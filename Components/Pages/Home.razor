@@ -505,6 +505,20 @@
     }
 </nav>
 
+@if (_optimizerCount > 0)
+{
+    <aside class="glass optimizer-panel" aria-label="Optimize view" aria-live="polite">
+        <div class="process-step">Optimize view</div>
+        <label class="process-text">
+            <input type="checkbox" checked="@_optimizerEnabled" @onchange="ToggleOptimizer" />
+            Hide objects smaller than 3 screen pixels
+        </label>
+        <p class="process-text">@_optimizerCount.ToString("N0") objects @(_optimizerEnabled ? "hidden" : "can be hidden") at this zoom.</p>
+        <p class="process-text">Uncheck to show all objects; check again to render fewer. Hidden objects cannot be selected or snapped to. Point markers stay visible.</p>
+        <p class="process-text">Print preview, printing and PDF export never use this optimizer. Layer visibility/Print settings and explicit point-marker visibility still apply; no objects are omitted just because they are small.</p>
+    </aside>
+}
+
 <aside class="float-panel scale-panel" aria-label="Scale">
     <div class="scale-readout">
         <div class="scale-actions">
@@ -546,6 +560,23 @@
 </div>
 
 @code {
+    private bool _optimizerEnabled = true;
+    private int _optimizerCount;
+
+    [JSInvokable]
+    public void OnOptimizerChanged(bool enabled, int count)
+    {
+        _optimizerEnabled = enabled;
+        _optimizerCount = count;
+        StateHasChanged();
+    }
+
+    private async Task ToggleOptimizer(ChangeEventArgs e)
+    {
+        if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+        await _cad.InvokeVoidAsync("setOptimizerEnabled", e.Value is true);
+    }
+
     private sealed record UnitDef(string Label, double Mm);
 
     private static readonly UnitDef[] MetricUnits = [new("1 mm", 1), new("1 cm", 10), new("1 m", 1000)];

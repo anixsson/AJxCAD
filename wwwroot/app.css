@@ -1069,6 +1069,17 @@ button {
 
 /* ---------- Scale panel ---------- */
 
+.optimizer-panel {
+    position: absolute;
+    z-index: 12;
+    left: 84px;
+    top: 76px;
+    width: min(320px, calc(100vw - 110px));
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    padding: 12px;
+}
+
 .scale-panel {
     right: 16px;
     bottom: 16px;

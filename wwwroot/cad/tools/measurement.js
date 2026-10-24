@@ -12,7 +12,7 @@
 //    `dimension` {x, y}; the offset is its distance from the measured line. Select can drag the dot too.
 
 import { bucket, defineBucket, checkpoint, newId } from "../store.js";
-import { activeLayerId, visibleItems, layerPrintable } from "../layers.js";
+import { activeLayerId, visibleItems as layerItems, layerPrintable } from "../layers.js";
 
 export const MEASURES = "measures";
 defineBucket(MEASURES, { label: "Measurements", fields: ["id", "points", "showLengths", "showAngles", "showArea", "dimension", "layerId"] });
@@ -133,6 +133,7 @@ const NODE_PX = 30; // how far from a line end a click may be in "nodes" mode
 const HANDLE_PX = 10; // how far from the dimension dot a press grabs it
 
 export function createMeasurementTool(env) {
+    const visibleItems = name => env.visibleItems ? env.visibleItems(name) : layerItems(name);
     let snapMode = "grid";
     let points = [];
     let phase = "idle"; // idle | picking (1 point) | measured (2 points) | multi (adding) | done
@@ -585,7 +586,8 @@ export function createMeasurementTool(env) {
         },
 
         hitText(sx, sy) {
-            return textHits.findLast(h => sx >= h.left && sx <= h.right && sy >= h.top && sy <= h.bottom)?.id ?? null;
+            const available = new Set(visibleItems(MEASURES).map(item => item.id));
+            return textHits.findLast(h => available.has(h.id) && sx >= h.left && sx <= h.right && sy >= h.top && sy <= h.bottom)?.id ?? null;
         },
 
         drawSaved(g, view) {
@@ -679,6 +681,8 @@ export function createMeasurementTool(env) {
         },
 
         draw(g, view) {
+            if (editingId !== null && env.isItemVisible &&
+                !env.isItemVisible(MEASURES, { points, dimension })) return;
             drawMeasurement(g, view, included(), phase, phase === "done" || dimDrag ? null : hover, display, dimension);
             const h = handlePoint();
             if (h) drawHandle(g, view, h, true);

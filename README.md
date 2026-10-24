@@ -74,6 +74,14 @@ Printing and PDF export include only visible markers on printable layers. Their 
 
 Pan and zoom the canvas as you work, or center the view on the origin. Grid spacing adapts to the zoom level. Choose metric or imperial measurements, set a 1:1 reference, and use the scale panel to check the current ratio and measured scale bar.
 
+### Optimize view
+
+At distant zoom levels, view optimization skips drawing objects smaller than **3 CSS screen pixels**: line length, circle diameter, rectangle diagonal, text font height, or measurement extent (including offset dimensions). Fixed-size Point markers and page frames are never hidden by this optimizer. Hidden objects cannot be selected or snapped to; existing selections are cleared for objects that become hidden. Zooming in restores the detail automatically. Objects are not deleted or changed.
+
+An **Optimize view** panel appears when any visible-layer objects fall below the threshold. Uncheck **Hide objects smaller than 3 screen pixels** to render and interact with all objects, or check it again to optimize. The panel remains available while disabled if there are small objects at the current zoom. The checkbox is a session-only view preference, enabled when the workspace starts.
+
+**Print preview, printing, and PDF export always bypass view optimization**, regardless of zoom or checkbox state. Existing layer visibility/Print settings and explicit point-marker visibility still apply; the optimizer never drops printable detail.
+
 ## Projects
 
 Save and reopen drawings as `.ajx` project files. A project keeps its drawing data, title, measurement settings, reference unit, and current view together, so you can pick up where you left off.

@@ -13,13 +13,14 @@
 //    in Lines mode the lines with both ends selected.
 
 import { bucket, checkpoint } from "../store.js";
-import { visibleItems } from "../layers.js";
+import { visibleItems as layerItems } from "../layers.js";
 
 const HIT_PX = 10;
 const DRAG_PX = 3;
 const SAME = 1e-6; // mm; points closer than this are the same corner
 
 export function createSelectTool(env) {
+    const visibleItems = name => env.visibleItems ? env.visibleItems(name) : layerItems(name);
     const selected = new Map(); // ref key -> ref
     let hover = null;
     let hoverHandle = null;
@@ -419,6 +420,24 @@ export function createSelectTool(env) {
         hotkey: "s",
 
         selectedMeasurementId,
+        refreshVisibility() {
+            if (!env.isItemVisible) return;
+            let changed = false;
+            for (const [key, ref] of selected) {
+                if (!env.isItemVisible(ref.geo.bucket, ref.item)) {
+                    selected.delete(key);
+                    changed = true;
+                }
+            }
+            if (hover?.refs?.some(r => !env.isItemVisible(r.geo.bucket, r.item))) hover = null;
+            if (hoverHandle && !env.isItemVisible(hoverHandle.geo.bucket, hoverHandle.item)) hoverHandle = null;
+            if (!changed) return;
+            drag = null;
+            marker = null;
+            setStack(null);
+            if (process) setProcess(null);
+            notifySelection();
+        },
         selectedLayerItems: () => [...new Set([...selected.values()].map(r => r.item))],
 
         selectLayer(id) {

@@ -9,6 +9,7 @@ import { addShape, createCircleTool, createRectangleTool, shapeGeometry, SHAPES 
 import { addText, createTextTool, textGeometry, TEXTS } from "./text.js";
 import { addPoint, createPointTool, pointGeometry, POINTS, setPointSettings, setPointMarker } from "./points.js";
 import { generateTestItems } from "./test-data.js";
+import { belowDetailThreshold } from "./optimizer.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
 import { createMeasurementTool, measurementGeometry, MEASURES } from "./tools/measurement.js";
@@ -28,6 +29,8 @@ let centered = null;
 let imperial = false;
 let effects = true; // false = performance mode: no glows or blurs on the canvas
 let paperTheme = false;
+let optimizerEnabled = true;
+let optimizerReport = "";
 const handlers = [];
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
@@ -37,6 +40,18 @@ let toolId = "cross";
 
 const toWorld = (sx, sy) => ({ x: (sx - originX) / scale, y: -(sy - originY) / scale });
 const toScreen = (x, y) => ({ x: originX + x * scale, y: originY - y * scale });
+
+function screenItems(name) {
+    const items = visibleItems(name);
+    if (!optimizerEnabled || tools.page?.previewPage()) return items;
+    return items.filter(item => !belowDetailThreshold(name, item, scale));
+}
+
+export function setOptimizerEnabled(enabled) {
+    if (typeof enabled !== "boolean") throw new Error("View optimization must be a checkbox value.");
+    optimizerEnabled = enabled;
+    draw();
+}
 
 function minorStepMm() {
     return niceAtLeast(MIN_MINOR_PX / (scale * unitMm)) * unitMm;
@@ -48,7 +63,7 @@ function snap(sx, sy, exclude) {
     const wc = toWorld(sx, sy);
     const reach = SNAP_PX / scale;
     for (const geo of geometries) {
-        for (const item of visibleItems(geo.bucket)) {
+        for (const item of screenItems(geo.bucket)) {
             for (const p of geo.points(item)) {
                 if (Math.abs(p.x - wc.x) > reach || Math.abs(p.y - wc.y) > reach) continue;
                 if (exclude?.(geo, item, p.key)) continue;
@@ -104,6 +119,8 @@ export function stickToBottom(box) {
 
 const env = {
     geometries,
+    visibleItems: screenItems,
+    isItemVisible: (name, item) => !optimizerEnabled || !!tools.page?.previewPage() || !belowDetailThreshold(name, item, scale),
     selectionGeometries: [...geometries, measurementGeometry],
     toWorld,
     toScreen,
@@ -430,11 +447,25 @@ function render() {
 
     // Print preview: measurement labels at their printed size on the previewed page (screen px per point).
     const preview = tools.page.previewPage();
+    let hidden = 0;
+    if (!preview) {
+        for (const name of [...geometries.map(g => g.bucket), MEASURES]) {
+            for (const item of visibleItems(name)) {
+                if (belowDetailThreshold(name, item, scale)) hidden++;
+            }
+        }
+    }
+    const report = `${optimizerEnabled}:${hidden}`;
+    if (report !== optimizerReport) {
+        optimizerReport = report;
+        dotnet.invokeMethodAsync("OnOptimizerChanged", optimizerEnabled, hidden);
+    }
+    tools.select.refreshVisibility();
     const printPx = preview ? scale * preview.scale * (25.4 / 72) * textSizeOf(preview) / 100 : 0;
     const pointPrintPx = preview ? scale * preview.scale * 25.4 / 96 : 0;
     const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, scale, fx: effects, paper: paperTheme, printPx, pointPrintPx };
     tools.page.drawSaved(ctx, view);
-    for (const geo of geometries) geo.draw(ctx, visibleItems(geo.bucket).filter(item => !preview || layerPrintable(item)), view);
+    for (const geo of geometries) geo.draw(ctx, screenItems(geo.bucket).filter(item => !preview || layerPrintable(item)), view);
     tools.measurement.drawSaved(ctx, view);
     currentTool().draw?.(ctx, view);
 
@@ -447,13 +478,15 @@ function render() {
 }
 
 function textAt(sx, sy) {
-    for (const item of [...visibleItems(TEXTS)].reverse()) {
+    for (const item of [...screenItems(TEXTS)].reverse()) {
         if (textGeometry.hitTest(item, sx, sy, env) !== null) return item.id;
     }
     return null;
 }
 
 export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
+    optimizerEnabled = true;
+    optimizerReport = "";
     normalizeLayers();
     el = workspace;
     canvas = canvasEl;

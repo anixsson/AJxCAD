@@ -47,6 +47,14 @@
             ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
             ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk")
         ]),
+        new("Optimize view", "", "When zoomed far out, the optimizer skips objects smaller than 3 screen pixels to reduce drawing work. It never deletes or changes drawing data. Fixed-size Point markers and page frames stay visible.",
+        [
+            ("Threshold", "Uses line length, circle diameter, rectangle diagonal, text font height or measurement extent, including offset dimensions"),
+            ("Optimize view panel", "Appears when small objects could be hidden. Uncheck Hide objects smaller than 3 screen pixels to show all objects; check it again to render fewer"),
+            ("Selection and snapping", "Optimized-away objects cannot be selected or snapped to. Existing selections lose objects that become hidden. Zoom in or disable optimization to restore interaction"),
+            ("Print and export", "Print preview, printing and PDF export always bypass optimization. Layer visibility/Print settings and explicit point-marker visibility still apply; small printable details are never omitted by the optimizer"),
+            ("Preference", "The checkbox applies only to the current workspace session and starts enabled")
+        ]),
         new("Point", "N", "A single reference node with a lightweight vector marker. Points are saved with the project, belong to layers, support selection, movement and deletion, and are available as snap targets even when their marker is hidden.",
         [
             ("Place", "Press N and click the board. Placement snaps to existing drawing nodes or the grid; keep clicking to add more points"),
