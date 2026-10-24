@@ -87,27 +87,43 @@
         }
         else if (_stack is { } st)
         {
-            <section class="glass process-box" role="dialog" aria-label="Corner line ends" aria-live="polite">
-                <div class="process-step">Corner · @st.Ends.Length line ends</div>
-                <div class="process-title">x @st.X · y @st.Y</div>
-                <p class="process-text">Several lines meet here. Uncheck the lines that should stay put; only checked line ends are selected and move.</p>
-                <div class="stack-list" role="group" aria-label="Line ends at this corner">
+            <section class="glass process-box" role="dialog" aria-label="Selection points" aria-live="polite">
+                <div class="process-step">@(st.Shared ? "Corner" : "Selection") · @st.Ends.Length points</div>
+                @if (st.Shared)
+                {
+                    <div class="process-title">x @st.X · y @st.Y</div>
+                }
+                <p class="process-text">Choose the points to move. Blue options are measurement area points; other options are line ends. Unchecked points stay put.</p>
+                <div class="stack-list measure-point-list" role="group" aria-label="Selected line and area points">
                     @for (var i = 0; i < st.Ends.Length; i++)
                     {
                         var index = i;
                         var end = st.Ends[i];
-                        <button type="button" class="chip check-chip stack-end @(end.Selected ? "active" : "")"
+                        <button type="button" class="chip check-chip stack-end @(end.Area ? "area-option" : "") @(end.Selected ? "active" : "")"
                                 role="checkbox" aria-checked="@(end.Selected.ToString().ToLowerInvariant())"
                                 @onclick="() => ToggleStackEnd(index)">
                             <span class="check-box" aria-hidden="true">@(end.Selected ? "✓" : "")</span>
                             <span class="stack-label">@end.Label</span>
-                            <span class="stack-meta">@(end.Length is null ? "line end" : $"{end.Length} → {end.To}")</span>
+                            <span class="stack-meta">@(end.Area ? end.To : end.Length is null ? "line end" : $"{end.Length} → {end.To}")</span>
                         </button>
                     }
                 </div>
                 <div class="process-actions">
                     <button type="button" class="chip active default-action" data-default-action @onclick="CloseStack">Done<span class="key-hint">Space</span></button>
                 </div>
+            </section>
+        }
+        @if (_selectedMeasurement is { } selectedMeasure && _moveStep is null)
+        {
+            <section class="glass process-box" aria-label="Selected measurement" aria-live="polite">
+                <div class="process-step">Measurement · @selectedMeasure.Points points</div>
+                <button type="button" class="chip" title="Edit this saved measurement"
+                        @onclick="() => EditMeasurement(selectedMeasure.Id)">Length @selectedMeasure.Length</button>
+                @if (selectedMeasure.Area is not null)
+                {
+                    <p class="process-text">Area @selectedMeasure.Area</p>
+                }
+                <p class="process-text">Drag selected blue points to move them. Click the length above or a label on the board to edit saved options.</p>
             </section>
         }
         <div class="toolmenu-row">
@@ -197,7 +213,50 @@
                 }
                 else
                 {
-                    <p class="process-text">Click to start a new measurement.</p>
+                    <div class="measure-caption">Show on board</div>
+                    <div class="unit-row" role="group" aria-label="Measurement display">
+                        @foreach (var (option, label, enabled) in new[]
+                        {
+                            ("showLengths", "Lengths", t.ShowLengths),
+                            ("showAngles", "Angles", t.ShowAngles),
+                            ("showArea", "Area", t.ShowArea)
+                        })
+                        {
+                            <button type="button" class="chip check-chip @(enabled ? "active" : "")"
+                                    role="checkbox" aria-checked="@(enabled.ToString().ToLowerInvariant())"
+                                    @onclick="() => RulerToggleDisplay(option)">
+                                <span class="check-box" aria-hidden="true">@(enabled ? "✓" : "")</span>
+                                @label
+                            </button>
+                        }
+                    </div>
+                    <p class="process-text">Check the points to include. Blue circles mark included points. Save keeps the measurement on the board; its text reopens this editor.</p>
+                    <div class="stack-list measure-point-list" role="group" aria-label="Measurement points">
+                        @{ var nodes = t.Nodes ?? []; }
+                        @for (var i = 0; i < nodes.Length; i++)
+                        {
+                            var index = i;
+                            var point = nodes[i];
+                            <button type="button" class="chip check-chip stack-end @(point.Selected ? "active" : "")"
+                                    role="checkbox" aria-checked="@(point.Selected.ToString().ToLowerInvariant())"
+                                    @onclick="() => RulerTogglePoint(index)">
+                                <span class="check-box" aria-hidden="true">@(point.Selected ? "✓" : "")</span>
+                                <span>@point.Label</span>
+                                <span class="stack-meta">x @point.X · y @point.Y</span>
+                            </button>
+                        }
+                    </div>
+                    <div class="process-actions">
+                        <button type="button" class="chip" @onclick="CancelMeasurement">Cancel</button>
+                        <button type="button" class="chip active default-action" data-default-action
+                                disabled="@(t.Points < 2)" @onclick="RulerSave">
+                            @(t.Saved ? "Save changes" : "Save to board")<span class="key-hint">Space</span>
+                        </button>
+                    </div>
+                    @if (t.Points < 2)
+                    {
+                        <p class="process-text">Include at least two points to save.</p>
+                    }
                 }
             </section>
         }
@@ -216,6 +275,10 @@
                                 @onclick="() => SetRulerSnap(mode)">@label</button>
                     }
                 </div>
+            </aside>
+            <aside class="glass toolmenu" aria-label="Measurement actions">
+                <span class="toolmenu-label">Actions</span>
+                <button type="button" class="chip danger" @onclick="RulerDeleteAll">Delete all measurements</button>
             </aside>
         </div>
     </div>
@@ -555,8 +618,23 @@
         if (_cad is not null) await _cad.InvokeAsync<bool>("cancelProcess");
     }
 
-    public sealed record StackEnd(string Label, bool Selected, string? Length, string? To);
-    public sealed record StackInfo(string X, string Y, StackEnd[] Ends);
+    public sealed record StackEnd(string Label, bool Selected, string? Length, string? To, bool Area = false);
+    public sealed record StackInfo(string X, string Y, StackEnd[] Ends, bool Shared = true);
+
+    public sealed record SelectedMeasurement(int Id, string Length, string? Area, int Points);
+    private SelectedMeasurement? _selectedMeasurement;
+
+    [JSInvokable]
+    public void OnSelectedMeasurement(SelectedMeasurement? measurement)
+    {
+        _selectedMeasurement = measurement;
+        StateHasChanged();
+    }
+
+    private async Task EditMeasurement(int id)
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("editMeasurement", id);
+    }
 
     private StackInfo? _stack;
 
@@ -577,9 +655,11 @@
         if (_cad is not null) await _cad.InvokeAsync<bool>("closeStack");
     }
 
+    public sealed record MeasurementPoint(string Label, string X, string Y, bool Selected);
     public sealed record Measurement(string Mode, string Length, int Points,
         string? Dx = null, string? Dy = null, string? Ax = null, string? Ay = null, string? Bx = null, string? By = null,
-        string? Area = null);
+        string? Area = null, bool Saved = false, MeasurementPoint[]? Nodes = null,
+        bool ShowLengths = true, bool ShowAngles = true, bool ShowArea = true);
 
     private string _rulerSnap = "grid";
     private bool _lineMulti = true;
@@ -602,6 +682,31 @@
     private async Task RulerStop()
     {
         if (_cad is not null) await _cad.InvokeAsync<bool>("rulerStop");
+    }
+
+    private async Task RulerTogglePoint(int index)
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("rulerTogglePoint", index);
+    }
+
+    private async Task RulerToggleDisplay(string option)
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("rulerToggleDisplay", option);
+    }
+
+    private async Task RulerDeleteAll()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("rulerDeleteAll");
+    }
+
+    private async Task RulerSave()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("rulerSave");
+    }
+
+    private async Task CancelMeasurement()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("cancelCurrent");
     }
 
     private async Task SetRulerSnap(string mode)

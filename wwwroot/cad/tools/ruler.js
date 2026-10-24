@@ -1,12 +1,36 @@
-// Ruler tool: measures without changing the drawing.
+// Ruler tool: measures without changing drawing lines; saved annotations live in the measures bucket.
 //  - Click two points: the box shows the length, the x/y difference and both points.
 //  - "Add points" (Space) continues from there: every click adds a point and the total length grows.
 //    From three points the enclosed area is shaded, measured and labelled at its centre.
 //    Every corner where two measured lines meet shows the angle between them (0–180°). "Stop" (Space) ends it and keeps the result.
 //  - After a finished measurement, the next click clears it and starts a new one.
 //  - Snap "grid": points snap to line ends, otherwise to the grid. Snap "nodes": only line ends can be picked.
+//  - Stop opens a point-checkbox editor; Save stores the annotation, and clicking its text reopens it.
 
-import { bucket } from "../store.js";
+import { bucket, defineBucket, checkpoint, newId } from "../store.js";
+
+export const MEASURES = "measures";
+defineBucket(MEASURES, { label: "Measurements", fields: ["id", "points", "showLengths", "showAngles", "showArea"] });
+
+export const measurementGeometry = {
+    bucket: MEASURES,
+    annotation: true,
+    points: item => item.points.flatMap((p, i) =>
+        p.enabled === false ? [] : [{ key: `p${i}`, x: p.x, y: p.y }]),
+    setPoint(item, key, x, y) {
+        const point = item.points[Number(key.slice(1))];
+        if (!point) throw new Error(`Unknown measurement point: ${key}`);
+        point.x = x;
+        point.y = y;
+    }
+};
+
+const defaultDisplay = () => ({ showLengths: true, showAngles: true, showArea: true });
+const displayOf = item => ({
+    showLengths: item.showLengths !== false,
+    showAngles: item.showAngles !== false,
+    showArea: item.showArea !== false
+});
 
 const NODE_PX = 30; // how far from a line end a click may be in "nodes" mode
 
@@ -15,6 +39,26 @@ export function createRulerTool(env) {
     let points = [];
     let phase = "idle"; // idle | picking (1 point) | measured (2 points) | multi (adding) | done
     let hover = null;
+    let editingId = null;
+    let textHits = [];
+    let renderingId = null;
+    let display = defaultDisplay();
+
+    const included = () => points.filter(p => p.enabled !== false);
+    const pointRows = () => points.map((p, i) => ({
+        label: `P${i + 1}`, x: signed(p.x), y: signed(p.y), selected: p.enabled !== false
+    }));
+
+    function recordText(g, view, text, x, y, centered = false) {
+        if (renderingId === null) return;
+        const width = g.measureText(text).width / view.dpr;
+        textHits.push({
+            id: renderingId,
+            left: x - (centered ? width / 2 : 0) - 5,
+            right: x + (centered ? width / 2 : width) + 5,
+            top: y - (centered ? 12 : 16), bottom: y + (centered ? 12 : 5)
+        });
+    }
 
     function nearestNode(sx, sy) {
         let best = null, bestDist = NODE_PX;
@@ -61,11 +105,15 @@ export function createRulerTool(env) {
                 points: 2
             });
         } else if (phase === "multi" || phase === "done") {
+            const active = included();
             env.measureChanged?.({
                 mode: phase,
-                length: env.formatLength(pathLength(points)),
-                area: points.length >= 3 ? env.formatArea(polygonArea(points)) : null,
-                points: points.length
+                length: env.formatLength(pathLength(active)),
+                area: active.length >= 3 ? env.formatArea(polygonArea(active)) : null,
+                points: active.length,
+                saved: editingId !== null,
+                nodes: pointRows(),
+                ...display
             });
         } else {
             env.measureChanged?.(null);
@@ -83,6 +131,9 @@ export function createRulerTool(env) {
     function clear() {
         if (phase === "idle") return false;
         points = [];
+        editingId = null;
+        display = defaultDisplay();
+        hover = null;
         setPhase("idle");
         return true;
     }
@@ -91,7 +142,7 @@ export function createRulerTool(env) {
         const d = view.dpr;
         const s = view.toScreen(p.x, p.y);
         if (filled) {
-            g.fillStyle = "#ff8fe0";
+            g.fillStyle = "#8fe3ff";
             g.beginPath();
             g.arc(s.x * d, s.y * d, 3.5 * d, 0, Math.PI * 2);
             g.fill();
@@ -170,6 +221,7 @@ export function createRulerTool(env) {
         g.shadowColor = "rgba(0,0,0,0.8)";
         g.shadowBlur = view.fx ? 4 * d : 0;
         g.fillText(formatAngle(c.deg), tx * d, ty * d);
+        recordText(g, view, formatAngle(c.deg), tx, ty, true);
         g.shadowBlur = 0;
         g.textAlign = "start";
         g.textBaseline = "alphabetic";
@@ -191,6 +243,7 @@ export function createRulerTool(env) {
         g.stroke();
         g.fillStyle = "#8fe3ff";
         g.fillText(text, s.x * d, s.y * d);
+        recordText(g, view, text, s.x, s.y, true);
         g.textAlign = "start";
         g.textBaseline = "alphabetic";
     }
@@ -202,7 +255,60 @@ export function createRulerTool(env) {
         g.shadowColor = "rgba(0,0,0,0.8)";
         g.shadowBlur = view.fx ? 4 * d : 0;
         g.fillText(text, (a.x + b.x) / 2 * d + 8 * d, (a.y + b.y) / 2 * d - 8 * d);
+        recordText(g, view, text, (a.x + b.x) / 2 + 8, (a.y + b.y) / 2 - 8);
         g.shadowBlur = 0;
+    }
+
+    function drawMeasurement(g, view, pts, state, cursor, options) {
+        const d = view.dpr;
+        const live = (state === "picking" || state === "multi") && cursor;
+        const path = live ? [...pts, cursor] : pts;
+        const screen = path.map(p => view.toScreen(p.x, p.y));
+
+        if ((state === "multi" || state === "done") && path.length >= 3) {
+            g.beginPath();
+            screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
+            g.closePath();
+            g.fillStyle = "rgba(143,227,255,0.16)";
+            if (options.showArea) g.fill();
+
+            const first = screen[0], last = screen.at(-1);
+            g.setLineDash([3 * d, 5 * d]);
+            g.strokeStyle = "rgba(143,227,255,0.45)";
+            g.lineWidth = 1 * d;
+            g.beginPath();
+            g.moveTo(last.x * d, last.y * d);
+            g.lineTo(first.x * d, first.y * d);
+            g.stroke();
+            g.setLineDash([]);
+        }
+
+        if (screen.length >= 2) {
+            g.setLineDash([6 * d, 5 * d]);
+            g.strokeStyle = state === "picking" || live ? "rgba(255,255,255,0.85)" : "#8fe3ff";
+            g.lineWidth = 1.5 * d;
+            g.beginPath();
+            screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
+            g.stroke();
+            g.setLineDash([]);
+
+            for (let i = 1; options.showLengths && i < path.length; i++) {
+                const len = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+                if (len > 0) label(g, view, env.formatLength(len), screen[i - 1], screen[i]);
+            }
+        }
+
+        if ((state === "multi" || state === "done") && path.length >= 3) {
+            if (options.showAngles) for (const c of corners(path)) angleMark(g, view, c);
+            const area = polygonArea(path);
+            if (options.showArea && area > 0) areaLabel(g, view, env.formatArea(area), polygonCentroid(path));
+        }
+
+        g.lineWidth = 1.5 * d;
+        for (const p of pts) {
+            drawPoint(g, view, p, true);
+        }
+        if (cursor) drawPoint(g, view, cursor, false);
     }
 
     return {
@@ -226,9 +332,95 @@ export function createRulerTool(env) {
 
         stop() {
             if (phase !== "multi") return false;
+            hover = null;
             setPhase("done");
             env.log("action", `ruler: total ${env.formatLength(pathLength(points))} over ${points.length} points`);
             return true;
+        },
+
+        togglePoint(index) {
+            if (phase !== "done" || !Number.isInteger(index) || !points[index]) {
+                throw new Error("Cannot toggle this measurement point");
+            }
+            points[index].enabled = points[index].enabled === false;
+            publish();
+            env.redraw();
+        },
+
+        toggleDisplay(option) {
+            if (phase !== "done" || !Object.hasOwn(display, option)) {
+                throw new Error(`Cannot toggle measurement display option: ${option}`);
+            }
+            display[option] = !display[option];
+            publish();
+            env.redraw();
+        },
+
+        save() {
+            if (phase !== "done" || included().length < 2) {
+                throw new Error("A saved measurement needs at least two included points");
+            }
+            checkpoint();
+            const stored = points.map(p => ({ x: p.x, y: p.y, enabled: p.enabled !== false }));
+            if (editingId === null) {
+                bucket(MEASURES).items.push({ id: newId(), points: stored, ...display });
+            } else {
+                const item = bucket(MEASURES).items.find(m => m.id === editingId);
+                if (!item) throw new Error(`Measurement ${editingId} no longer exists`);
+                item.points = stored;
+                Object.assign(item, display);
+            }
+            env.log("action", "measurement saved");
+            clear();
+            env.redraw();
+        },
+
+        deleteAll() {
+            const saved = bucket(MEASURES);
+            if (saved.items.length) {
+                checkpoint();
+                saved.items = [];
+            }
+            clear();
+            textHits = [];
+            env.log("action", "all measurements deleted");
+            env.redraw();
+        },
+
+        open(id) {
+            const item = bucket(MEASURES).items.find(m => m.id === id);
+            if (!item) throw new Error(`Unknown measurement: ${id}`);
+            points = structuredClone(item.points);
+            editingId = id;
+            display = displayOf(item);
+            hover = null;
+            setPhase("done");
+        },
+
+        inspect(id) {
+            const item = bucket(MEASURES).items.find(m => m.id === id);
+            if (!item) throw new Error(`Unknown measurement: ${id}`);
+            const active = item.points.filter(p => p.enabled !== false);
+            return {
+                id: item.id,
+                length: env.formatLength(pathLength(active)),
+                area: active.length >= 3 ? env.formatArea(polygonArea(active)) : null,
+                points: active.length
+            };
+        },
+
+        hitText(sx, sy) {
+            return textHits.findLast(h => sx >= h.left && sx <= h.right && sy >= h.top && sy <= h.bottom)?.id ?? null;
+        },
+
+        drawSaved(g, view) {
+            textHits = [];
+            for (const item of bucket(MEASURES).items) {
+                if (item.id === editingId) continue;
+                renderingId = item.id;
+                drawMeasurement(g, view, item.points.filter(p => p.enabled !== false), "done", null, displayOf(item));
+            }
+            renderingId = null;
         },
 
         deactivate() {
@@ -255,6 +447,7 @@ export function createRulerTool(env) {
         },
 
         pointerDown(e) {
+            if (editingId !== null) return;
             const p = resolve(e.sx, e.sy);
             if (!p) return;
             if (phase === "multi") {
@@ -283,58 +476,7 @@ export function createRulerTool(env) {
         },
 
         draw(g, view) {
-            const d = view.dpr;
-            const live = (phase === "picking" || phase === "multi") && hover;
-            const path = live ? [...points, hover] : points;
-            const screen = path.map(p => view.toScreen(p.x, p.y));
-
-            // Shaded area once there are three or more points.
-            if ((phase === "multi" || phase === "done") && path.length >= 3) {
-                g.beginPath();
-                screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
-                g.closePath();
-                g.fillStyle = "rgba(143,227,255,0.16)";
-                g.fill();
-
-                const first = screen[0], last = screen.at(-1);
-                g.setLineDash([3 * d, 5 * d]);
-                g.strokeStyle = "rgba(143,227,255,0.45)";
-                g.lineWidth = 1 * d;
-                g.beginPath();
-                g.moveTo(last.x * d, last.y * d);
-                g.lineTo(first.x * d, first.y * d);
-                g.stroke();
-                g.setLineDash([]);
-            }
-
-            if (screen.length >= 2) {
-                g.setLineDash([6 * d, 5 * d]);
-                g.strokeStyle = phase === "picking" || live ? "rgba(255,255,255,0.85)" : "#8fe3ff";
-                g.lineWidth = 1.5 * d;
-                g.beginPath();
-                screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
-                g.stroke();
-                g.setLineDash([]);
-
-                // Length of each segment along the path.
-                for (let i = 1; i < path.length; i++) {
-                    const len = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
-                    if (len > 0) label(g, view, env.formatLength(len), screen[i - 1], screen[i]);
-                }
-            }
-
-            if ((phase === "multi" || phase === "done") && path.length >= 3) {
-                for (const c of corners(path)) angleMark(g, view, c);
-            }
-
-            if ((phase === "multi" || phase === "done") && path.length >= 3) {
-                const area = polygonArea(path);
-                if (area > 0) areaLabel(g, view, env.formatArea(area), polygonCentroid(path));
-            }
-
-            g.lineWidth = 1.5 * d;
-            for (const p of points) drawPoint(g, view, p, true);
-            if (hover) drawPoint(g, view, hover, false);
+            drawMeasurement(g, view, included(), phase, phase === "done" ? null : hover, display);
         }
     };
 }

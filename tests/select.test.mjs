@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bucket, undo, newId } from "../wwwroot/cad/store.js";
 import { createSelectTool } from "../wwwroot/cad/tools/select.js";
+import { lineGeometry } from "../wwwroot/cad/lines.js";
+import { MEASURES, measurementGeometry } from "../wwwroot/cad/tools/ruler.js";
 
 const lines = bucket("lines");
 
@@ -48,7 +50,7 @@ function draw(tool, { dpr = 1, fx = false, toScreen = (x, y) => ({ x, y }) } = {
     const strokes = [];
     let path = [];
     const g = {};
-    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText", "closePath", "fill", "roundRect"]) {
+    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText", "closePath", "fill", "roundRect", "arc"]) {
         g[method] = (...args) => {
             calls.push([method, ...args]);
             if (method === "beginPath") path = [];
@@ -499,7 +501,7 @@ test("clicking a corner where lines meet lists each line end and labels the line
     const { tool, stacks } = setupStack();
     click(tool, 1, 1);
     assert.deepEqual(stacks.at(-1), {
-        x: "0 mm", y: "0 mm",
+        x: "0 mm", y: "0 mm", shared: true,
         ends: [
             { label: "L1", selected: true, length: "100 mm", to: "100 mm, 0 mm" },
             { label: "L2", selected: true, length: "100 mm", to: "0 mm, 100 mm" },
@@ -552,4 +554,107 @@ test("all ends unchecked then rechecked, Esc and Done close the box, Lines mode 
     assert.equal(stacks.at(-1), null);
     click(tool, 50, 0);
     assert.equal(stacks.at(-1), null);
+});
+
+function setupMixed() {
+    const stacks = [], measurements = [], counts = [];
+    bucket(MEASURES).items = [{
+        id: 100,
+        points: [
+            { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 },
+            { x: 50, y: 50, enabled: false }
+        ]
+    }];
+    const { tool } = setup([{ x1: 0, y1: 0, x2: 100, y2: 0 }], {
+        selectionGeometries: [lineGeometry, measurementGeometry],
+        stackChanged: info => stacks.push(info),
+        measurementSelectionChanged: id => measurements.push(id),
+        selectionChanged: count => counts.push(count)
+    });
+    return { tool, stacks, measurements, counts, area: bucket(MEASURES).items[0] };
+}
+
+test("shared corners include blue area choices and unchecked area points stay put", () => {
+    const { tool, stacks, measurements, area } = setupMixed();
+    click(tool, 0, 0);
+    const box = stacks.at(-1);
+    assert.equal(box.ends.length, 2);
+    assert.equal(box.ends[0].area, undefined);
+    assert.equal(box.ends[1].area, true);
+    assert.equal(box.ends[1].label, "Area 100 · P1");
+    assert.equal(measurements.at(-1), null, "a mixed selection does not show area-only information");
+    assert.ok(draw(tool).calls.some(([m, text]) => m === "fillText" && text === "Area 100 · P1"));
+    tool.toggleStackEnd(1);
+    tool.pointerDown(pointer(0, 0));
+    tool.pointerMove(pointer(20, 30));
+    tool.pointerUp(pointer(20, 30));
+    assert.deepEqual([lines.items[0].x1, lines.items[0].y1], [20, 30]);
+    assert.deepEqual([area.points[0].x, area.points[0].y], [0, 0]);
+});
+
+test("rectangle selects line ends and area points together; dragging and undo move both", () => {
+    const { tool, stacks, counts, area } = setupMixed();
+    tool.pointerDown(pointer(-20, -20));
+    tool.pointerMove(pointer(120, 120));
+    tool.pointerUp(pointer(120, 120));
+    assert.equal(counts.at(-1), 5, "two line ends and three enabled measurement points");
+    assert.equal(stacks.at(-1).shared, false);
+    assert.equal(stacks.at(-1).ends.filter(e => e.area).length, 3);
+    const before = structuredClone(area);
+    tool.pointerDown(pointer(0, 0));
+    tool.pointerMove(pointer(20, 30));
+    tool.pointerUp(pointer(20, 30));
+    assert.deepEqual(geometry(), [[20, 30, 120, 30]]);
+    assert.deepEqual(area.points.map(p => [p.x, p.y]), [[20, 30], [120, 30], [120, 130], [50, 50]]);
+    assert.equal(undo(), true);
+    tool.dataChanged();
+    assert.deepEqual(bucket(MEASURES).items[0], before);
+    assert.deepEqual(geometry(), [[0, 0, 100, 0]]);
+});
+
+test("blue area-only points select and move without activating the editor", () => {
+    const { tool, measurements, counts, area } = setupMixed();
+    click(tool, 100, 100);
+    assert.equal(counts.at(-1), 1);
+    assert.equal(measurements.at(-1), 100, "area-only information is available");
+    tool.pointerDown(pointer(100, 100));
+    tool.pointerMove(pointer(120, 100));
+    tool.pointerUp(pointer(120, 100));
+    assert.deepEqual([area.points[2].x, area.points[2].y], [120, 100]);
+    assert.deepEqual(geometry(), [[0, 0, 100, 0]]);
+    click(tool, 0, 0, { shift: true });
+    assert.equal(measurements.at(-1), null, "adding a drawing endpoint hides area-only information");
+    assert.equal(tool.canOpenMeasurement(), true);
+});
+
+test("guided Move previews and moves line and area points with the same offset", () => {
+    const { tool, area } = setupMixed();
+    tool.pointerDown(pointer(-20, -20));
+    tool.pointerMove(pointer(120, 120));
+    tool.pointerUp(pointer(120, 120));
+    tool.startMove();
+    assert.equal(tool.canOpenMeasurement(), false);
+    click(tool, 0, 0);
+    tool.confirmMoveBase();
+    tool.pointerMove(pointer(20, 30));
+    assert.ok(draw(tool).strokes.some(s => s.path.length >= 5), "preview contains the measurement polygon");
+    click(tool, 20, 30);
+    assert.deepEqual(geometry(), [[20, 30, 120, 30]]);
+    assert.deepEqual(area.points.slice(0, 3).map(p => [p.x, p.y]), [[20, 30], [120, 30], [120, 130]]);
+});
+
+test("Lines mode includes shared area points but does not mistake measurements for drawing lines", () => {
+    const { tool, area, counts } = setupMixed();
+    tool.setSelectionMode("lines");
+    click(tool, 30, 0);
+    assert.equal(counts.at(-1), 4, "both line ends and the shared area points");
+    assert.equal(handlesDrawn(tool), 1, "only the drawing line has a split handle");
+    click(tool, 100, 100);
+    assert.equal(counts.at(-1), 1, "an isolated blue point is selectable in Lines mode");
+    assert.equal(handlesDrawn(tool), 0);
+    assert.doesNotThrow(() => draw(tool));
+    tool.pointerDown(pointer(100, 100));
+    tool.pointerMove(pointer(110, 120));
+    tool.pointerUp(pointer(110, 120));
+    assert.deepEqual([area.points[2].x, area.points[2].y], [110, 120]);
 });

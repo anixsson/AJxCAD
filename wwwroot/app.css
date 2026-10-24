@@ -715,6 +715,11 @@ button {
     margin-bottom: 10px;
 }
 
+.measure-point-list {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
 .stack-end {
     justify-content: flex-start;
     padding: 6px 8px;
@@ -724,6 +729,15 @@ button {
     min-width: 22px;
     font-weight: 700;
     color: #ff8fe0;
+}
+
+.area-option .stack-label {
+    color: #8fe3ff;
+}
+
+.area-option.active {
+    background: rgba(143, 227, 255, 0.2);
+    border-color: #8fe3ff;
 }
 
 .stack-meta {

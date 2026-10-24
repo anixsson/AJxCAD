@@ -12,11 +12,21 @@ The bottom-center toolmenu shows options for the active tool. In Select, switch 
 
 Click a corner where several lines meet (Nodes mode) to open the **Corner** box. It lists every line end at that corner (L1, L2, …) with its length and far end, and the same labels appear on the board next to each line. Uncheck lines to leave them in place: only checked ends are selected and move, so you can pull one line off a shared corner. Press Done (Space) or Esc to close the box.
 
+Select also picks saved measurement points (blue circles). Shared-corner and rectangle selections can include both line endpoints and area points; the selection information box shows measurement points as blue checkbox options. Uncheck any points to leave them in place, then drag the selection or use **Actions > Move** to move both kinds together. Only included measurement points are selectable. A selection belonging solely to one measurement shows its length and area without opening the editor. Moves update measurement labels and can be undone.
+
 While anything is selected, an Actions menu appears beside the toolmenu. **Move** opens a guide box: click a base point (such as a corner of the selection), press Next (or Space), then click the destination. The selection moves by that offset, with a live preview and offset distance; Esc or Cancel stops the move.
 
 ## Measuring
 
-Press R for the Ruler. Click two points to see a box with the distance, the x and y difference, and both points' coordinates. Press **Add points** (or Space) to keep going: each click adds a point to the total length, and from three points the enclosed area is shaded, with its size shown at the center of the shape and the angle between the lines marked at every corner. Press the red **Stop** (or Space) to finish and keep the result. The next click hides the box and starts a new measurement. In the toolmenu, choose **Grid + nodes** to snap to line ends and the grid, or **Nodes only** to ignore the grid and pick only line ends. The ruler never changes the drawing.
+Press R for the Ruler. Click two points to see a box with the distance, the x and y difference, and both points' coordinates. Press **Add points** (or Space) to keep going: each click adds a point to the total length, and from three points the enclosed area is shaded, with its size shown at the center of the shape and the angle between the lines marked at every corner. Press the red **Stop** (or Space) to finish. Check or uncheck the points to include, then press **Save to board** (or Space) to keep the measurement visible with any tool. Small blue circles mark included points.
+
+Saved measurements live in the **Measurements** (`measures`) bucket and are included when saving the `.ajx` project. With **Select** active, click saved length, area or angle text to switch to Ruler and reopen its information box. Clicking a blue point selects it for movement instead of opening the editor. Point checkbox buttons in the editor update the preview; **Save changes** updates the stored measurement, while **Cancel** or Esc discards the draft. Unchecked points remain available to reselect, and at least two points must be included to save. Save operations can be undone. Measurement points do not automatically follow drawing lines: select both to move them together.
+
+Use the **Show on board** checkboxes to choose **Lengths**, **Angles**, and **Area** independently before saving. They update the preview immediately, and each measurement remembers its own choices. Area controls both the area label and shading; hiding values does not change the calculations in the information box. All three start checked, including for older saved measurements. With all text hidden, use Select to pick only a measurement point, then click the length text in its selection information box to reopen the editor.
+
+In Ruler's Actions bar, **Delete all measurements** asks for confirmation, then removes all saved measurements and clears the current measurement draft. Drawing lines are unchanged. Cmd/Ctrl + Z restores the deleted saved measurements.
+
+In the toolmenu, choose **Grid + nodes** to snap to line ends and the grid, or **Nodes only** to ignore the grid and pick only line ends. Ruler annotations do not change the drawing's lines. Without saving, clicking the board after a finished measurement starts a new one.
 
 ## Navigation and scale
 

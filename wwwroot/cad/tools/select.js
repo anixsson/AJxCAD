@@ -27,13 +27,14 @@ export function createSelectTool(env) {
     let process = null; // guided Move: { step: "base" | "target", base, point }
     let lastCount = 0;
     let stack = null; // stacked corner being inspected: { ends: [{ geo, item, key, label }] }
+    const geometries = env.selectionGeometries ?? env.geometries;
 
     const keyOf = (geo, item, key) => `${geo.bucket}:${item.id}:${key}`;
     const refKey = r => keyOf(r.geo, r.item, r.key);
 
     function allPoints() {
         const out = [];
-        for (const geo of env.geometries) {
+        for (const geo of geometries) {
             for (const item of bucket(geo.bucket).items) {
                 for (const p of geo.points(item)) out.push({ geo, item, key: p.key, x: p.x, y: p.y });
             }
@@ -47,7 +48,7 @@ export function createSelectTool(env) {
         const w = env.toWorld(sx, sy);
         const reach = Math.abs(env.toWorld(sx + HIT_PX, sy).x - w.x);
         let best = null, bestDist = HIT_PX;
-        for (const geo of env.geometries) {
+        for (const geo of geometries) {
             for (const item of bucket(geo.bucket).items) {
                 for (const p of geo.points(item)) {
                     if (Math.abs(p.x - w.x) > reach || Math.abs(p.y - w.y) > reach) continue;
@@ -71,7 +72,8 @@ export function createSelectTool(env) {
 
     function findLine(sx, sy) {
         let best = null, bestDist = HIT_PX;
-        for (const geo of env.geometries) {
+        for (const geo of geometries) {
+            if (geo.annotation) continue;
             for (const item of bucket(geo.bucket).items) {
                 const points = geo.points(item);
                 if (points.length !== 2) continue;
@@ -103,7 +105,13 @@ export function createSelectTool(env) {
         return { x: g.x, y: g.y };
     }
 
-    const findTarget = (sx, sy) => mode === "lines" ? findLine(sx, sy) : findNode(sx, sy);
+    function findTarget(sx, sy) {
+        if (mode === "nodes") return findNode(sx, sy);
+        const line = findLine(sx, sy);
+        if (line) return line;
+        const node = findNode(sx, sy);
+        return node?.refs.some(r => r.geo.annotation) ? node : null;
+    }
 
     // Lines that can be split by their midpoint handle: Lines mode, both ends selected, geometry supports it.
     function* splittable() {
@@ -158,9 +166,13 @@ export function createSelectTool(env) {
         return points.length === 2 ? points.find(q => q.key !== r.key) : null;
     }
 
-    function setStack(node) {
-        const next = node && mode === "nodes" && node.refs.length >= 2
-            ? { ends: node.refs.map((r, i) => ({ geo: r.geo, item: r.item, key: r.key, label: `L${i + 1}` })) }
+    function setStack(node, shared = true) {
+        let line = 0;
+        const next = node && (mode === "nodes" || node.refs.some(r => r.geo.annotation)) && node.refs.length >= 2
+            ? { shared, ends: node.refs.map(r => ({
+                geo: r.geo, item: r.item, key: r.key,
+                label: r.geo.annotation ? `Area ${r.item.id} · P${Number(r.key.slice(1)) + 1}` : `L${++line}`
+            })) }
             : null;
         if (!stack && !next) return;
         stack = next;
@@ -169,7 +181,7 @@ export function createSelectTool(env) {
 
     // Tells the UI about the stacked corner; closes it once its ends no longer meet (e.g. some were moved away).
     function publishStack() {
-        if (stack) {
+        if (stack?.shared) {
             const points = stack.ends.map(pointOf);
             const [c] = points;
             if (points.some(p => !p || Math.abs(p.x - c.x) >= SAME || Math.abs(p.y - c.y) >= SAME)) stack = null;
@@ -182,13 +194,16 @@ export function createSelectTool(env) {
         env.stackChanged?.({
             x: signed(c.x),
             y: signed(c.y),
+            shared: stack.shared,
             ends: stack.ends.map(r => {
                 const o = otherEnd(r);
                 return {
                     label: r.label,
                     selected: selected.has(refKey(r)),
                     length: o ? env.formatLength(Math.hypot(o.x - c.x, o.y - c.y)) : null,
-                    to: o ? `${signed(o.x)}, ${signed(o.y)}` : null
+                    to: r.geo.annotation ? `${signed(pointOf(r).x)}, ${signed(pointOf(r).y)}`
+                        : o ? `${signed(o.x)}, ${signed(o.y)}` : null,
+                    ...(r.geo.annotation ? { area: true } : {})
                 };
             })
         });
@@ -196,21 +211,20 @@ export function createSelectTool(env) {
 
     function drawStackLabels(g, view) {
         const d = view.dpr;
-        const c = pointOf(stack.ends[0]);
-        const cs = view.toScreen(c.x, c.y);
         g.font = `600 ${11 * d}px system-ui, -apple-system, sans-serif`;
         g.textAlign = "center";
         g.textBaseline = "middle";
         for (const r of stack.ends) {
+            const c = pointOf(r);
+            const cs = view.toScreen(c.x, c.y);
             const o = otherEnd(r);
-            if (!o) continue;
-            const os = view.toScreen(o.x, o.y);
+            const os = o && !r.geo.annotation ? view.toScreen(o.x, o.y) : { x: cs.x + 20, y: cs.y };
             const len = Math.hypot(os.x - cs.x, os.y - cs.y);
             if (len < 1) continue;
             const ux = (os.x - cs.x) / len, uy = (os.y - cs.y) / len;
             const reach = Math.min(36, len * 0.6);
             const on = selected.has(refKey(r));
-            if (on) {
+            if (on && !r.geo.annotation) {
                 g.strokeStyle = "#ff8fe0";
                 g.lineWidth = 3 * d;
                 g.beginPath();
@@ -223,8 +237,9 @@ export function createSelectTool(env) {
             if (ny > 0 || (ny === 0 && nx > 0)) { nx = -nx; ny = -ny; }
             const x = (cs.x + ux * reach + nx * 11) * d, y = (cs.y + uy * reach + ny * 11) * d;
             const w = g.measureText(r.label).width + 10 * d, h = 16 * d;
-            g.fillStyle = on ? "rgba(255,143,224,0.9)" : "rgba(20,16,44,0.85)";
-            g.strokeStyle = on ? "#ff8fe0" : "rgba(255,255,255,0.5)";
+            const color = r.geo.annotation ? "#8fe3ff" : "#ff8fe0";
+            g.fillStyle = on ? color : "rgba(20,16,44,0.85)";
+            g.strokeStyle = on ? color : "rgba(255,255,255,0.5)";
             g.lineWidth = 1 * d;
             g.beginPath();
             g.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
@@ -244,6 +259,10 @@ export function createSelectTool(env) {
     }
 
     function notifySelection() {
+        const refs = [...selected.values()];
+        const first = refs[0];
+        env.measurementSelectionChanged?.(first?.geo.annotation &&
+            refs.every(r => r.geo === first.geo && r.item === first.item) ? first.item.id : null);
         if (selected.size === lastCount) return;
         lastCount = selected.size;
         env.selectionChanged?.(lastCount);
@@ -297,16 +316,16 @@ export function createSelectTool(env) {
     function drawMovePreview(g, view, dx, dy) {
         const d = view.dpr;
         g.beginPath();
-        for (const geo of env.geometries) {
+        for (const geo of geometries) {
             for (const item of bucket(geo.bucket).items) {
                 const points = geo.points(item);
-                if (points.length !== 2 || !points.some(p => selected.has(keyOf(geo, item, p.key)))) continue;
-                const [a, b] = points.map(p => {
+                if (points.length < 2 || !points.some(p => selected.has(keyOf(geo, item, p.key)))) continue;
+                const screen = points.map(p => {
                     const moved = selected.has(keyOf(geo, item, p.key));
                     return view.toScreen(p.x + (moved ? dx : 0), p.y + (moved ? dy : 0));
                 });
-                g.moveTo(a.x * d, a.y * d);
-                g.lineTo(b.x * d, b.y * d);
+                screen.forEach((p, i) => i ? g.lineTo(p.x * d, p.y * d) : g.moveTo(p.x * d, p.y * d));
+                if (geo.annotation && screen.length >= 3) g.closePath();
             }
         }
         g.setLineDash([4 * d, 4 * d]);
@@ -320,6 +339,10 @@ export function createSelectTool(env) {
     return {
         id: "select",
         hotkey: "s",
+
+        canOpenMeasurement() {
+            return !process && !drag;
+        },
 
         startMove() {
             if (!selected.size) return false;
@@ -435,6 +458,7 @@ export function createSelectTool(env) {
                 env.log("action", `moved ${selected.size} line end${selected.size === 1 ? "" : "s"} by ${env.formatLength(Math.hypot(dx, dy))}`);
                 setProcess(null);
                 publishStack();
+                notifySelection();
                 return;
             }
             const handle = !e.shift && findHandle(e.sx, e.sy);
@@ -489,7 +513,12 @@ export function createSelectTool(env) {
             if (!alreadySelected) {
                 if (!e.shift) selected.clear();
                 addNode(node);
-                setStack(e.shift ? null : node);
+                if ([...selected.values()].some(r => r.geo.annotation)) {
+                    const refs = [...selected.values()];
+                    setStack({ refs }, !e.shift);
+                } else {
+                    setStack(e.shift ? null : node);
+                }
                 report();
             }
 
@@ -563,6 +592,8 @@ export function createSelectTool(env) {
                     drag.x = e.sx;
                     drag.y = e.sy;
                     selectInRect(drag, drag.base, drag.mode);
+                    const refs = [...selected.values()];
+                    if (refs.some(r => r.geo.annotation)) setStack({ refs }, false);
                     report();
                 } else if (!drag.shift && selected.size) {
                     selected.clear();
@@ -577,7 +608,10 @@ export function createSelectTool(env) {
                 removeNode(drag.toggleOnRelease);
                 report();
             }
-            if (drag.moved || drag.toggleOnRelease) publishStack();
+            if (drag.moved || drag.toggleOnRelease) {
+                publishStack();
+                notifySelection();
+            }
             drag = null;
             marker = null;
             updateHover(e.sx, e.sy);
@@ -623,7 +657,7 @@ export function createSelectTool(env) {
             }
             g.lineWidth = 1.5 * d;
 
-            if (mode === "lines" && hover && !drag && !isSelected(hover)) {
+            if (mode === "lines" && hover?.points && !drag && !isSelected(hover)) {
                 const [a, b] = hover.points.map(p => view.toScreen(p.x, p.y));
                 g.beginPath();
                 g.moveTo(a.x * d, a.y * d);
@@ -638,6 +672,16 @@ export function createSelectTool(env) {
             for (const p of allPoints()) {
                 const s = view.toScreen(p.x, p.y);
                 if (s.x < -10 || s.x > view.width + 10 || s.y < -10 || s.y > view.height + 10) continue;
+                if (p.geo.annotation) {
+                    const on = selected.has(refKey(p));
+                    g.beginPath();
+                    g.arc(s.x * d, s.y * d, (on ? 6 : 3.5) * d, 0, Math.PI * 2);
+                    g.fillStyle = on ? "#8fe3ff" : "#167aab";
+                    g.fill();
+                    g.strokeStyle = "#8fe3ff";
+                    g.stroke();
+                    continue;
+                }
                 if (selected.has(refKey(p))) {
                     const r = 4.5 * d;
                     g.fillStyle = "#ff8fe0";

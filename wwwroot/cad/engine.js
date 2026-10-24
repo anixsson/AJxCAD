@@ -8,7 +8,7 @@ import { addLine, lineGeometry } from "./lines.js";
 import { generateLines } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
-import { createRulerTool } from "./tools/ruler.js";
+import { createRulerTool, measurementGeometry } from "./tools/ruler.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -96,6 +96,7 @@ export function stickToBottom(box) {
 
 const env = {
     geometries,
+    selectionGeometries: [...geometries, measurementGeometry],
     toWorld,
     toScreen,
     snap,
@@ -109,6 +110,8 @@ const env = {
     processChanged: state => dotnet?.invokeMethodAsync("OnProcessChanged", state?.step ?? null, !!state?.hasBase),
     measureChanged: info => dotnet?.invokeMethodAsync("OnMeasureChanged", info),
     stackChanged: info => dotnet?.invokeMethodAsync("OnStackChanged", info),
+    measurementSelectionChanged: id => dotnet?.invokeMethodAsync("OnSelectedMeasurement",
+        id === null ? null : tools.ruler.inspect(id)),
     capture: id => el.setPointerCapture(id)
 };
 
@@ -152,6 +155,18 @@ export const setRulerSnap = mode => tools.ruler.setSnapMode(mode);
 export const setLineMulti = on => tools.line.setMulti(on);
 export const rulerAddPoints = () => tools.ruler.addPoints();
 export const rulerStop = () => tools.ruler.stop();
+export const rulerSave = () => tools.ruler.save();
+export const rulerTogglePoint = index => tools.ruler.togglePoint(index);
+export const rulerToggleDisplay = option => tools.ruler.toggleDisplay(option);
+export function editMeasurement(id) {
+    if (toolId !== "select") throw new Error("Use Select to edit a saved measurement");
+    setTool("ruler");
+    tools.ruler.open(id);
+}
+export function rulerDeleteAll() {
+    if (!window.confirm("Delete all measurements? Drawing lines will stay. You can undo this action.")) return;
+    tools.ruler.deleteAll();
+}
 
 // Esc first cancels what the current tool is doing (a measurement, a Move); returns false if there was nothing.
 export function cancelCurrent() {
@@ -260,6 +275,7 @@ function render() {
 
     const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects };
     for (const geo of geometries) geo.draw(ctx, bucket(geo.bucket).items, view);
+    tools.ruler.drawSaved(ctx, view);
     currentTool().draw?.(ctx, view);
 
     // Only tell Blazor when the "origin is centred" state flips, not on every pan frame.
@@ -337,7 +353,14 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
         if (document.activeElement !== el) el.focus({ preventScroll: true });
         if (e.button === 0) {
             log("mouse", `click detail=${e.detail}`);
-            currentTool().pointerDown?.(toolEvent(e));
+            const event = toolEvent(e);
+            const measurement = toolId === "select" && !event.shift && tools.select.canOpenMeasurement()
+                ? tools.ruler.hitText(event.sx, event.sy) : null;
+            if (measurement !== null) {
+                editMeasurement(measurement);
+            } else {
+                currentTool().pointerDown?.(event);
+            }
             return;
         }
         if (e.button !== 2) return;
