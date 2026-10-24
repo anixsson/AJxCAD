@@ -1,0 +1,49 @@
+@* File > Print / Export: pick a page frame, then print it or save it as PDF. *@
+@if (Pages.Length == 0)
+{
+    <p class="data-intro">There are no pages yet. Use the Page tool (P) to place a page frame around what you want to print.</p>
+}
+else
+{
+    <p class="data-intro">Choose the page to print. Drawing lines inside its frame are printed at the page's scale.</p>
+    <div class="stack-list print-pages" role="radiogroup" aria-label="Pages">
+        @foreach (var row in Pages)
+        {
+            var id = row.Id;
+            <button type="button" class="chip stack-end @(_selected == id ? "active" : "")" role="radio"
+                    aria-checked="@((_selected == id).ToString().ToLowerInvariant())" @onclick="() => _selected = id">
+                <span>@row.Name</span>
+                <span class="stack-meta">@row.Summary</span>
+            </button>
+        }
+    </div>
+}
+@if (Error is not null)
+{
+    <p class="test-error" role="alert">@Error</p>
+}
+@if (Status is not null)
+{
+    <p class="data-intro" role="status">@Status</p>
+}
+<div class="settings-actions">
+    <button type="button" class="chip" disabled="@(Busy || _selected is null)" @onclick="() => OnExport.InvokeAsync(_selected!.Value)">Export PDF…</button>
+    <button type="button" class="chip active" disabled="@(Busy || _selected is null)" @onclick="() => OnPrint.InvokeAsync(_selected!.Value)">Print…</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PageRow[] Pages { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string? Status { get; set; }
+    [Parameter] public EventCallback<int> OnPrint { get; set; }
+    [Parameter] public EventCallback<int> OnExport { get; set; }
+
+    private int? _selected;
+
+    protected override void OnParametersSet()
+    {
+        if (_selected is { } id && Pages.Any(p => p.Id == id)) return;
+        _selected = Pages.FirstOrDefault(p => p.Selected)?.Id ?? Pages.FirstOrDefault()?.Id;
+    }
+}

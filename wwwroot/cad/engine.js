@@ -4,12 +4,14 @@
 
 import { bucket, checkpoint, undo as undoData, describe, describePage, serialize, deserialize, clearAll } from "./store.js";
 import { getProject, updateProject, getView, setView } from "./project.js";
-import { addLine, lineGeometry } from "./lines.js";
+import { addLine, lineGeometry, LINES } from "./lines.js";
 import { generateLines } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
 import { createRulerTool, measurementGeometry } from "./tools/ruler.js";
 import { createPageTool } from "./tools/page.js";
+import { PAGES } from "./pages.js";
+import { pagePdf } from "./pdf.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -185,6 +187,13 @@ export const savePage = () => tools.page.save();
 export const setPageVisible = (id, on) => tools.page.setVisible(id, on);
 export const setPageLocked = (id, on) => tools.page.setLocked(id, on);
 export const deletePage = id => tools.page.deletePage(id);
+
+// Print / Export: the stored page (not an unsaved draft) as PDF text.
+export function getPagePdf(id) {
+    const page = bucket(PAGES).items.find(p => p.id === id);
+    if (!page) throw new Error(`Unknown page: ${id}`);
+    return { name: page.name, pdf: pagePdf(page, bucket(LINES).items) };
+}
 
 // Glides the view so the whole page frame fits with a margin.
 export function zoomToPage(id) {
@@ -365,10 +374,10 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
             if (!tool.space || typing(e)) return;
             e.preventDefault();
             if (!e.repeat && tool.space()) log("action", `Space handled (tool=${toolId})`);
-        } else if ((e.metaKey || e.ctrlKey) && !e.altKey && ["n", "o", "s"].includes(e.key.toLowerCase())) {
+        } else if ((e.metaKey || e.ctrlKey) && !e.altKey && ["n", "o", "s", "p"].includes(e.key.toLowerCase())) {
             e.preventDefault();
             const k = e.key.toLowerCase();
-            dotnet.invokeMethodAsync("OnFileCommand", k === "n" ? "new" : k === "o" ? "open" : e.shiftKey ? "saveas" : "save");
+            dotnet.invokeMethodAsync("OnFileCommand", k === "n" ? "new" : k === "o" ? "open" : k === "p" ? "print" : e.shiftKey ? "saveas" : "save");
         } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
             if (typing(e)) return;
             e.preventDefault();

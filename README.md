@@ -34,6 +34,10 @@ Press P for the Page tool to lay out print pages. The **Pages** panel opens at t
 
 Click a frame to select it and drag it anywhere on the board. In the panel, click a page name to select it and use its checkboxes to show or hide the frame or set **No select**. Hidden and No select frames cannot be clicked or dragged on the board, but you can still select them by name in the panel to edit them. The page information box sets the name, paper size, orientation and scale (type a factor or pick a preset), previewing the frame as you edit. **Save** (or Space) stores the changes, **Cancel** or Esc goes back to the saved page, **Zoom to** fits the page in the view, and **Delete** removes it. Every change can be undone. Pages are stored in the **Pages** (`pages`) bucket and saved in the `.ajx` project, and visible frames show with every tool.
 
+## Printing and PDF
+
+Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the system print dialog, and **Export PDF…** saves a PDF where you choose. The output is a vector PDF of the drawing lines inside the page frame, on the page's paper size at its scale. Measurements and the grid are not printed.
+
 ## Navigation and scale
 
 Pan and zoom the canvas as you work, or center the view on the origin. Grid spacing adapts to the zoom level. Choose metric or imperial measurements, set a 1:1 reference, and use the scale panel to check the current ratio and measured scale bar.

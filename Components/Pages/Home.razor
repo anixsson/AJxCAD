@@ -2,7 +2,7 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<div class="app @(_appearance != "full" ? "perf" : "") @(_appearance == "paper" ? "paper" : "") @(NativeWindow.IsMac ? "mac" : "win")">
+<div class="app @(EffectiveAppearance != "full" ? "perf" : "") @(EffectiveAppearance == "paper" ? "paper" : "") @(NativeWindow.IsMac ? "mac" : "win")">
 <div class="workspace" @ref="_workspace">
     <canvas @ref="_canvas"></canvas>
 </div>
@@ -17,6 +17,11 @@
 
 <Modal Open="@(_dialog == "data")" Title="Data buckets" Width="560" OnClose="CloseDialog">
     <DataDialog Buckets="_buckets" LoadPage="LoadBucketPage" />
+</Modal>
+
+<Modal Open="@(_dialog == "print")" Title="Print / Export" Width="460" OnClose="CloseDialog">
+    <PrintDialog Pages="@(_pages?.Pages ?? [])" Busy="_printing" Error="@_printError" Status="@_printStatus"
+                 OnPrint="PrintPage" OnExport="ExportPage" />
 </Modal>
 
 <Modal Open="@(_dialog == "guide")" Title="AJxCAD User guide" Width="560" OnClose="CloseDialog">
@@ -510,6 +515,8 @@
             new("New", "⌘N", () => OnFileCommand("new")), new("Open…", "⌘O", () => OnFileCommand("open")),
             new("Save", "⌘S", () => OnFileCommand("save")), new("Save As…", "⇧⌘S", () => OnFileCommand("saveas")),
             Separator,
+            new("Print / Export…", "⌘P", () => OnFileCommand("print")),
+            Separator,
             new("Project settings…", null, () => OpenDialog("project")),
             new("Data buckets…", null, ShowData),
             Separator,
@@ -931,13 +938,95 @@
         Preferences.Default.Get("performanceMode", false) ? "performance" : "full");
     private string _projectName = "Untitled";
 
+    // The Print / Export dialog shows the app in Paper without changing the saved preference.
+    private string EffectiveAppearance => _dialog == "print" ? "paper" : _appearance;
+    private string? _appliedAppearance;
+
+    private bool _printing;
+    private string? _printError;
+    private string? _printStatus;
+
+    private async Task OpenPrint()
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+        _pages = await _cad.InvokeAsync<PagesState>("getPages");
+        _printError = null;
+        _printStatus = null;
+        await OpenDialog("print");
+    }
+
+    private sealed record PagePdf(string Name, string Pdf);
+
+    private async Task<PagePdf> CreatePdf(int id)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+        return await _cad.InvokeAsync<PagePdf>("getPagePdf", id);
+    }
+
+    private static string PdfFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var safe = new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
+        return $"{(safe.Length == 0 ? "Page" : safe)}.pdf";
+    }
+
+    private async Task RunPrintAction(Func<Task<string?>> action)
+    {
+        if (_printing) return;
+        _printing = true;
+        _printError = null;
+        _printStatus = null;
+        try
+        {
+            _printStatus = await action();
+        }
+        catch (Exception ex)
+        {
+            _printError = ex.Message;
+            Log("error", $"print/export failed: {ex.Message}");
+        }
+        finally
+        {
+            _printing = false;
+        }
+    }
+
+    // Writes the PDF to the app cache and hands it to the system print dialog.
+    private Task PrintPage(int id) => RunPrintAction(async () =>
+    {
+        var page = await CreatePdf(id);
+        var folder = Path.Combine(FileSystem.CacheDirectory, "print");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, PdfFileName(page.Name));
+        await File.WriteAllTextAsync(path, page.Pdf, System.Text.Encoding.ASCII);
+        Log("action", $"print {path}");
+        await PrintService.PrintPdfAsync(path);
+        return null;
+    });
+
+    private Task ExportPage(int id) => RunPrintAction(async () =>
+    {
+        var page = await CreatePdf(id);
+        await using var stream = new MemoryStream(System.Text.Encoding.ASCII.GetBytes(page.Pdf));
+        var result = await CommunityToolkit.Maui.Storage.FileSaver.Default.SaveAsync(PdfFileName(page.Name), stream);
+        if (result.IsSuccessful)
+        {
+            Log("action", $"exported {result.FilePath}");
+            return $"Saved {result.FilePath}";
+        }
+        if (result.Exception is not null and not OperationCanceledException) throw result.Exception;
+        return null;
+    });
+
     private async Task SetAppearance(string appearance)
     {
         if (appearance is not ("full" or "performance" or "paper"))
             throw new ArgumentOutOfRangeException(nameof(appearance));
 
-        if (_cad is not null) await _cad.InvokeVoidAsync("setAppearance", appearance);
         _appearance = appearance;
+        await ApplyAppearance();
         Preferences.Default.Set("appearance", appearance);
     }
 
@@ -976,6 +1065,7 @@
             case "open": await OpenProject(); break;
             case "save": await SaveProject(false); break;
             case "saveas": await SaveProject(true); break;
+            case "print": await OpenPrint(); break;
         }
         await InvokeAsync(StateHasChanged);
     }
@@ -1133,15 +1223,27 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_debug && _debugOpen && _cad is not null) await _cad.InvokeVoidAsync("stickToBottom", _logBox);
-        if (!firstRender) return;
+        if (!firstRender)
+        {
+            await ApplyAppearance();
+            return;
+        }
 
         _self = DotNetObjectReference.Create(this);
         _cad = await JS.InvokeAsync<IJSObjectReference>("import", "./cad/engine.js");
         await _cad.InvokeVoidAsync("init", _workspace, _canvas, _self, ReferencePx, _unit.Mm);
-        await _cad.InvokeVoidAsync("setAppearance", _appearance);
+        await ApplyAppearance();
         await SyncProject();
         _pages = await _cad.InvokeAsync<PagesState>("getPages");
         StateHasChanged();
+    }
+
+    // Keeps the canvas theme in step with the app theme (including the Print dialog's temporary Paper).
+    private async Task ApplyAppearance()
+    {
+        if (_cad is null || _appliedAppearance == EffectiveAppearance) return;
+        _appliedAppearance = EffectiveAppearance;
+        await _cad.InvokeVoidAsync("setAppearance", _appliedAppearance);
     }
 
     // Called from cad.js when the scale changes (wheel zoom or buttons).
