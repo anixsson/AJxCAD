@@ -138,6 +138,8 @@ test("area ignores winding direction and the shaded area is drawn while adding p
     const areaText = calls.find(([m, text]) => m === "fillText" && text === "600 mm²");
     assert.ok(areaText, "area is labelled on the board");
     assert.ok(Math.abs(areaText[2] - 40 / 3) < 1e-9 && Math.abs(areaText[3] - 20) < 1e-9, "label sits at the triangle's centroid");
+    const angles = calls.filter(([m, text]) => m === "fillText" && text.endsWith("°")).map(([, text]) => text).sort();
+    assert.deepEqual(angles, ["36.9°", "53.1°", "90°"], "each corner of the 30-40-50 triangle shows its angle");
 
     tool.cancel();
     assert.equal(measures.at(-1), null);

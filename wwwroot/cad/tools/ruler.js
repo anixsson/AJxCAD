@@ -1,7 +1,8 @@
 // Ruler tool: measures without changing the drawing.
 //  - Click two points: the box shows the length, the x/y difference and both points.
 //  - "Add points" (Space) continues from there: every click adds a point and the total length grows.
-//    From three points the enclosed area is shaded, measured and labelled at its centre. "Stop" (Space) ends it and keeps the result.
+//    From three points the enclosed area is shaded, measured and labelled at its centre.
+//    Every corner where two measured lines meet shows the angle between them (0–180°). "Stop" (Space) ends it and keeps the result.
 //  - After a finished measurement, the next click clears it and starts a new one.
 //  - Snap "grid": points snap to line ends, otherwise to the grid. Snap "nodes": only line ends can be picked.
 
@@ -115,6 +116,63 @@ export function createRulerTool(env) {
             return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
         }
         return { x: cx / (3 * a2), y: cy / (3 * a2) };
+    }
+
+    const formatAngle = deg => `${Number(deg.toFixed(1))}°`;
+
+    // Angle at v between the lines v→a and v→b, in degrees (0–180); null if either line has no length.
+    function angleAt(a, v, b) {
+        const ux = a.x - v.x, uy = a.y - v.y, wx = b.x - v.x, wy = b.y - v.y;
+        if (Math.hypot(ux, uy) < 1e-9 || Math.hypot(wx, wy) < 1e-9) return null;
+        return Math.abs(Math.atan2(ux * wy - uy * wx, ux * wx + uy * wy)) * 180 / Math.PI;
+    }
+
+    // Every corner of the closed shape (the last point joins back to the first).
+    function corners(points) {
+        // The cursor point can sit on the last clicked point; repeated points are not corners.
+        const path = points.filter((p, i) => {
+            const q = points[(i - 1 + points.length) % points.length];
+            return points.length < 2 || Math.hypot(p.x - q.x, p.y - q.y) > 1e-9;
+        });
+        const out = [];
+        const n = path.length;
+        if (n < 3) return out;
+        for (let i = 0; i < n; i++) {
+            const a = path[(i - 1 + n) % n], v = path[i], b = path[(i + 1) % n];
+            const deg = angleAt(a, v, b);
+            if (deg !== null) out.push({ a, v, b, deg });
+        }
+        return out;
+    }
+
+    function angleMark(g, view, c) {
+        const d = view.dpr;
+        const [a, v, b] = [c.a, c.v, c.b].map(p => view.toScreen(p.x, p.y));
+        const la = Math.hypot(a.x - v.x, a.y - v.y), lb = Math.hypot(b.x - v.x, b.y - v.y);
+        const r = Math.min(18, la / 2, lb / 2);
+        if (r < 4) return;
+        const a1 = Math.atan2(a.y - v.y, a.x - v.x);
+        let delta = Math.atan2(b.y - v.y, b.x - v.x) - a1;
+        while (delta > Math.PI) delta -= 2 * Math.PI;
+        while (delta <= -Math.PI) delta += 2 * Math.PI;
+        g.strokeStyle = "rgba(255,214,120,0.9)";
+        g.lineWidth = 1.5 * d;
+        g.beginPath();
+        g.arc(v.x * d, v.y * d, r * d, a1, a1 + delta, delta < 0);
+        g.stroke();
+
+        const mid = a1 + delta / 2;
+        const tx = v.x + Math.cos(mid) * (r + 14), ty = v.y + Math.sin(mid) * (r + 14);
+        g.font = `600 ${11 * d}px system-ui, -apple-system, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillStyle = "#ffd678";
+        g.shadowColor = "rgba(0,0,0,0.8)";
+        g.shadowBlur = view.fx ? 4 * d : 0;
+        g.fillText(formatAngle(c.deg), tx * d, ty * d);
+        g.shadowBlur = 0;
+        g.textAlign = "start";
+        g.textBaseline = "alphabetic";
     }
 
     function areaLabel(g, view, text, at) {
@@ -263,6 +321,10 @@ export function createRulerTool(env) {
                     const len = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
                     if (len > 0) label(g, view, env.formatLength(len), screen[i - 1], screen[i]);
                 }
+            }
+
+            if ((phase === "multi" || phase === "done") && path.length >= 3) {
+                for (const c of corners(path)) angleMark(g, view, c);
             }
 
             if ((phase === "multi" || phase === "done") && path.length >= 3) {
