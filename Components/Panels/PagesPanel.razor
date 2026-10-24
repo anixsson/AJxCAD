@@ -1,0 +1,47 @@
+@* Pages tab: every page frame with a show/hide checkbox; click a name to select the page. *@
+@if (State.Pages.Length == 0)
+{
+    <p class="side-empty">No pages yet. Add a page, then click on the board to place its frame.</p>
+}
+else
+{
+    <div class="page-columns" aria-hidden="true"><span>Show</span><span>No select</span><span>Page</span></div>
+    <div class="page-list" role="list" aria-label="Pages">
+        @foreach (var page in State.Pages)
+        {
+            var p = page;
+            <div class="page-row" role="listitem">
+                <button type="button" class="chip check-chip page-visible @(p.Visible ? "active" : "")"
+                        role="checkbox" aria-checked="@p.Visible.ToString().ToLowerInvariant()"
+                        aria-label="Show @p.Name on the board" title="Show or hide this page frame"
+                        @onclick="() => OnToggleVisible.InvokeAsync((p.Id, !p.Visible))">
+                    <span class="check-box" aria-hidden="true">@(p.Visible ? "✓" : "")</span>
+                </button>
+                <button type="button" class="chip check-chip page-visible page-lock @(p.Locked ? "active" : "")"
+                        role="checkbox" aria-checked="@p.Locked.ToString().ToLowerInvariant()"
+                        aria-label="No select for @p.Name" title="No select: the frame cannot be clicked or dragged on the board"
+                        @onclick="() => OnToggleLocked.InvokeAsync((p.Id, !p.Locked))">
+                    <span class="check-box" aria-hidden="true">@(p.Locked ? "✓" : "")</span>
+                </button>
+                <button type="button" class="chip page-select @(p.Selected ? "active" : "") @(p.Visible ? "" : "hidden-page")"
+                        aria-pressed="@p.Selected.ToString().ToLowerInvariant()" title="Select this page"
+                        @onclick="() => OnSelect.InvokeAsync(p.Id)">
+                    <span class="page-name">@p.Name</span>
+                    <span class="page-meta">@p.Summary</span>
+                </button>
+            </div>
+        }
+    </div>
+}
+<div class="side-actions">
+    <button type="button" class="chip @(State.Placing ? "active" : "")" disabled="@State.Placing"
+            title="Click on the board to place a new page frame" @onclick="OnAdd">+ Add page</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PagesState State { get; set; } = default!;
+    [Parameter] public EventCallback OnAdd { get; set; }
+    [Parameter] public EventCallback<int> OnSelect { get; set; }
+    [Parameter] public EventCallback<(int Id, bool Visible)> OnToggleVisible { get; set; }
+    [Parameter] public EventCallback<(int Id, bool Locked)> OnToggleLocked { get; set; }
+}

@@ -326,6 +326,36 @@
     </div>
 }
 
+@if (_tool == "page" && _pages is { } pages)
+{
+    <SidePanel Label="Board panel" Tabs="SideTabs" @bind-ActiveTab="_sideTab">
+        @if (_sideTab == "Pages")
+        {
+            <PagesPanel State="pages" OnAdd="AddPage" OnSelect="SelectPage" OnToggleVisible="SetPageVisible" OnToggleLocked="SetPageLocked" />
+        }
+    </SidePanel>
+
+    <div class="toolmenu-dock">
+        @if (pages.Placing)
+        {
+            <section class="glass process-box" role="dialog" aria-label="Add page" aria-live="polite">
+                <div class="process-step">Add page</div>
+                <div class="process-title">Place the page frame</div>
+                <p class="process-text">Click on the board to place the frame's centre. Points snap to line ends and the grid.</p>
+                <div class="process-actions">
+                    <button type="button" class="chip" @onclick="CancelPage">Cancel</button>
+                </div>
+            </section>
+        }
+        else if (pages.Draft is { } draft)
+        {
+            <PageInfoBox Draft="draft" Papers="pages.Papers" Dirty="pages.Dirty" Error="@_pageError"
+                         OnChange="SetPageDraft" OnInvalid="ShowPageError" OnSave="SavePage" OnCancel="CancelPage"
+                         OnDelete="() => DeletePage(draft.Id)" OnZoom="() => ZoomToPage(draft.Id)" />
+        }
+    </div>
+}
+
 @if (_showDebugMenu && _debug)
 {
     <aside class="glass debug-panel @(_debugOpen ? "open" : "")" aria-label="Debug log">
@@ -774,6 +804,53 @@
         StateHasChanged();
     }
 
+    private static readonly string[] SideTabs = ["Pages"];
+    private string _sideTab = "Pages";
+    private PagesState? _pages;
+    private string? _pageError;
+
+    [JSInvokable]
+    public void OnPagesChanged(PagesState state)
+    {
+        if (state.SelectedId != _pages?.SelectedId) _pageError = null;
+        _pages = state;
+        StateHasChanged();
+    }
+
+    // Page actions report JS validation errors in the page information box instead of failing silently.
+    private async Task PageCall(string identifier, params object?[] args)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+        try
+        {
+            _pageError = null;
+            await _cad.InvokeVoidAsync(identifier, args);
+        }
+        catch (JSException ex)
+        {
+            _pageError = ex.Message;
+            Log("error", $"{identifier}: {ex.Message}");
+        }
+    }
+
+    private Task AddPage() => PageCall("startPlacePage");
+    private Task SelectPage(int id) => PageCall("selectPage", id);
+    private Task SetPageVisible((int Id, bool Visible) change) => PageCall("setPageVisible", change.Id, change.Visible);
+    private Task SetPageLocked((int Id, bool Locked) change) => PageCall("setPageLocked", change.Id, change.Locked);
+    private Task SetPageDraft(Dictionary<string, object> changes) => PageCall("setPageDraft", changes);
+    private Task SavePage() => PageCall("savePage");
+    private Task DeletePage(int id) => PageCall("deletePage", id);
+    private Task ZoomToPage(int id) => PageCall("zoomToPage", id);
+
+    private async Task CancelPage()
+    {
+        _pageError = null;
+        if (_cad is not null) await _cad.InvokeAsync<bool>("cancelCurrent");
+    }
+
+    private void ShowPageError(string message) => _pageError = message;
+
     // "general" tools work on any data; "data" tools each own a bucket of data (see wwwroot/cad/store.js).
     private record ToolDef(string Id, string Title, string Hotkey, string Group, string Icon);
 
@@ -782,6 +859,7 @@
         new("cross", "Cross", "V", "general", "<path class=\"cross\" d=\"M12 3v7M12 14v7M3 12h7M14 12h7\"/>"),
         new("select", "Select", "S", "general", "<path d=\"M5 3l14 8.5-6.2 1.6 3.7 6.4-2.6 1.5-3.7-6.4L5 18z\"/>"),
         new("ruler", "Ruler", "R", "general", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>"),
+        new("page", "Page", "P", "data", "<path class=\"outline\" d=\"M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6\"/>"),
         new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>")
     ];
 
@@ -1062,6 +1140,8 @@
         await _cad.InvokeVoidAsync("init", _workspace, _canvas, _self, ReferencePx, _unit.Mm);
         await _cad.InvokeVoidAsync("setAppearance", _appearance);
         await SyncProject();
+        _pages = await _cad.InvokeAsync<PagesState>("getPages");
+        StateHasChanged();
     }
 
     // Called from cad.js when the scale changes (wheel zoom or buttons).

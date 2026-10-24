@@ -9,6 +9,7 @@ import { generateLines } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
 import { createRulerTool, measurementGeometry } from "./tools/ruler.js";
+import { createPageTool } from "./tools/page.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -111,6 +112,8 @@ const env = {
     processChanged: state => dotnet?.invokeMethodAsync("OnProcessChanged", state?.step ?? null, !!state?.hasBase),
     measureChanged: info => dotnet?.invokeMethodAsync("OnMeasureChanged", info),
     stackChanged: info => dotnet?.invokeMethodAsync("OnStackChanged", info),
+    pagesChanged: state => dotnet?.invokeMethodAsync("OnPagesChanged", state),
+    viewSizeMm: () => ({ w: el.clientWidth / scale, h: el.clientHeight / scale }),
     measurementSelectionChanged: id => dotnet?.invokeMethodAsync("OnSelectedMeasurement",
         id === null ? null : tools.ruler.inspect(id)),
     capture: id => el.setPointerCapture(id)
@@ -171,6 +174,25 @@ export function deleteSelectedMeasurement() {
     }
     tools.ruler.deleteMeasurement(id);
     tools.select.dataChanged();
+}
+
+// Page tool and the Pages side panel.
+export const getPages = () => tools.page.state();
+export const startPlacePage = () => tools.page.startPlacing();
+export const selectPage = id => tools.page.select(id);
+export const setPageDraft = changes => tools.page.setDraft(changes);
+export const savePage = () => tools.page.save();
+export const setPageVisible = (id, on) => tools.page.setVisible(id, on);
+export const setPageLocked = (id, on) => tools.page.setLocked(id, on);
+export const deletePage = id => tools.page.deletePage(id);
+
+// Glides the view so the whole page frame fits with a margin.
+export function zoomToPage(id) {
+    const r = tools.page.rectOf(id);
+    const fit = Math.min(el.clientWidth / r.w, el.clientHeight / r.h) * 0.8;
+    const target = Math.min(oneToOne * 100, Math.max(oneToOne / 1000, fit));
+    const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    animateView(target, el.clientWidth / 2 - cx * target, el.clientHeight / 2 + cy * target);
 }
 
 // Esc first cancels what the current tool is doing (a measurement, a Move); returns false if there was nothing.
@@ -281,6 +303,7 @@ function render() {
     ctx.shadowBlur = 0;
 
     const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects, paper: paperTheme };
+    tools.page.drawSaved(ctx, view);
     for (const geo of geometries) geo.draw(ctx, bucket(geo.bucket).items, view);
     tools.ruler.drawSaved(ctx, view);
     currentTool().draw?.(ctx, view);
@@ -309,6 +332,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     tools.select = createSelectTool(env);
     tools.line = createLineTool(env);
     tools.ruler = createRulerTool(env);
+    tools.page = createPageTool(env);
 
     const toolEvent = e => {
         const r = el.getBoundingClientRect();

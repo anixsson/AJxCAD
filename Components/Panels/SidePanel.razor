@@ -1,0 +1,23 @@
+@* Top-right panel with tabs. Pages is the first tab; more (such as Layers) can be added later. *@
+<aside class="glass side-panel" aria-label="@Label">
+    <div class="side-tabs" role="tablist" aria-label="@Label">
+        @foreach (var tab in Tabs)
+        {
+            var active = tab == ActiveTab;
+            <button type="button" class="chip side-tab @(active ? "active" : "")" role="tab"
+                    aria-selected="@active.ToString().ToLowerInvariant()"
+                    @onclick="() => ActiveTabChanged.InvokeAsync(tab)">@tab</button>
+        }
+    </div>
+    <div class="side-body" role="tabpanel" aria-label="@ActiveTab">
+        @ChildContent
+    </div>
+</aside>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Side panel";
+    [Parameter, EditorRequired] public string[] Tabs { get; set; } = [];
+    [Parameter, EditorRequired] public string ActiveTab { get; set; } = "";
+    [Parameter] public EventCallback<string> ActiveTabChanged { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

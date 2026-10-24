@@ -69,6 +69,7 @@
         new("Toolmenus and options", "", "The bottom-center bars show controls for the active tool. Checkbox buttons show a tick when enabled.",
         [
             ("Toolmenu", "Select offers Nodes / Lines, Line offers Multi, and Ruler offers snapping options"),
+            ("Side panel", "The top-right panel holds the Pages tab while the Page tool is active"),
             ("Actions bar", "Appears when something is selected; Move starts a guided move"),
             ("Options bar", "In Select's Lines mode, Middle shows or hides midpoint split handles"),
             ("Space", "Activate the glowing default button in an interaction box. Otherwise, in Line, end the current chain"),
@@ -124,6 +125,20 @@
             ("Toolmenu: Multi", "Checked (default) keeps drawing connected lines; unchecked draws one line per two clicks. Changing it cancels the pending segment but keeps placed lines"),
             ("Double-click or Esc", "Finish and return to the Cross tool"),
             ("Cmd/Ctrl + Z", "Cancel the current line, then undo placed lines")
+        ]),
+        new("Page", "P", "Lay out print pages. A page frame is a sheet of paper (ISO A5–A0, or US Letter, Legal, Tabloid, ANSI C and ANSI D) multiplied by a scale factor: at 1:50 the frame covers 50 times the paper size of the drawing. Pages live in the Pages bucket and are saved with the project. Visible frames show on the board with every tool.",
+        [
+            ("P", "Switch to the Page tool. The Pages panel opens at the top right"),
+            ("+ Add page", "A dashed frame follows the cursor; click to place its centre. The first page picks a scale that fits about half of the view; later pages reuse the last page's paper and scale"),
+            ("Click a frame", "Select the page and open its information box. Drag to move the frame; it snaps to the grid and line ends"),
+            ("Pages panel", "Click a name to select that page. The checkbox shows or hides its frame on the board; hidden frames cannot be clicked on the board, and a selected hidden page shows dashed"),
+            ("No select", "Check No select in the Pages panel so the frame cannot be clicked or dragged on the board; clicks go through to what is underneath. You can still select the page by its name in the panel to edit it"),
+            ("Information box", "Name the page, choose the paper size, Portrait or Landscape, and type a scale factor or pick a preset. The board previews your edits"),
+            ("Save or Space", "Store the edits. Cancel or Esc goes back to the saved page. Selecting another page discards unsaved edits"),
+            ("Zoom to", "Fit the selected page in the view"),
+            ("Delete", "Remove the page frame; Cmd/Ctrl + Z restores it"),
+            ("Esc", "Stop placing, then discard unsaved edits, then clear the selection; once nothing is open, return to the Cross tool"),
+            ("Cmd/Ctrl + Z", "Drop the frame being placed or unsaved edits first, then undo placing, moving, saving, showing or hiding, No select changes, and deleting pages")
         ]),
         new("Navigation and scale", "", "Pan and zoom in any tool. The scale panel shows the current ratio, grid spacing and a measured scale bar. Its expandable settings control the measuring system and 1:1 reference.",
         [

@@ -1,0 +1,132 @@
+@using System.Globalization
+@* Information box for the selected page: edits preview live on the board until Save or Cancel. *@
+<section class="glass process-box page-box" aria-label="Page information" aria-live="polite">
+    <div class="process-step">Page@(Draft.Visible ? "" : " · hidden")@(Draft.Locked ? " · no select" : "")@(Dirty ? " · unsaved changes" : "")</div>
+
+    <label class="page-field">
+        <span class="measure-caption">Name</span>
+        <input class="text-input" type="text" maxlength="60" value="@_nameText" aria-label="Page name"
+               @oninput="SetName" />
+    </label>
+
+    <div class="measure-caption">Paper size</div>
+    @foreach (var group in Papers.GroupBy(p => p.Group))
+    {
+        <div class="unit-row page-papers" role="group" aria-label="@group.Key paper sizes">
+            <span class="unit-caption">@group.Key</span>
+            @foreach (var paper in group)
+            {
+                var id = paper.Id;
+                <button type="button" class="chip @(Draft.Paper == id ? "active" : "")"
+                        aria-pressed="@((Draft.Paper == id).ToString().ToLowerInvariant())"
+                        @onclick="() => Set(PaperKey, id)">@paper.Label</button>
+            }
+        </div>
+    }
+    <div class="unit-row" role="group" aria-label="Orientation">
+        @foreach (var (landscape, label) in new[] { (false, "Portrait"), (true, "Landscape") })
+        {
+            var value = landscape;
+            <button type="button" class="chip @(Draft.Landscape == value ? "active" : "")"
+                    aria-pressed="@((Draft.Landscape == value).ToString().ToLowerInvariant())"
+                    @onclick="() => Set(LandscapeKey, value)">@label</button>
+        }
+    </div>
+
+    <div class="measure-caption page-scale-caption">Scale · the frame covers paper size × factor</div>
+    <div class="unit-row page-scale" role="group" aria-label="Scale">
+        <span class="unit-caption">1 :</span>
+        <input @key="_scaleKey" class="text-input page-scale-input" type="number" min="0.01" max="100000" step="any"
+               aria-label="Scale factor" value="@_scaleText" @onchange="SetScaleText" />
+        @foreach (var preset in Presets)
+        {
+            var value = preset;
+            <button type="button" class="chip @(Math.Abs(Draft.Scale - value) < 1e-9 ? "active" : "")"
+                    @onclick="() => Set(ScaleKey, value)">@Num(value)</button>
+        }
+    </div>
+
+    <dl class="measure-grid page-grid">
+        <dt>Paper</dt><dd>@Draft.PaperSize</dd><dd>@Draft.ScaleLabel</dd>
+        <dt>Covers</dt><dd>w @Draft.Width</dd><dd>h @Draft.Height</dd>
+        <dt>Centre</dt><dd>x @Draft.X</dd><dd>y @Draft.Y</dd>
+    </dl>
+
+    @if (Error is not null)
+    {
+        <p class="test-error" role="alert">@Error</p>
+    }
+
+    <div class="process-actions page-actions">
+        <button type="button" class="chip danger" title="Delete this page frame (undo restores it)" @onclick="OnDelete">Delete</button>
+        <button type="button" class="chip" title="Fit this page in the view" @onclick="OnZoom">Zoom to</button>
+        <span class="page-actions-gap"></span>
+        <button type="button" class="chip" disabled="@(!Dirty)" @onclick="OnCancel">Cancel</button>
+        <button type="button" class="chip active default-action" data-default-action
+                disabled="@(!Dirty || string.IsNullOrWhiteSpace(_nameText))" @onclick="OnSave">Save<span class="key-hint">Space</span></button>
+    </div>
+</section>
+
+@code {
+    private static readonly double[] Presets = [1, 10, 20, 50, 100, 200];
+
+    [Parameter, EditorRequired] public PageDraft Draft { get; set; } = default!;
+    [Parameter, EditorRequired] public PaperOption[] Papers { get; set; } = [];
+    [Parameter] public bool Dirty { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<Dictionary<string, object>> OnChange { get; set; }
+    [Parameter] public EventCallback<string> OnInvalid { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+    [Parameter] public EventCallback OnZoom { get; set; }
+
+    // Inputs keep their own text while typing; they reload from the draft when it is reset (select, save, cancel, undo).
+    private string _nameText = "";
+    private string _scaleText = "";
+    private int _scaleKey;
+    private (int Id, int Revision)? _loaded;
+    private double _loadedScale = double.NaN;
+
+    protected override void OnParametersSet()
+    {
+        if (_loaded != (Draft.Id, Draft.Revision))
+        {
+            _loaded = (Draft.Id, Draft.Revision);
+            _nameText = Draft.Name;
+            _scaleText = Num(Draft.Scale);
+        }
+        else if (_loadedScale != Draft.Scale)
+        {
+            _scaleText = Num(Draft.Scale);
+        }
+        _loadedScale = Draft.Scale;
+    }
+
+    private const string NameKey = "name", PaperKey = "paper", LandscapeKey = "landscape", ScaleKey = "scale";
+
+    private Task Set(string key, object value) => OnChange.InvokeAsync(new Dictionary<string, object> { [key] = value });
+
+    private Task SetName(ChangeEventArgs e)
+    {
+        _nameText = e.Value?.ToString() ?? "";
+        return Set(NameKey, _nameText);
+    }
+
+    private async Task SetScaleText(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString() ?? "";
+        _scaleText = text;
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var scale)
+            && double.IsFinite(scale) && scale is >= 0.01 and <= 100000)
+        {
+            await Set(ScaleKey, scale);
+            return;
+        }
+        _scaleText = Num(Draft.Scale);
+        _scaleKey++; // re-create the input so it shows the restored value
+        await OnInvalid.InvokeAsync("Scale must be a number between 0.01 and 100000.");
+    }
+
+    private static string Num(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
+}

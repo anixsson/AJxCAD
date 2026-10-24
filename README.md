@@ -28,6 +28,12 @@ Select a saved measurement's blue point, or click its text to open the Ruler edi
 
 In the toolmenu, choose **Grid + nodes** to snap to line ends and the grid, or **Nodes only** to ignore the grid and pick only line ends. Ruler annotations do not change the drawing's lines. Without saving, clicking the board after a finished measurement starts a new one.
 
+## Page layout
+
+Press P for the Page tool to lay out print pages. The **Pages** panel opens at the top right. Press **+ Add page**, and a dashed frame follows the cursor; click to place its centre. A frame is a sheet of paper (ISO A5–A0, or US Letter, Legal, Tabloid, ANSI C and ANSI D, portrait or landscape) multiplied by a scale factor, so at 1:50 it covers 50 times the paper size. Larger factors frame more of the drawing. The first page picks a scale that fits about half of the view; later pages reuse the last page's paper and scale.
+
+Click a frame to select it and drag it anywhere on the board. In the panel, click a page name to select it and use its checkboxes to show or hide the frame or set **No select**. Hidden and No select frames cannot be clicked or dragged on the board, but you can still select them by name in the panel to edit them. The page information box sets the name, paper size, orientation and scale (type a factor or pick a preset), previewing the frame as you edit. **Save** (or Space) stores the changes, **Cancel** or Esc goes back to the saved page, **Zoom to** fits the page in the view, and **Delete** removes it. Every change can be undone. Pages are stored in the **Pages** (`pages`) bucket and saved in the `.ajx` project, and visible frames show with every tool.
+
 ## Navigation and scale
 
 Pan and zoom the canvas as you work, or center the view on the origin. Grid spacing adapts to the zoom level. Choose metric or imperial measurements, set a 1:1 reference, and use the scale panel to check the current ratio and measured scale bar.
