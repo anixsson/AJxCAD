@@ -45,13 +45,202 @@
         <aside class="glass tool-group" aria-label="@(group == "general" ? "General tools" : "Drawing tools")">
             @foreach (var t in _tools.Where(t => t.Group == group))
             {
-                <button type="button" class="tool-btn @(_tool == t.Id ? "active" : "")" title="@t.Title (@t.Hotkey)" aria-label="@t.Title" @onclick="() => SetTool(t.Id)">
+                <button type="button" class="tool-btn @(_tool == t.Id ? "active" : "")" aria-label="@t.Title (@t.Hotkey)" @onclick="() => SetTool(t.Id)">
                     <svg viewBox="0 0 24 24" aria-hidden="true">@((MarkupString)t.Icon)</svg>
+                    <span class="tool-tip" aria-hidden="true">@t.Title<kbd>@t.Hotkey</kbd></span>
                 </button>
             }
         </aside>
     }
 </div>
+
+@if (_tool == "select")
+{
+    <div class="toolmenu-dock">
+        @if (_moveStep is not null)
+        {
+            <section class="glass process-box" role="dialog" aria-label="Move selection" aria-live="polite">
+                @if (_moveStep == "base")
+                {
+                    <div class="process-step">Move · Step 1 of 2</div>
+                    <div class="process-title">@(_moveHasBase ? "Base point set" : "Pick a base point")</div>
+                    <p class="process-text">
+                        @(_moveHasBase
+                            ? "Click again to choose a different point, or press Next."
+                            : "Click a corner of the selection. Points snap to line ends and the grid.")
+                    </p>
+                    <div class="process-actions">
+                        <button type="button" class="chip" @onclick="CancelProcess">Cancel</button>
+                        <button type="button" class="chip active default-action" data-default-action disabled="@(!_moveHasBase)" @onclick="ConfirmMoveBase">Next<span class="key-hint">Space</span></button>
+                    </div>
+                }
+                else
+                {
+                    <div class="process-step">Move · Step 2 of 2</div>
+                    <div class="process-title">Pick the destination</div>
+                    <p class="process-text">Click where the base point should go. Everything selected moves with it.</p>
+                    <div class="process-actions">
+                        <button type="button" class="chip" @onclick="CancelProcess">Cancel</button>
+                    </div>
+                }
+            </section>
+        }
+        else if (_stack is { } st)
+        {
+            <section class="glass process-box" role="dialog" aria-label="Corner line ends" aria-live="polite">
+                <div class="process-step">Corner · @st.Ends.Length line ends</div>
+                <div class="process-title">x @st.X · y @st.Y</div>
+                <p class="process-text">Several lines meet here. Uncheck the lines that should stay put; only checked line ends are selected and move.</p>
+                <div class="stack-list" role="group" aria-label="Line ends at this corner">
+                    @for (var i = 0; i < st.Ends.Length; i++)
+                    {
+                        var index = i;
+                        var end = st.Ends[i];
+                        <button type="button" class="chip check-chip stack-end @(end.Selected ? "active" : "")"
+                                role="checkbox" aria-checked="@(end.Selected.ToString().ToLowerInvariant())"
+                                @onclick="() => ToggleStackEnd(index)">
+                            <span class="check-box" aria-hidden="true">@(end.Selected ? "✓" : "")</span>
+                            <span class="stack-label">@end.Label</span>
+                            <span class="stack-meta">@(end.Length is null ? "line end" : $"{end.Length} → {end.To}")</span>
+                        </button>
+                    }
+                </div>
+                <div class="process-actions">
+                    <button type="button" class="chip active default-action" data-default-action @onclick="CloseStack">Done<span class="key-hint">Space</span></button>
+                </div>
+            </section>
+        }
+        <div class="toolmenu-row">
+            <aside class="glass toolmenu" aria-label="Select toolmenu">
+                <span class="toolmenu-label">Select</span>
+                <div class="unit-row" role="group" aria-label="Selection mode">
+                    @foreach (var mode in new[] { "nodes", "lines" })
+                    {
+                        <button type="button" class="chip @(_selectionMode == mode ? "active" : "")"
+                                aria-pressed="@((_selectionMode == mode).ToString().ToLowerInvariant())"
+                                @onclick="() => SetSelectionMode(mode)">@(mode == "nodes" ? "Nodes" : "Lines")</button>
+                    }
+                </div>
+            </aside>
+            @if (_selectionCount > 0)
+            {
+                <aside class="glass toolmenu" aria-label="Selection actions">
+                    <span class="toolmenu-label">Actions</span>
+                    <div class="unit-row" role="group" aria-label="Selection actions">
+                        <button type="button" class="chip @(_moveStep is not null ? "active" : "")"
+                                title="Move the selection from a base point to a destination"
+                                disabled="@(_moveStep is not null)" @onclick="StartMove">Move</button>
+                    </div>
+                </aside>
+            }
+            @if (_selectionMode == "lines")
+            {
+                <aside class="glass toolmenu" aria-label="Select options">
+                    <span class="toolmenu-label">Options</span>
+                    <div class="unit-row" role="group" aria-label="Select options">
+                        <button type="button" class="chip check-chip @(_splitHandles ? "active" : "")"
+                                role="checkbox"
+                                title="Show the middle handle on selected lines; drag it to split the line"
+                                aria-checked="@(_splitHandles.ToString().ToLowerInvariant())"
+                                @onclick="ToggleSplitHandles">
+                            <span class="check-box" aria-hidden="true">@(_splitHandles ? "✓" : "")</span>
+                            Middle
+                        </button>
+                    </div>
+                </aside>
+            }
+        </div>
+    </div>
+}
+
+@if (_tool == "ruler")
+{
+    <div class="toolmenu-dock">
+        @if (_measure is { Mode: "single" } m)
+        {
+            <section class="glass process-box measure-box" aria-label="Measurement" aria-live="polite">
+                <div class="process-step">Ruler</div>
+                <div class="measure-length">@m.Length</div>
+                <dl class="measure-grid">
+                    <dt>Point 1</dt><dd>x @m.Ax</dd><dd>y @m.Ay</dd>
+                    <dt>Point 2</dt><dd>x @m.Bx</dd><dd>y @m.By</dd>
+                    <dt>Δ</dt><dd>x @m.Dx</dd><dd>y @m.Dy</dd>
+                </dl>
+                <p class="process-text">Click to start a new measurement, or add more points to measure a total length and area.</p>
+                <div class="process-actions">
+                    <button type="button" class="chip active default-action" data-default-action
+                            title="Keep clicking points to add them to the total length" @onclick="RulerAddPoints">Add points<span class="key-hint">Space</span></button>
+                </div>
+            </section>
+        }
+        else if (_measure is { } t)
+        {
+            <section class="glass process-box measure-box" aria-label="Measurement" aria-live="polite">
+                <div class="process-step">Ruler · @(t.Mode == "multi" ? "Adding points" : "Result") · @t.Points points</div>
+                <div class="measure-total">
+                    <div>
+                        <span class="measure-caption">Total length</span>
+                        <div class="measure-length">@t.Length</div>
+                    </div>
+                    <div>
+                        <span class="measure-caption">Area</span>
+                        <div class="measure-length">@(t.Area ?? "—")</div>
+                    </div>
+                </div>
+                @if (t.Mode == "multi")
+                {
+                    <p class="process-text">Click to add points. @(t.Area is null ? "The area appears from three points." : "The area closes back to the first point.")</p>
+                    <div class="process-actions">
+                        <button type="button" class="chip danger" data-default-action
+                                title="Finish and keep the result" @onclick="RulerStop">Stop<span class="key-hint">Space</span></button>
+                    </div>
+                }
+                else
+                {
+                    <p class="process-text">Click to start a new measurement.</p>
+                }
+            </section>
+        }
+        <div class="toolmenu-row">
+            <aside class="glass toolmenu" aria-label="Ruler toolmenu">
+                <span class="toolmenu-label">Ruler</span>
+                <div class="unit-row" role="group" aria-label="Snap to">
+                    @foreach (var (mode, label, title) in new[]
+                    {
+                        ("grid", "Grid + nodes", "Snap to line ends, otherwise to the grid"),
+                        ("nodes", "Nodes only", "Ignore the grid; only line ends can be picked")
+                    })
+                    {
+                        <button type="button" class="chip @(_rulerSnap == mode ? "active" : "")" title="@title"
+                                aria-pressed="@((_rulerSnap == mode).ToString().ToLowerInvariant())"
+                                @onclick="() => SetRulerSnap(mode)">@label</button>
+                    }
+                </div>
+            </aside>
+        </div>
+    </div>
+}
+
+@if (_tool == "line")
+{
+    <div class="toolmenu-dock">
+        <div class="toolmenu-row">
+            <aside class="glass toolmenu" aria-label="Line toolmenu">
+                <span class="toolmenu-label">Line</span>
+                <div class="unit-row" role="group" aria-label="Line options">
+                    <button type="button" class="chip check-chip @(_lineMulti ? "active" : "")"
+                            role="checkbox"
+                            title="Keep drawing connected lines; uncheck to draw one line at a time"
+                            aria-checked="@(_lineMulti.ToString().ToLowerInvariant())"
+                            @onclick="ToggleLineMulti">
+                        <span class="check-box" aria-hidden="true">@(_lineMulti ? "✓" : "")</span>
+                        Multi
+                    </button>
+                </div>
+            </aside>
+        </div>
+    </div>
+}
 
 @if (_showDebugMenu && _debug)
 {
@@ -310,6 +499,126 @@
         StateHasChanged();
     }
     private string _tool = "cross";
+    private string _selectionMode = "nodes";
+
+    private async Task SetSelectionMode(string mode)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setSelectionMode", mode);
+        _selectionMode = mode;
+    }
+
+    private bool _splitHandles = true;
+
+    private async Task ToggleSplitHandles()
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setSplitHandles", !_splitHandles);
+        _splitHandles = !_splitHandles;
+    }
+
+    private int _selectionCount;
+    private string? _moveStep; // null, "base" or "target"
+    private bool _moveHasBase;
+
+    [JSInvokable]
+    public void OnSelectionChanged(int count)
+    {
+        _selectionCount = count;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnProcessChanged(string? step, bool hasBase)
+    {
+        _moveStep = step;
+        _moveHasBase = hasBase;
+        StateHasChanged();
+    }
+
+    private async Task StartMove()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("startMove");
+    }
+
+    private async Task ConfirmMoveBase()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("confirmMoveBase");
+    }
+
+    private async Task CancelProcess()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("cancelProcess");
+    }
+
+    public sealed record StackEnd(string Label, bool Selected, string? Length, string? To);
+    public sealed record StackInfo(string X, string Y, StackEnd[] Ends);
+
+    private StackInfo? _stack;
+
+    [JSInvokable]
+    public void OnStackChanged(StackInfo? stack)
+    {
+        _stack = stack;
+        StateHasChanged();
+    }
+
+    private async Task ToggleStackEnd(int index)
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("toggleStackEnd", index);
+    }
+
+    private async Task CloseStack()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("closeStack");
+    }
+
+    public sealed record Measurement(string Mode, string Length, int Points,
+        string? Dx = null, string? Dy = null, string? Ax = null, string? Ay = null, string? Bx = null, string? By = null,
+        string? Area = null);
+
+    private string _rulerSnap = "grid";
+    private bool _lineMulti = true;
+
+    private async Task ToggleLineMulti()
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setLineMulti", !_lineMulti);
+        _lineMulti = !_lineMulti;
+    }
+    private Measurement? _measure;
+
+    private async Task RulerAddPoints()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("rulerAddPoints");
+    }
+
+    private async Task RulerStop()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("rulerStop");
+    }
+
+    private async Task SetRulerSnap(string mode)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setRulerSnap", mode);
+        _rulerSnap = mode;
+    }
+
+    [JSInvokable]
+    public void OnMeasureChanged(Measurement? measurement)
+    {
+        _measure = measurement;
+        StateHasChanged();
+    }
 
     // "general" tools work on any data; "data" tools each own a bucket of data (see wwwroot/cad/store.js).
     private record ToolDef(string Id, string Title, string Hotkey, string Group, string Icon);
@@ -318,6 +627,7 @@
     [
         new("cross", "Cross", "V", "general", "<path class=\"cross\" d=\"M12 3v7M12 14v7M3 12h7M14 12h7\"/>"),
         new("select", "Select", "S", "general", "<path d=\"M5 3l14 8.5-6.2 1.6 3.7 6.4-2.6 1.5-3.7-6.4L5 18z\"/>"),
+        new("ruler", "Ruler", "R", "general", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>"),
         new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>")
     ];
 
@@ -368,12 +678,13 @@
     }
 
     [JSInvokable]
-    public void OnEscape()
+    public async Task OnEscape()
     {
         Log("action", $"OnEscape in Blazor (dialog={_dialog}, menu={_openMenu}, tool={_tool})");
         if (_dialog is not null) _dialog = null;
         else if (_openMenu is not null) _openMenu = null;
-        else if (_tool != "cross") _ = SetTool("cross");
+        else if (_cad is not null && await _cad.InvokeAsync<bool>("cancelCurrent")) return;
+        else if (_tool != "cross") await SetTool("cross");
         else return;
         StateHasChanged();
     }

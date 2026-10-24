@@ -1,0 +1,340 @@
+// Ruler tool: measures without changing the drawing.
+//  - Click two points: the box shows the length, the x/y difference and both points.
+//  - "Add points" (Space) continues from there: every click adds a point and the total length grows.
+//    From three points the enclosed area is shaded, measured and labelled at its centre.
+//    Every corner where two measured lines meet shows the angle between them (0–180°). "Stop" (Space) ends it and keeps the result.
+//  - After a finished measurement, the next click clears it and starts a new one.
+//  - Snap "grid": points snap to line ends, otherwise to the grid. Snap "nodes": only line ends can be picked.
+
+import { bucket } from "../store.js";
+
+const NODE_PX = 30; // how far from a line end a click may be in "nodes" mode
+
+export function createRulerTool(env) {
+    let snapMode = "grid";
+    let points = [];
+    let phase = "idle"; // idle | picking (1 point) | measured (2 points) | multi (adding) | done
+    let hover = null;
+
+    function nearestNode(sx, sy) {
+        let best = null, bestDist = NODE_PX;
+        for (const geo of env.geometries) {
+            for (const item of bucket(geo.bucket).items) {
+                for (const p of geo.points(item)) {
+                    const s = env.toScreen(p.x, p.y);
+                    const dist = Math.hypot(s.x - sx, s.y - sy);
+                    if (dist <= bestDist) { best = { x: p.x, y: p.y, kind: "end" }; bestDist = dist; }
+                }
+            }
+        }
+        return best;
+    }
+
+    const resolve = (sx, sy) => snapMode === "nodes" ? nearestNode(sx, sy) : env.snap(sx, sy);
+    const signed = v => (v < 0 ? "−" : "") + env.formatLength(Math.abs(v));
+
+    function pathLength(pts) {
+        let total = 0;
+        for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        return total;
+    }
+
+    // Shoelace formula; the shape is closed back to the first point.
+    function polygonArea(pts) {
+        let sum = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i], b = pts[(i + 1) % pts.length];
+            sum += a.x * b.y - b.x * a.y;
+        }
+        return Math.abs(sum) / 2;
+    }
+
+    function publish() {
+        if (phase === "measured") {
+            const [a, b] = points;
+            env.measureChanged?.({
+                mode: "single",
+                length: env.formatLength(Math.hypot(b.x - a.x, b.y - a.y)),
+                dx: signed(b.x - a.x), dy: signed(b.y - a.y),
+                ax: signed(a.x), ay: signed(a.y),
+                bx: signed(b.x), by: signed(b.y),
+                points: 2
+            });
+        } else if (phase === "multi" || phase === "done") {
+            env.measureChanged?.({
+                mode: phase,
+                length: env.formatLength(pathLength(points)),
+                area: points.length >= 3 ? env.formatArea(polygonArea(points)) : null,
+                points: points.length
+            });
+        } else {
+            env.measureChanged?.(null);
+        }
+    }
+
+    function setPhase(next) {
+        const hadBox = phase === "measured" || phase === "multi" || phase === "done";
+        phase = next;
+        const hasBox = phase === "measured" || phase === "multi" || phase === "done";
+        if (hadBox || hasBox) publish();
+        env.redraw();
+    }
+
+    function clear() {
+        if (phase === "idle") return false;
+        points = [];
+        setPhase("idle");
+        return true;
+    }
+
+    function drawPoint(g, view, p, filled) {
+        const d = view.dpr;
+        const s = view.toScreen(p.x, p.y);
+        if (filled) {
+            g.fillStyle = "#ff8fe0";
+            g.beginPath();
+            g.arc(s.x * d, s.y * d, 3.5 * d, 0, Math.PI * 2);
+            g.fill();
+        } else {
+            const r = (p.kind === "end" ? 6 : 4) * d;
+            g.strokeStyle = p.kind === "end" ? "#ff8fe0" : "rgba(255,255,255,0.8)";
+            g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
+        }
+    }
+
+    // Area-weighted centre of the polygon; falls back to the point average when it is (nearly) flat.
+    function polygonCentroid(pts) {
+        let a2 = 0, cx = 0, cy = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i], q = pts[(i + 1) % pts.length];
+            const c = p.x * q.y - q.x * p.y;
+            a2 += c;
+            cx += (p.x + q.x) * c;
+            cy += (p.y + q.y) * c;
+        }
+        if (Math.abs(a2) < 1e-9) {
+            return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+        }
+        return { x: cx / (3 * a2), y: cy / (3 * a2) };
+    }
+
+    const formatAngle = deg => `${Number(deg.toFixed(1))}°`;
+
+    // Angle at v between the lines v→a and v→b, in degrees (0–180); null if either line has no length.
+    function angleAt(a, v, b) {
+        const ux = a.x - v.x, uy = a.y - v.y, wx = b.x - v.x, wy = b.y - v.y;
+        if (Math.hypot(ux, uy) < 1e-9 || Math.hypot(wx, wy) < 1e-9) return null;
+        return Math.abs(Math.atan2(ux * wy - uy * wx, ux * wx + uy * wy)) * 180 / Math.PI;
+    }
+
+    // Every corner of the closed shape (the last point joins back to the first).
+    function corners(points) {
+        // The cursor point can sit on the last clicked point; repeated points are not corners.
+        const path = points.filter((p, i) => {
+            const q = points[(i - 1 + points.length) % points.length];
+            return points.length < 2 || Math.hypot(p.x - q.x, p.y - q.y) > 1e-9;
+        });
+        const out = [];
+        const n = path.length;
+        if (n < 3) return out;
+        for (let i = 0; i < n; i++) {
+            const a = path[(i - 1 + n) % n], v = path[i], b = path[(i + 1) % n];
+            const deg = angleAt(a, v, b);
+            if (deg !== null) out.push({ a, v, b, deg });
+        }
+        return out;
+    }
+
+    function angleMark(g, view, c) {
+        const d = view.dpr;
+        const [a, v, b] = [c.a, c.v, c.b].map(p => view.toScreen(p.x, p.y));
+        const la = Math.hypot(a.x - v.x, a.y - v.y), lb = Math.hypot(b.x - v.x, b.y - v.y);
+        const r = Math.min(18, la / 2, lb / 2);
+        if (r < 4) return;
+        const a1 = Math.atan2(a.y - v.y, a.x - v.x);
+        let delta = Math.atan2(b.y - v.y, b.x - v.x) - a1;
+        while (delta > Math.PI) delta -= 2 * Math.PI;
+        while (delta <= -Math.PI) delta += 2 * Math.PI;
+        g.strokeStyle = "rgba(255,214,120,0.9)";
+        g.lineWidth = 1.5 * d;
+        g.beginPath();
+        g.arc(v.x * d, v.y * d, r * d, a1, a1 + delta, delta < 0);
+        g.stroke();
+
+        const mid = a1 + delta / 2;
+        const tx = v.x + Math.cos(mid) * (r + 14), ty = v.y + Math.sin(mid) * (r + 14);
+        g.font = `600 ${11 * d}px system-ui, -apple-system, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillStyle = "#ffd678";
+        g.shadowColor = "rgba(0,0,0,0.8)";
+        g.shadowBlur = view.fx ? 4 * d : 0;
+        g.fillText(formatAngle(c.deg), tx * d, ty * d);
+        g.shadowBlur = 0;
+        g.textAlign = "start";
+        g.textBaseline = "alphabetic";
+    }
+
+    function areaLabel(g, view, text, at) {
+        const d = view.dpr;
+        const s = view.toScreen(at.x, at.y);
+        g.font = `600 ${13 * d}px system-ui, -apple-system, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        const w = g.measureText(text).width + 14 * d, h = 22 * d;
+        g.fillStyle = "rgba(20,16,44,0.78)";
+        g.strokeStyle = "rgba(143,227,255,0.7)";
+        g.lineWidth = 1 * d;
+        g.beginPath();
+        g.roundRect(s.x * d - w / 2, s.y * d - h / 2, w, h, h / 2);
+        g.fill();
+        g.stroke();
+        g.fillStyle = "#8fe3ff";
+        g.fillText(text, s.x * d, s.y * d);
+        g.textAlign = "start";
+        g.textBaseline = "alphabetic";
+    }
+
+    function label(g, view, text, a, b) {
+        const d = view.dpr;
+        g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
+        g.fillStyle = "#fff";
+        g.shadowColor = "rgba(0,0,0,0.8)";
+        g.shadowBlur = view.fx ? 4 * d : 0;
+        g.fillText(text, (a.x + b.x) / 2 * d + 8 * d, (a.y + b.y) / 2 * d - 8 * d);
+        g.shadowBlur = 0;
+    }
+
+    return {
+        id: "ruler",
+        hotkey: "r",
+
+        setSnapMode(value) {
+            if (value !== "grid" && value !== "nodes") throw new Error(`Unknown ruler snap mode: ${value}`);
+            snapMode = value;
+            hover = null;
+            env.redraw();
+        },
+
+        // Continue a two-point measurement: following clicks add points to the total.
+        addPoints() {
+            if (phase !== "measured") return false;
+            setPhase("multi");
+            env.log("action", "ruler: adding points");
+            return true;
+        },
+
+        stop() {
+            if (phase !== "multi") return false;
+            setPhase("done");
+            env.log("action", `ruler: total ${env.formatLength(pathLength(points))} over ${points.length} points`);
+            return true;
+        },
+
+        deactivate() {
+            clear();
+            hover = null;
+        },
+
+        // Undo may move the measured line ends, so the measurement would be stale.
+        dataChanged() {
+            clear();
+        },
+
+        cancel: clear,
+
+        // While adding points, undo removes the last one; otherwise it drops the measurement.
+        undoStep() {
+            if (phase === "multi" && points.length > 2) {
+                points.pop();
+                publish();
+                env.redraw();
+                return true;
+            }
+            return clear();
+        },
+
+        pointerDown(e) {
+            const p = resolve(e.sx, e.sy);
+            if (!p) return;
+            if (phase === "multi") {
+                points.push(p);
+                publish();
+            } else if (phase === "picking") {
+                points.push(p);
+                setPhase("measured");
+                env.log("action", `measured ${env.formatLength(pathLength(points))}`);
+            } else {
+                points = [p];
+                setPhase("picking");
+            }
+            hover = p;
+            env.redraw();
+        },
+
+        pointerMove(e) {
+            hover = resolve(e.sx, e.sy);
+            env.redraw();
+        },
+
+        pointerLeave() {
+            hover = null;
+            env.redraw();
+        },
+
+        draw(g, view) {
+            const d = view.dpr;
+            const live = (phase === "picking" || phase === "multi") && hover;
+            const path = live ? [...points, hover] : points;
+            const screen = path.map(p => view.toScreen(p.x, p.y));
+
+            // Shaded area once there are three or more points.
+            if ((phase === "multi" || phase === "done") && path.length >= 3) {
+                g.beginPath();
+                screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
+                g.closePath();
+                g.fillStyle = "rgba(143,227,255,0.16)";
+                g.fill();
+
+                const first = screen[0], last = screen.at(-1);
+                g.setLineDash([3 * d, 5 * d]);
+                g.strokeStyle = "rgba(143,227,255,0.45)";
+                g.lineWidth = 1 * d;
+                g.beginPath();
+                g.moveTo(last.x * d, last.y * d);
+                g.lineTo(first.x * d, first.y * d);
+                g.stroke();
+                g.setLineDash([]);
+            }
+
+            if (screen.length >= 2) {
+                g.setLineDash([6 * d, 5 * d]);
+                g.strokeStyle = phase === "picking" || live ? "rgba(255,255,255,0.85)" : "#8fe3ff";
+                g.lineWidth = 1.5 * d;
+                g.beginPath();
+                screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
+                g.stroke();
+                g.setLineDash([]);
+
+                // Length of each segment along the path.
+                for (let i = 1; i < path.length; i++) {
+                    const len = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+                    if (len > 0) label(g, view, env.formatLength(len), screen[i - 1], screen[i]);
+                }
+            }
+
+            if ((phase === "multi" || phase === "done") && path.length >= 3) {
+                for (const c of corners(path)) angleMark(g, view, c);
+            }
+
+            if ((phase === "multi" || phase === "done") && path.length >= 3) {
+                const area = polygonArea(path);
+                if (area > 0) areaLabel(g, view, env.formatArea(area), polygonCentroid(path));
+            }
+
+            g.lineWidth = 1.5 * d;
+            for (const p of points) drawPoint(g, view, p, true);
+            if (hover) drawPoint(g, view, hover, false);
+        }
+    };
+}

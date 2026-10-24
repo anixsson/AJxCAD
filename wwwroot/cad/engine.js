@@ -8,6 +8,7 @@ import { addLine, lineGeometry } from "./lines.js";
 import { generateLines } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
+import { createRulerTool } from "./tools/ruler.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -64,6 +65,17 @@ function formatLength(mm) {
     return `${+(mm / 1000).toFixed(3)} m`;
 }
 
+function formatArea(mm2) {
+    if (imperial) {
+        const sqIn = mm2 / 645.16;
+        if (sqIn < 144) return `${+sqIn.toFixed(3)} in²`;
+        return `${+(sqIn / 144).toFixed(3)} ft²`;
+    }
+    if (mm2 < 100) return `${+mm2.toFixed(3)} mm²`;
+    if (mm2 < 1e6) return `${+(mm2 / 100).toFixed(3)} cm²`;
+    return `${+(mm2 / 1e6).toFixed(3)} m²`;
+}
+
 // Sends a line to the on-screen debug log.
 function log(kind, text) {
     dotnet?.invokeMethodAsync("OnLog", kind, text);
@@ -89,9 +101,14 @@ const env = {
     snap,
     minorStepMm,
     formatLength,
+    formatArea,
     log,
     redraw: () => draw(),
     setTool: name => setTool(name),
+    selectionChanged: count => dotnet?.invokeMethodAsync("OnSelectionChanged", count),
+    processChanged: state => dotnet?.invokeMethodAsync("OnProcessChanged", state?.step ?? null, !!state?.hasBase),
+    measureChanged: info => dotnet?.invokeMethodAsync("OnMeasureChanged", info),
+    stackChanged: info => dotnet?.invokeMethodAsync("OnStackChanged", info),
     capture: id => el.setPointerCapture(id)
 };
 
@@ -111,6 +128,35 @@ export function setTool(name) {
 export function setImperial(value) {
     imperial = value;
     draw();
+}
+
+export function setSelectionMode(mode) {
+    tools.select.setSelectionMode(mode);
+}
+
+// Midpoint split handles on selected lines (Select tool action menu).
+export function setSplitHandles(on) {
+    tools.select.setSplitHandles(on);
+}
+
+// Corner box: line ends stacked on a clicked corner (Select tool, Nodes mode).
+export const toggleStackEnd = index => tools.select.toggleStackEnd(index);
+export const closeStack = () => tools.select.closeStack();
+
+// Guided Move on the current selection (Select tool action menu).
+export const startMove = () => tools.select.startMove();
+export const confirmMoveBase = () => tools.select.confirmMoveBase();
+export const cancelProcess = () => tools.select.cancelProcess();
+
+export const setRulerSnap = mode => tools.ruler.setSnapMode(mode);
+export const setLineMulti = on => tools.line.setMulti(on);
+export const rulerAddPoints = () => tools.ruler.addPoints();
+export const rulerStop = () => tools.ruler.stop();
+
+// Esc first cancels what the current tool is doing (a measurement, a Move); returns false if there was nothing.
+export function cancelCurrent() {
+    const tool = currentTool();
+    return !!(tool.cancel ?? tool.cancelProcess)?.call(tool);
 }
 
 export function undo() {
@@ -239,6 +285,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     tools.cross = { id: "cross", hotkey: "v" };
     tools.select = createSelectTool(env);
     tools.line = createLineTool(env);
+    tools.ruler = createRulerTool(env);
 
     const toolEvent = e => {
         const r = el.getBoundingClientRect();
@@ -256,6 +303,20 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
         if (e.key === "Escape") {
             log("action", `Escape handled (tool=${toolId})`);
             dotnet.invokeMethodAsync("OnEscape");
+        } else if (e.key === " " && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            // Space presses the visible default button (marked data-default-action) of a guide or action box.
+            if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return;
+            const next = [...document.querySelectorAll("[data-default-action]")].find(b => !b.disabled && b.offsetParent);
+            if (next) {
+                e.preventDefault(); // also stops Space from pressing whichever button has focus
+                if (!e.repeat) next.click();
+                return;
+            }
+            // Otherwise the active tool may use Space (e.g. Line: end the chain and start a new one).
+            const tool = currentTool();
+            if (!tool.space || typing(e)) return;
+            e.preventDefault();
+            if (!e.repeat && tool.space()) log("action", `Space handled (tool=${toolId})`);
         } else if ((e.metaKey || e.ctrlKey) && !e.altKey && ["n", "o", "s"].includes(e.key.toLowerCase())) {
             e.preventDefault();
             const k = e.key.toLowerCase();

@@ -36,10 +36,11 @@
 
     private static readonly Section[] _sections =
     [
-        new("Getting started", "", "Start with an empty workspace or open an existing .ajx project. Pick tools from the floating toolbar or use their keyboard shortcuts.",
+        new("Getting started", "", "Start with an empty workspace or open an existing .ajx project. Pick tools from the floating toolbar or use their keyboard shortcuts; hover a tool to see its name and shortcut.",
         [
             ("Draw", "Press L, then click a start and end point. Keep clicking to create connected lines"),
             ("Edit", "Press S, select a line end and drag it to a new position"),
+            ("Measure", "Press R, then click two points"),
             ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
             ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk")
         ]),
@@ -65,22 +66,53 @@
             ("V", "Switch to the Cross tool"),
             ("Esc", "Return to the Cross tool from any other tool")
         ]),
-        new("Select", "S", "Edit the ends of lines. Line ends show as small squares; the one near your cursor is highlighted. Click it to select it, then drag to move it. Drag on empty space to select the line ends inside a rectangle. Lines that meet at a corner stay joined and move together.",
+        new("Toolmenus and options", "", "The bottom-center bars show controls for the active tool. Checkbox buttons show a tick when enabled.",
+        [
+            ("Toolmenu", "Select offers Nodes / Lines, Line offers Multi, and Ruler offers snapping options"),
+            ("Actions bar", "Appears when something is selected; Move starts a guided move"),
+            ("Options bar", "In Select's Lines mode, Middle shows or hides midpoint split handles"),
+            ("Space", "Activate the glowing default button in an interaction box. Otherwise, in Line, end the current chain"),
+            ("Defaults", "Middle and Multi start checked. Changing tools keeps these options; restarting the app resets them")
+        ]),
+        new("Select", "S", "Edit the ends of lines. Line ends show as small squares; the one near your cursor is highlighted. Click it to select it, then drag to move it. Drag on empty space to select the line ends inside a rectangle. Shared corners move together unless you uncheck individual line ends in the Corner box.",
         [
             ("S", "Switch to the Select tool"),
-            ("Click", "Select a line end"),
+            ("Toolmenu", "Use the bottom-center Nodes / Lines toggle to choose what clicking selects; switching modes keeps the selection"),
+            ("Click", "Select a line end in Nodes mode, or both ends of a line in Lines mode; shared corners stay joined"),
+            ("Highlights", "Every line with both ends selected lights up, including lines between selected corners"),
+            ("Corner box", "In Nodes mode, click where several line ends meet. Each checkbox lists a label (L1, L2…), length and far-end coordinates; matching labels appear near the corner. Uncheck ends to leave them in place, then drag the corner to move only your picks. Done or Space closes the box without clearing your selection"),
+            ("Split", "In Lines mode, drag the diamond handle in the middle of a selected line to split it into two lines and move the new shared node. One undo restores the line. Turn the handles on or off with the Middle checkbox in the Options bar"),
             ("Shift + click", "Add a line end; clicking an already-selected end removes it"),
             ("Shift + Command (Mac) / Shift + Ctrl (Windows) + click", "Remove a line end from the selection"),
-            ("Drag", "Move the selected ends together (or just the one you grab)"),
+            ("Drag", "Move the selected ends together by grabbing a node or line in the chosen mode; a dashed guide shows the offset distance from the start"),
             ("Drag empty space", "Select the line ends inside the rectangle; hold Shift to add, or Shift + Command on Mac / Shift + Ctrl on Windows to remove"),
             ("Click empty space", "Clear the selection"),
+            ("Actions > Move", "With a selection, press Move, click a base point (such as a corner), press Next or Space, then click the destination. A preview and offset show where the selection will go"),
+            ("Esc", "Cancel a running Move, then close an open Corner box; once neither is open, return to the Cross tool"),
             ("Cmd/Ctrl + Z", "Undo the move")
         ]),
-        new("Line", "L", "Draw straight lines. Click to set the start, click again to place the end. The next line starts where the last one ended. Points snap to the grid and to existing line ends, and the length is shown while drawing.",
+        new("Ruler", "R", "Measure without changing the drawing. Click two points to see the distance, the x and y difference, and both points' coordinates in your measuring system.",
+        [
+            ("R", "Switch to the Ruler tool"),
+            ("Click, click", "Pick the two points; a box shows the result"),
+            ("Click again", "Hide the box and start a new measurement from that point"),
+            ("Add points or Space", "After two points, keep clicking to add points to the total length. From three points the enclosed area is shaded and its size is shown at the center of the shape. Each corner shows the angle between its two lines"),
+            ("Length labels", "Each measured segment shows its length; the total adds the clicked segments, not the closing edge of the shaded area"),
+            ("Area and angles", "The shape closes from the last point to the first. Its area label sits at the centroid; amber arcs show the smaller angle (0–180°) at every corner, including the closing edge. Values update with the cursor and remain after Stop"),
+            ("Complex shapes", "For concave shapes, the area label or smaller-angle arc can sit outside the shading. Self-crossing shapes use signed-area cancellation rather than the total shaded area"),
+            ("Stop or Space", "Finish adding points and keep the total length and area"),
+            ("Cmd/Ctrl + Z", "While adding points, remove the last point"),
+            ("Grid + nodes", "Default. Snap to line ends, otherwise to the grid"),
+            ("Nodes only", "Ignore the grid; only line ends can be picked"),
+            ("Esc", "Clear the measurement; press again to return to the Cross tool")
+        ]),
+        new("Line", "L", "Draw straight lines. Click to set the start, click again to place the end. With Multi checked, the next line starts where the last one ended; otherwise, each pair of clicks draws a separate line. Points snap to the grid and to existing line ends, and the length is shown while drawing.",
         [
             ("L", "Switch to the Line tool"),
             ("Click", "Place a point"),
             ("Shift", "Lock the angle to 45° steps"),
+            ("Space", "End the current chain; placed lines stay and the next click starts a new line"),
+            ("Toolmenu: Multi", "Checked (default) keeps drawing connected lines; unchecked draws one line per two clicks. Changing it cancels the pending segment but keeps placed lines"),
             ("Double-click or Esc", "Finish and return to the Cross tool"),
             ("Cmd/Ctrl + Z", "Cancel the current line, then undo placed lines")
         ]),
@@ -113,6 +145,7 @@
         [
             ("Cmd/Ctrl + Z", "Undo a drawing edit. In the Line tool, first cancel the current line, then undo placed lines"),
             ("Esc", "Close an open dialog or menu; otherwise return to the Cross tool"),
+            ("Space", "Press the glowing default button in a guide box, such as Next in Move"),
             ("V / S / L", "Choose Cross, Select or Line when working in the workspace"),
             ("Project settings", "Title changes are not part of drawing undo"),
             ("Unavailable commands", "Redo, Cut, Copy and Paste are currently disabled")

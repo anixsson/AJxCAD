@@ -500,7 +500,8 @@ button {
 }
 
 .tool-btn svg path[d^="M5 19"],
-.tool-btn svg path.cross {
+.tool-btn svg path.cross,
+.tool-btn svg path.outline {
     fill: none;
 }
 
@@ -515,6 +516,235 @@ button {
 .tool-btn.active {
     background: linear-gradient(135deg, #ff8fe0, #8f7cff);
     color: #1a1538;
+}
+
+/* Name popup to the right of a tool button. Solid background: a nested backdrop blur does not render inside the glass bar. */
+.tool-btn {
+    position: relative;
+}
+
+.tool-tip {
+    position: absolute;
+    left: calc(100% + 14px);
+    top: 50%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px 5px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    background: rgba(30, 24, 70, 0.94);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    color: #e6e0ff;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-4px, -50%);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.tool-tip kbd {
+    padding: 0 5px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 10px;
+    opacity: 0.75;
+}
+
+.tool-btn:hover .tool-tip,
+.tool-btn:focus-visible .tool-tip {
+    opacity: 1;
+    transform: translate(0, -50%);
+}
+
+/* ---------- Toolmenu ---------- */
+
+.toolmenu-dock {
+    position: fixed;
+    z-index: 10;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.toolmenu-row {
+    display: flex;
+    gap: 10px;
+}
+
+.toolmenu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+}
+
+.process-box {
+    width: 300px;
+    padding: 12px 14px;
+}
+
+.process-step {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.process-title {
+    margin-top: 2px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.process-text {
+    margin: 6px 0 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(230, 230, 255, 0.8);
+}
+
+.measure-length {
+    margin: 2px 0 8px;
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.measure-grid {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 3px 12px;
+    margin: 0;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.measure-grid dt {
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.measure-grid dd {
+    margin: 0;
+}
+
+.measure-box .process-text {
+    margin: 10px 0 0;
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.measure-box .process-actions {
+    margin-top: 10px;
+}
+
+.measure-total {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.measure-caption {
+    font-size: 11px;
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.measure-total .measure-length {
+    margin: 0;
+    font-size: 20px;
+}
+
+.chip.danger {
+    border-color: rgba(255, 85, 96, 0.7);
+    background: rgba(255, 85, 96, 0.22);
+    color: #ffd6da;
+    font-weight: 600;
+}
+
+.chip.danger:hover {
+    background: rgba(255, 85, 96, 0.36);
+}
+
+.process-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.process-actions .chip {
+    flex: 0 0 auto;
+    padding: 4px 14px;
+}
+
+.check-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.check-box {
+    display: inline-grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid rgba(201, 182, 255, 0.6);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    color: #1a1538;
+}
+
+.check-chip.active .check-box {
+    background: #8fe3ff;
+    border-color: #8fe3ff;
+}
+
+.stack-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.stack-end {
+    justify-content: flex-start;
+    padding: 6px 8px;
+}
+
+.stack-label {
+    min-width: 22px;
+    font-weight: 700;
+    color: #ff8fe0;
+}
+
+.stack-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 400;
+    color: rgba(230, 230, 255, 0.75);
+}
+
+.chip:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.toolmenu-label {
+    font-size: 12px;
+    color: rgba(230, 230, 255, 0.65);
+}
+
+.toolmenu .unit-row {
+    margin: 0;
 }
 
 /* ---------- Scale panel ---------- */
@@ -700,12 +930,15 @@ button {
     initial-value: 0deg;
 }
 
-.modal.glow {
+.modal.glow,
+.default-action:not(:disabled) {
     position: relative;
 }
 
 .modal.glow::before,
-.modal.glow::after {
+.modal.glow::after,
+.default-action:not(:disabled)::before,
+.default-action:not(:disabled)::after {
     content: "";
     position: absolute;
     inset: -1px;
@@ -725,6 +958,30 @@ button {
     border-radius: 19px;
     filter: blur(6px);
     opacity: 0.45;
+}
+
+/* The button Space presses: same rotating light, scaled to a small button. */
+.default-action:not(:disabled)::before {
+    animation-duration: 3s;
+}
+
+.default-action:not(:disabled)::after {
+    inset: -4px;
+    padding: 5px;
+    border-radius: 12px;
+    filter: blur(5px);
+    opacity: 0.6;
+    animation-duration: 3s;
+}
+
+.key-hint {
+    margin-left: 6px;
+    padding: 0 5px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    opacity: 0.75;
 }
 
 @keyframes glow-spin {
@@ -1130,8 +1387,16 @@ button {
 }
 
 .perf .modal.glow::before,
-.perf .modal.glow::after {
+.perf .modal.glow::after,
+.perf .default-action::before,
+.perf .default-action::after {
     display: none;
+}
+
+/* Performance mode keeps the default button recognisable with a plain outline instead of the moving light. */
+.perf .default-action:not(:disabled) {
+    outline: 2px solid #ff8fe0;
+    outline-offset: 1px;
 }
 
 #blazor-error-ui {
