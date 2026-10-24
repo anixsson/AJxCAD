@@ -375,15 +375,17 @@ export function createRulerTool(env) {
             env.redraw();
         },
 
-        deleteAll() {
+        selectedMeasurementId: () => editingId,
+
+        deleteMeasurement(id) {
             const saved = bucket(MEASURES);
-            if (saved.items.length) {
-                checkpoint();
-                saved.items = [];
-            }
-            clear();
+            const index = saved.items.findIndex(item => item.id === id);
+            if (index === -1) throw new Error(`Unknown measurement: ${id}`);
+            checkpoint();
+            saved.items.splice(index, 1);
+            if (editingId === id) clear();
             textHits = [];
-            env.log("action", "all measurements deleted");
+            env.log("action", `measurement ${id} deleted`);
             env.redraw();
         },
 

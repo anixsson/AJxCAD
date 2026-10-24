@@ -24,7 +24,7 @@ Saved measurements live in the **Measurements** (`measures`) bucket and are incl
 
 Use the **Show on board** checkboxes to choose **Lengths**, **Angles**, and **Area** independently before saving. They update the preview immediately, and each measurement remembers its own choices. Area controls both the area label and shading; hiding values does not change the calculations in the information box. All three start checked, including for older saved measurements. With all text hidden, use Select to pick only a measurement point, then click the length text in its selection information box to reopen the editor.
 
-In Ruler's Actions bar, **Delete all measurements** asks for confirmation, then removes all saved measurements and clears the current measurement draft. Drawing lines are unchanged. Cmd/Ctrl + Z restores the deleted saved measurements.
+Select a saved measurement's blue point, or click its text to open the Ruler editor, to show **Delete measurement** in the Actions bar. It opens an in-app confirmation dialog: choose **Cancel** to keep it or **Delete measurement** to remove only that saved measurement. Closing the dialog or pressing Esc also cancels. Other measurements and drawing lines are unchanged. The button is hidden for unsaved drafts and mixed selections. Cmd/Ctrl + Z restores the deleted measurement.
 
 In the toolmenu, choose **Grid + nodes** to snap to line ends and the grid, or **Nodes only** to ignore the grid and pick only line ends. Ruler annotations do not change the drawing's lines. Without saving, clicking the board after a finished measurement starts a new one.
 

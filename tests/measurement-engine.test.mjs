@@ -89,14 +89,55 @@ test("only Select opens saved measurement text; blue points select without openi
         engine.undo();
         const restored = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures");
         assert.equal(restored.rows[0][1][1].enabled, true);
-        window.confirm = () => false;
-        engine.rulerDeleteAll();
-        assert.equal(engine.getBuckets().find(b => b.name === "measures").count, 1, "cancel keeps measurements");
-        window.confirm = () => true;
-        engine.rulerDeleteAll();
-        assert.equal(engine.getBuckets().find(b => b.name === "measures").count, 0);
+        assert.throws(() => engine.deleteSelectedMeasurement(), /Select a saved measurement/);
+        engine.setTool("ruler");
+        click(600, 300);
+        click(800, 300);
+        engine.rulerAddPoints();
+        click(800, 600);
+        engine.rulerStop();
+        assert.throws(() => engine.deleteSelectedMeasurement(), /Select a saved measurement/, "unsaved draft cannot be deleted");
+        engine.rulerSave();
+        const beforeDelete = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures").rows;
+        assert.equal(beforeDelete.length, 2);
+        engine.setTool("select");
+        flush();
+        click(200, 200);
+        assert.equal(calls.findLast(c => c.name === "OnSelectedMeasurement").args[0].id, beforeDelete[0][0]);
+        document.querySelector = () => ({});
+        document.querySelectorAll = () => [{
+            disabled: false, offsetParent: {},
+            click: () => assert.fail("modal must block the workspace default action")
+        }];
+        const beforeModalKeys = calls.length;
+        for (const key of ["Escape", " ", "r", "z", "n", "o", "s"]) {
+            document.dispatchEvent(Object.assign(new Event("keydown"), { key, metaKey: true }));
+            document.dispatchEvent(Object.assign(new Event("keydown"), { key }));
+        }
+        assert.equal(calls.length, beforeModalKeys, "modal handles its own keys without invoking workspace commands");
+        assert.deepEqual(JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures").rows,
+            beforeDelete, "dismissing a modal without confirmation leaves measurements unchanged");
+        document.querySelector = () => null;
+        document.querySelectorAll = () => [];
+        window.confirm = () => { assert.fail("deletion must not use a native confirmation dialog"); };
+        assert.equal(engine.getBuckets().find(b => b.name === "measures").count, 2, "selecting a measurement does not delete it");
+        engine.deleteSelectedMeasurement();
+        assert.deepEqual(JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures").rows,
+            [beforeDelete[1]], "only the selected measurement is removed");
+        assert.equal(calls.findLast(c => c.name === "OnSelectedMeasurement").args[0], null);
+        assert.equal(calls.findLast(c => c.name === "OnSelectionChanged").args[0], 0);
         engine.undo();
-        assert.equal(engine.getBuckets().find(b => b.name === "measures").count, 1, "confirmed deletion is undoable");
+        assert.deepEqual(JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures").rows,
+            beforeDelete, "confirmed deletion is undoable");
+        flush();
+        const restoredArea = texts.find(t => t.text.endsWith("²"));
+        click(restoredArea.x, restoredArea.y);
+        assert.equal(calls.findLast(c => c.name === "OnMeasureChanged").args[0].saved, true);
+        engine.deleteSelectedMeasurement();
+        assert.equal(engine.getBuckets().find(b => b.name === "measures").count, 1, "editor deletes only its saved measurement");
+        assert.equal(calls.findLast(c => c.name === "OnMeasureChanged").args[0], null);
+        engine.undo();
+        assert.equal(engine.getBuckets().find(b => b.name === "measures").count, 2, "editor deletion is undoable");
     } finally {
         engine.dispose();
         delete globalThis.window;

@@ -356,7 +356,7 @@ test("older saved measurements default to all data visible", () => {
     for (const option of ["showLengths", "showAngles", "showArea"]) assert.equal(measures.at(-1)[option], true);
 });
 
-test("delete all clears saved measurements and the open draft, leaves lines, and is undoable", () => {
+test("deleting one saved measurement clears its editor, preserves other data, and is undoable", () => {
     const { tool, measures } = setup([{ x1: 500, y1: 500, x2: 600, y2: 500 }]);
     triangle(tool);
     tool.save();
@@ -365,17 +365,34 @@ test("delete all clears saved measurements and the open draft, leaves lines, and
     const before = structuredClone(bucket(MEASURES).items);
     const drawing = structuredClone(lines.items);
     tool.open(before[0].id);
+    assert.equal(tool.selectedMeasurementId(), before[0].id);
     tool.togglePoint(1);
-    tool.deleteAll();
+    tool.deleteMeasurement(before[0].id);
     assert.equal(measures.at(-1), null);
-    assert.deepEqual(bucket(MEASURES).items, []);
+    assert.equal(tool.selectedMeasurementId(), null);
+    assert.deepEqual(bucket(MEASURES).items, [before[1]]);
     assert.deepEqual(lines.items, drawing);
     assert.equal(tool.hitText(50, 400), null);
-    assert.equal(savedDrawing(tool).texts.length, 0);
+    assert.equal(savedDrawing(tool).circles.length, 3);
     assert.equal(tool.undoStep(), false, "no active draft intercepts undo");
     assert.equal(undo(), true);
     tool.dataChanged();
     assert.deepEqual(bucket(MEASURES).items, before);
     assert.deepEqual(lines.items, drawing);
     assert.equal(savedDrawing(tool).circles.length, 6);
+});
+
+test("deletion rejects unknown measurements and preserves an unrelated draft", () => {
+    const { tool, measures } = setup([]);
+    triangle(tool);
+    tool.save();
+    const id = bucket(MEASURES).items[0].id;
+    triangle(tool);
+    const draft = structuredClone(measures.at(-1));
+    assert.equal(tool.selectedMeasurementId(), null);
+    assert.throws(() => tool.deleteMeasurement(-1), /Unknown measurement/);
+    assert.equal(bucket(MEASURES).items.length, 1);
+    tool.deleteMeasurement(id);
+    assert.deepEqual(measures.at(-1), draft);
+    assert.equal(bucket(MEASURES).items.length, 0);
 });

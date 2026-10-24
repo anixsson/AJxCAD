@@ -163,9 +163,13 @@ export function editMeasurement(id) {
     setTool("ruler");
     tools.ruler.open(id);
 }
-export function rulerDeleteAll() {
-    if (!window.confirm("Delete all measurements? Drawing lines will stay. You can undo this action.")) return;
-    tools.ruler.deleteAll();
+export function deleteSelectedMeasurement() {
+    const id = currentTool().selectedMeasurementId?.() ?? null;
+    if (id === null || (toolId === "select" && !tools.select.canOpenMeasurement())) {
+        throw new Error("Select a saved measurement before deleting it");
+    }
+    tools.ruler.deleteMeasurement(id);
+    tools.select.dataChanged();
 }
 
 // Esc first cancels what the current tool is doing (a measurement, a Move); returns false if there was nothing.
@@ -316,6 +320,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     // Tool shortcuts must not fire while a dialog is open or a text field has focus.
     const typing = e => !!document.querySelector(".modal-backdrop") || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || !!e.target?.isContentEditable;
     on(document, "keydown", e => {
+        if (document.querySelector(".modal-backdrop")) return;
         if (e.key === "Escape") {
             log("action", `Escape handled (tool=${toolId})`);
             dotnet.invokeMethodAsync("OnEscape");

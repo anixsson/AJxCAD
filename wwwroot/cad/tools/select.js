@@ -258,11 +258,15 @@ export function createSelectTool(env) {
         notifySelection();
     }
 
-    function notifySelection() {
+    function selectedMeasurementId() {
         const refs = [...selected.values()];
         const first = refs[0];
-        env.measurementSelectionChanged?.(first?.geo.annotation &&
-            refs.every(r => r.geo === first.geo && r.item === first.item) ? first.item.id : null);
+        return first?.geo.annotation &&
+            refs.every(r => r.geo === first.geo && r.item === first.item) ? first.item.id : null;
+    }
+
+    function notifySelection() {
+        env.measurementSelectionChanged?.(selectedMeasurementId());
         if (selected.size === lastCount) return;
         lastCount = selected.size;
         env.selectionChanged?.(lastCount);
@@ -339,6 +343,8 @@ export function createSelectTool(env) {
     return {
         id: "select",
         hotkey: "s",
+
+        selectedMeasurementId,
 
         canOpenMeasurement() {
             return !process && !drag;

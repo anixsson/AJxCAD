@@ -27,6 +27,20 @@
     <AboutDialog />
 </Modal>
 
+<Modal Open="@(_dialog == "delete-measurement")" Title="Delete measurement?" Width="460" OnClose="CloseDialog">
+    <p class="data-intro">Delete this saved measurement? Other measurements and drawing lines will stay. You can undo this action.</p>
+    @if (_deleteMeasurementError is not null)
+    {
+        <p class="test-error" role="alert">@_deleteMeasurementError</p>
+    }
+    <div class="settings-actions">
+        <button type="button" class="chip" disabled="@_deletingMeasurement" @onclick="CloseDialog">Cancel</button>
+        <button type="button" class="chip danger" disabled="@_deletingMeasurement" @onclick="ConfirmDeleteMeasurement">
+            @(_deletingMeasurement ? "Deleting..." : "Delete measurement")
+        </button>
+    </div>
+</Modal>
+
 @if (_showDebugMenu)
 {
     <Modal Open="@(_dialog == "testdata")" Title="Test data" Width="520" OnClose="CloseDialog">
@@ -146,6 +160,10 @@
                         <button type="button" class="chip @(_moveStep is not null ? "active" : "")"
                                 title="Move the selection from a base point to a destination"
                                 disabled="@(_moveStep is not null)" @onclick="StartMove">Move</button>
+                        @if (_selectedMeasurement is not null && _moveStep is null)
+                        {
+                            <button type="button" class="chip danger" @onclick="DeleteSelectedMeasurement">Delete measurement</button>
+                        }
                     </div>
                 </aside>
             }
@@ -276,10 +294,13 @@
                     }
                 </div>
             </aside>
-            <aside class="glass toolmenu" aria-label="Measurement actions">
-                <span class="toolmenu-label">Actions</span>
-                <button type="button" class="chip danger" @onclick="RulerDeleteAll">Delete all measurements</button>
-            </aside>
+            @if (_measure is { Saved: true })
+            {
+                <aside class="glass toolmenu" aria-label="Measurement actions">
+                    <span class="toolmenu-label">Actions</span>
+                    <button type="button" class="chip danger" @onclick="DeleteSelectedMeasurement">Delete measurement</button>
+                </aside>
+            }
         </div>
     </div>
 }
@@ -694,9 +715,37 @@
         if (_cad is not null) await _cad.InvokeVoidAsync("rulerToggleDisplay", option);
     }
 
-    private async Task RulerDeleteAll()
+    private bool _deletingMeasurement;
+    private string? _deleteMeasurementError;
+
+    private Task DeleteSelectedMeasurement()
     {
-        if (_cad is not null) await _cad.InvokeVoidAsync("rulerDeleteAll");
+        _deleteMeasurementError = null;
+        return OpenDialog("delete-measurement");
+    }
+
+    private async Task ConfirmDeleteMeasurement()
+    {
+        if (_deletingMeasurement) return;
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        _deleteMeasurementError = null;
+        _deletingMeasurement = true;
+        try
+        {
+            await _cad.InvokeVoidAsync("deleteSelectedMeasurement");
+            CloseDialog();
+        }
+        catch (JSException ex)
+        {
+            _deleteMeasurementError = $"Could not delete the measurement: {ex.Message}";
+            Log("error", _deleteMeasurementError);
+        }
+        finally
+        {
+            _deletingMeasurement = false;
+        }
     }
 
     private async Task RulerSave()

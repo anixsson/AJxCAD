@@ -583,6 +583,7 @@ test("shared corners include blue area choices and unchecked area points stay pu
     assert.equal(box.ends[1].area, true);
     assert.equal(box.ends[1].label, "Area 100 · P1");
     assert.equal(measurements.at(-1), null, "a mixed selection does not show area-only information");
+    assert.equal(tool.selectedMeasurementId(), null, "mixed selection has no deletion target");
     assert.ok(draw(tool).calls.some(([m, text]) => m === "fillText" && text === "Area 100 · P1"));
     tool.toggleStackEnd(1);
     tool.pointerDown(pointer(0, 0));
@@ -617,6 +618,7 @@ test("blue area-only points select and move without activating the editor", () =
     click(tool, 100, 100);
     assert.equal(counts.at(-1), 1);
     assert.equal(measurements.at(-1), 100, "area-only information is available");
+    assert.equal(tool.selectedMeasurementId(), 100, "only this saved measurement is the deletion target");
     tool.pointerDown(pointer(100, 100));
     tool.pointerMove(pointer(120, 100));
     tool.pointerUp(pointer(120, 100));
@@ -624,6 +626,7 @@ test("blue area-only points select and move without activating the editor", () =
     assert.deepEqual(geometry(), [[0, 0, 100, 0]]);
     click(tool, 0, 0, { shift: true });
     assert.equal(measurements.at(-1), null, "adding a drawing endpoint hides area-only information");
+    assert.equal(tool.selectedMeasurementId(), null);
     assert.equal(tool.canOpenMeasurement(), true);
 });
 
