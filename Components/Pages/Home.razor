@@ -2,31 +2,34 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<div class="app @(EffectiveAppearance != "full" ? "perf" : "") @(EffectiveAppearance == "paper" ? "paper" : "") @(NativeWindow.IsMac ? "mac" : "win")">
+<div class="app @(EffectiveAppearance != "full" ? "perf" : "") @(EffectiveAppearance == "paper" ? "paper" : "") @(NativeWindow.IsMac ? "mac" : "win")"
+     style="--ui-scale: @Css(_uiScalePercent / 100d); --text-scale: @Css(_textScalePercent / 100d)">
 <div class="workspace" @ref="_workspace">
     <canvas @ref="_canvas"></canvas>
 </div>
 
-<Modal Open="@(_dialog == "settings")" Title="App settings" Width="460" OnClose="CloseDialog">
+<Modal Open="@(_dialog == "settings")" Title="App settings" Width="500" OnClose="CloseDialog">
     <SettingsDialog Appearance="_appearance" AppearanceChanged="SetAppearance" ShowDebugMenu="_showDebugMenu" ShowDebugMenuChanged="SetShowDebugMenu"
-                    ExtendedZoom="_extendedZoom" ExtendedZoomChanged="SetExtendedZoom" GridColor="_gridColor" GridColorChanged="SetGridColor" />
+                    ExtendedZoom="_extendedZoom" ExtendedZoomChanged="SetExtendedZoom" GridColor="_gridColor" GridColorChanged="SetGridColor"
+                    UiScalePercent="_uiScalePercent" UiScalePercentChanged="SetUiScalePercent"
+                    TextScalePercent="_textScalePercent" TextScalePercentChanged="SetTextScalePercent" />
 </Modal>
 
-<Modal Open="@(_dialog == "project")" Title="Project settings" Width="460" OnClose="CloseDialog">
+<Modal Open="@(_dialog == "project")" Title="Project settings" Width="500" OnClose="CloseDialog">
     <ProjectSettingsDialog ProjectName="@_projectName" ProjectNameChanged="SetProjectName" OnShowData="ShowData"
                            PointSettings="_projectPointSettings" OnPointSettingsChanged="ChangePointSettings" PointError="@_pointSettingsError" />
 </Modal>
 
-<Modal Open="@(_dialog == "data")" Title="Data buckets" Width="560" OnClose="CloseDialog">
+<Modal Open="@(_dialog == "data")" Title="Data buckets" Width="600" OnClose="CloseDialog">
     <DataDialog Buckets="_buckets" LoadPage="LoadBucketPage" />
 </Modal>
 
-<Modal Open="@(_dialog == "print")" Title="Print / Export" Width="460" OnClose="CloseDialog">
+<Modal Open="@(_dialog == "print")" Title="Print / Export" Width="500" OnClose="CloseDialog">
     <PrintDialog Pages="@(_pages?.Pages ?? [])" Busy="_printing" Error="@_printError" Status="@_printStatus"
                  OnPrint="PrintPage" OnExport="ExportPage" ExportedPath="@_exportedPath" OnOpenLocation="OpenExportLocation" OnOpenFile="OpenExportedFile" />
 </Modal>
 
-<Modal Open="@(_dialog == "guide")" Title="AJxCAD User guide" Width="560" OnClose="CloseDialog">
+<Modal Open="@(_dialog == "guide")" Title="AJxCAD User guide" Width="600" OnClose="CloseDialog">
     <UserGuideDialog />
 </Modal>
 
@@ -34,7 +37,7 @@
     <AboutDialog />
 </Modal>
 
-<Modal Open="@(_dialog == "delete-measurement")" Title="Delete measurement?" Width="460" OnClose="CloseDialog">
+<Modal Open="@(_dialog == "delete-measurement")" Title="Delete measurement?" Width="500" OnClose="CloseDialog">
     <p class="data-intro">Delete this saved measurement? Other measurements and drawing lines will stay. You can undo this action.</p>
     @if (_deleteMeasurementError is not null)
     {
@@ -51,7 +54,7 @@
 
 @if (_showDebugMenu)
 {
-    <Modal Open="@(_dialog == "testdata")" Title="Test data" Width="520" OnClose="CloseDialog">
+    <Modal Open="@(_dialog == "testdata")" Title="Test data" Width="560" OnClose="CloseDialog">
         <TestDataDialog OnGenerate="GenerateTestData" />
     </Modal>
 }
@@ -1408,6 +1411,8 @@
 
     private bool _extendedZoom = Preferences.Default.Get("extendedZoom", false);
     private string? _gridColor = Preferences.Default.ContainsKey("gridColor") ? Preferences.Default.Get("gridColor", "") : null;
+    private int _uiScalePercent = Math.Clamp(Preferences.Default.Get("uiScalePercent", 100), 80, 140);
+    private int _textScalePercent = Math.Clamp(Preferences.Default.Get("textScalePercent", 100), 100, 160);
 
     private async Task SetExtendedZoom(bool enabled)
     {
@@ -1415,6 +1420,24 @@
         await _cad.InvokeVoidAsync("setExtendedZoom", enabled);
         _extendedZoom = enabled;
         Preferences.Default.Set("extendedZoom", enabled);
+    }
+
+    private void SetUiScalePercent(int percent)
+    {
+        if (percent is < 80 or > 140 || (percent - 80) % 10 != 0)
+            throw new ArgumentOutOfRangeException(nameof(percent));
+
+        _uiScalePercent = percent;
+        Preferences.Default.Set("uiScalePercent", percent);
+    }
+
+    private void SetTextScalePercent(int percent)
+    {
+        if (percent is < 100 or > 160 || percent % 10 != 0)
+            throw new ArgumentOutOfRangeException(nameof(percent));
+
+        _textScalePercent = percent;
+        Preferences.Default.Set("textScalePercent", percent);
     }
 
     private async Task SetGridColor(string? color)

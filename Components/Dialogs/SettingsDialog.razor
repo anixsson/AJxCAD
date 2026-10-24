@@ -1,5 +1,5 @@
-<div class="settings">
-    <p class="data-intro">These settings belong to the app. Appearance, zoom range and grid color are kept on this computer; developer tools reset at launch. Project settings are in File → Project settings.</p>
+<div class="settings app-settings">
+    <p class="data-intro">These settings belong to the app. Appearance, UI scale, text size, zoom range and grid color are kept on this computer; developer tools reset at launch. Project settings are in File → Project settings.</p>
 
     <h3>Appearance</h3>
     <div class="mode-options">
@@ -16,6 +16,25 @@
             <span>White paper, black ink and monochrome controls. No glows or blur.</span>
         </button>
     </div>
+    <h3>Interface size</h3>
+    <div class="setting-row setting-scale" role="group" aria-label="UI scale">
+        <span>UI scale</span>
+        <button type="button" class="chip" aria-label="Decrease UI scale by 10%" disabled="@(UiScalePercent <= 80)"
+                @onclick="() => UiScalePercentChanged.InvokeAsync(UiScalePercent - 10)">−</button>
+        <output aria-live="polite">@UiScalePercent%</output>
+        <button type="button" class="chip" aria-label="Increase UI scale by 10%" disabled="@(UiScalePercent >= 140)"
+                @onclick="() => UiScalePercentChanged.InvokeAsync(UiScalePercent + 10)">+</button>
+    </div>
+    <p class="data-intro">Adjust the size of menus and controls. The drawing canvas stays the same size.</p>
+    <div class="setting-row setting-scale" role="group" aria-label="Text size">
+        <span>Text size</span>
+        <button type="button" class="chip" aria-label="Decrease text size by 10%" disabled="@(TextScalePercent <= 100)"
+                @onclick="() => TextScalePercentChanged.InvokeAsync(TextScalePercent - 10)">−</button>
+        <output aria-live="polite">@TextScalePercent%</output>
+        <button type="button" class="chip" aria-label="Increase text size by 10%" disabled="@(TextScalePercent >= 160)"
+                @onclick="() => TextScalePercentChanged.InvokeAsync(TextScalePercent + 10)">+</button>
+    </div>
+    <p class="data-intro">Enlarge interface text independently of UI scale. Drawing text, measurements and print output are unchanged.</p>
     <h3>Zoom and scale</h3>
     <label class="setting-row setting-check">
         <input type="checkbox" checked="@ExtendedZoom" @onchange="e => ExtendedZoomChanged.InvokeAsync(e.Value is true)" />
@@ -49,6 +68,10 @@
     [Parameter] public EventCallback<bool> ExtendedZoomChanged { get; set; }
     [Parameter] public string? GridColor { get; set; }
     [Parameter] public EventCallback<string?> GridColorChanged { get; set; }
+    [Parameter] public int UiScalePercent { get; set; } = 100;
+    [Parameter] public EventCallback<int> UiScalePercentChanged { get; set; }
+    [Parameter] public int TextScalePercent { get; set; } = 100;
+    [Parameter] public EventCallback<int> TextScalePercentChanged { get; set; }
     [Parameter] public bool ShowDebugMenu { get; set; }
     [Parameter] public EventCallback<bool> ShowDebugMenuChanged { get; set; }
 

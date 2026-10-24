@@ -93,7 +93,7 @@ button {
     display: flex;
     align-items: center;
     border-radius: 17px;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     font-weight: 600;
     color: rgba(230, 230, 255, 0.9);
     pointer-events: none;
@@ -188,7 +188,7 @@ button {
     border: 0;
     background: transparent;
     color: #e6e0ff;
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale, 1));
     cursor: pointer;
 }
 
@@ -274,7 +274,7 @@ button {
     border-radius: 8px;
     background: transparent;
     cursor: pointer;
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale, 1));
     text-align: left;
 }
 
@@ -292,7 +292,7 @@ button {
     width: 14px;
     text-align: center;
     color: #6fd0ff;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
 }
 
 .flyout-label {
@@ -301,7 +301,7 @@ button {
 
 .flyout-shortcut {
     margin-left: 22px;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     letter-spacing: 0.04em;
     color: rgba(230, 230, 255, 0.5);
 }
@@ -333,7 +333,7 @@ button {
     border-radius: 9px;
     background: transparent;
     cursor: pointer;
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale, 1));
 }
 
 .float-btn:hover {
@@ -379,7 +379,7 @@ button {
     border: 0;
     background: transparent;
     cursor: pointer;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: #a99cd8;
@@ -393,7 +393,7 @@ button {
     padding: 1px 6px;
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.1);
-    font-size: 10px;
+    font-size: calc(10px * var(--text-scale, 1));
     letter-spacing: 0;
 }
 
@@ -401,7 +401,7 @@ button {
     border: 0;
     background: transparent;
     cursor: pointer;
-    font-size: 10px;
+    font-size: calc(10px * var(--text-scale, 1));
     color: #a99cd8;
 }
 
@@ -427,7 +427,7 @@ button {
     overflow-x: hidden;
     padding: 6px 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
-    font: 10.5px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font: calc(10.5px * var(--text-scale, 1))/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 .debug-panel:not(.open) .debug-lines {
@@ -536,7 +536,7 @@ button {
     background: rgba(30, 24, 70, 0.94);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     color: #e6e0ff;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     font-weight: 500;
     white-space: nowrap;
     pointer-events: none;
@@ -550,7 +550,7 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 4px;
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--text-scale, 1));
     opacity: 0.75;
 }
 
@@ -587,12 +587,13 @@ button {
 }
 
 .process-box {
-    width: 300px;
+    width: calc(300px * var(--text-scale, 1));
+    max-width: calc(100vw / var(--ui-scale, 1) - 32px);
     padding: 12px 14px;
 }
 
 .process-step {
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: rgba(230, 230, 255, 0.55);
@@ -600,13 +601,13 @@ button {
 
 .process-title {
     margin-top: 2px;
-    font-size: 15px;
+    font-size: calc(15px * var(--text-scale, 1));
     font-weight: 600;
 }
 
 .process-text {
     margin: 6px 0 10px;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     line-height: 1.4;
     color: rgba(230, 230, 255, 0.8);
 }
@@ -646,7 +647,7 @@ button {
 
 .measure-length {
     margin: 2px 0 8px;
-    font-size: 24px;
+    font-size: calc(24px * var(--text-scale, 1));
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
@@ -656,7 +657,7 @@ button {
     grid-template-columns: auto 1fr 1fr;
     gap: 3px 12px;
     margin: 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     font-variant-numeric: tabular-nums;
 }
 
@@ -685,13 +686,13 @@ button {
 }
 
 .measure-caption {
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     color: rgba(230, 230, 255, 0.55);
 }
 
 .measure-total .measure-length {
     margin: 0;
-    font-size: 20px;
+    font-size: calc(20px * var(--text-scale, 1));
 }
 
 .chip.danger {
@@ -730,7 +731,7 @@ button {
     height: 14px;
     border: 1.5px solid rgba(201, 182, 255, 0.6);
     border-radius: 4px;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     font-weight: 700;
     line-height: 1;
     color: #1a1538;
@@ -806,7 +807,7 @@ button {
 }
 
 .toolmenu-label {
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     color: rgba(230, 230, 255, 0.65);
 }
 
@@ -888,7 +889,7 @@ button {
 
 .side-empty {
     margin: 2px 4px 10px;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     line-height: 1.4;
     color: rgba(230, 230, 255, 0.7);
 }
@@ -916,7 +917,7 @@ button {
     display: flex;
     gap: 6px;
     margin: 0 0 4px;
-    font-size: 10px;
+    font-size: calc(10px * var(--text-scale, 1));
     letter-spacing: 0.04em;
     color: rgba(230, 230, 255, 0.55);
 }
@@ -948,7 +949,7 @@ button {
 }
 
 .page-meta {
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     font-weight: 400;
     color: rgba(230, 230, 255, 0.7);
 }
@@ -974,7 +975,7 @@ button {
 }
 
 .layer-columns {
-    font-size: 10px;
+    font-size: calc(10px * var(--text-scale, 1));
     text-align: center;
 }
 
@@ -1091,7 +1092,8 @@ button {
 .scale-panel {
     right: 16px;
     bottom: 16px;
-    width: 244px;
+    width: calc(274px * var(--text-scale, 1));
+    max-width: calc(100vw / var(--ui-scale, 1) - 32px);
     padding: 12px 12px 8px;
 }
 
@@ -1102,7 +1104,7 @@ button {
 }
 
 .scale-ratio {
-    font-size: 22px;
+    font-size: calc(22px * var(--text-scale, 1));
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
@@ -1117,7 +1119,7 @@ button {
 .unit-caption {
     flex: none;
     margin-right: 2px;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     letter-spacing: 0.06em;
     color: #a99cd8;
 }
@@ -1129,7 +1131,7 @@ button {
     border-radius: 8px;
     background: transparent;
     cursor: pointer;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     white-space: nowrap;
 }
 
@@ -1198,7 +1200,7 @@ button {
 .scale-grid-info {
     margin-top: 4px;
     text-align: right;
-    font-size: 10px;
+    font-size: calc(10px * var(--text-scale, 1));
     letter-spacing: 0.03em;
     color: rgba(230, 230, 255, 0.6);
 }
@@ -1219,7 +1221,7 @@ button {
 }
 
 .scale-bar-label {
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     color: #cfc6f5;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
@@ -1255,8 +1257,9 @@ button {
 }
 
 .modal {
-    max-width: calc(100vw - 48px);
-    max-height: calc(100vh - 48px);
+    width: calc(var(--modal-width, 460px) * var(--text-scale, 1));
+    max-width: calc(100% - 48px);
+    max-height: calc(100% - 48px);
     display: flex;
     flex-direction: column;
     animation: flyout-in 0.2s ease-out;
@@ -1320,7 +1323,7 @@ button {
     padding: 0 5px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 4px;
-    font-size: 10px;
+    font-size: calc(10px * var(--text-scale, 1));
     font-weight: 500;
     opacity: 0.75;
 }
@@ -1337,6 +1340,7 @@ button {
 
 .modal-head {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     padding: 12px 12px 10px 18px;
@@ -1345,7 +1349,7 @@ button {
 
 .modal-head h2 {
     margin: 0;
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale, 1));
     font-weight: 600;
     letter-spacing: 0.04em;
 }
@@ -1367,8 +1371,9 @@ button {
 
 .modal-body {
     padding: 18px;
+    min-height: 0;
     overflow: auto;
-    font-size: 13px;
+    font-size: calc(13px * var(--text-scale, 1));
     line-height: 1.5;
 }
 
@@ -1395,7 +1400,7 @@ button {
 
 .about-name {
     margin-top: 10px;
-    font-size: 22px;
+    font-size: calc(22px * var(--text-scale, 1));
     font-weight: 700;
     background: linear-gradient(90deg, #ff8fe0, #6fd0ff);
     -webkit-background-clip: text;
@@ -1404,7 +1409,7 @@ button {
 }
 
 .about-version {
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     color: #a99cd8;
 }
 
@@ -1414,7 +1419,7 @@ button {
 
 .about-note {
     color: rgba(230, 230, 255, 0.6);
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
 }
 
 .about-keys {
@@ -1425,7 +1430,7 @@ button {
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     text-align: left;
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
 }
 
 .about-keys dt {
@@ -1472,7 +1477,7 @@ button {
     padding: 1px 7px;
     border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 5px;
-    font: 600 11px system-ui, sans-serif;
+    font: 600 calc(11px * var(--text-scale, 1)) system-ui, sans-serif;
     color: #cfc6f5;
 }
 
@@ -1499,7 +1504,7 @@ button {
 
 .data-group {
     margin: 14px 0 6px;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1507,7 +1512,7 @@ button {
 }
 
 .data-count {
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     font-weight: 400;
     color: rgba(230, 230, 255, 0.6);
 }
@@ -1518,7 +1523,7 @@ button {
     justify-content: space-between;
     gap: 8px;
     margin-bottom: 8px;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
 }
 
 .data-text {
@@ -1528,7 +1533,7 @@ button {
     padding: 8px 10px;
     border-radius: 8px;
     background: rgba(10, 8, 30, 0.5);
-    font: 11px/1.45 ui-monospace, Menlo, monospace;
+    font: calc(11px * var(--text-scale, 1))/1.45 ui-monospace, Menlo, monospace;
     color: #cfc6f5;
     user-select: text;
     -webkit-user-select: text;
@@ -1536,7 +1541,7 @@ button {
 
 .settings h3 {
     margin: 14px 0 8px;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1551,6 +1556,48 @@ button {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+.setting-scale > span {
+    flex: 1;
+}
+
+.setting-scale button {
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.setting-scale output {
+    min-width: 4ch;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.app-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.app-settings > :is(h3, .data-intro, .settings-actions) {
+    margin: 0;
+}
+
+.app-settings > h3 {
+    margin-top: 12px;
+}
+
+.app-settings .mode-options {
+    gap: 12px;
+}
+
+.app-settings .setting-row {
+    gap: 16px;
+    min-height: 36px;
+}
+
+.app-settings .setting-scale > span {
+    min-width: 6em;
 }
 
 .setting-check {
@@ -1637,7 +1684,7 @@ button {
 .dev-build {
     margin-left: 10px;
     color: #a99cd8;
-    font-size: 11px;
+    font-size: calc(11px * var(--text-scale, 1));
 }
 
 .test-spacing {
@@ -1694,7 +1741,7 @@ button {
 }
 
 .mode-card span {
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     color: rgba(230, 230, 255, 0.65);
 }
 
@@ -1707,6 +1754,11 @@ button {
 
 .app {
     display: contents;
+    font-size: calc(16px * var(--text-scale, 1));
+}
+
+.app > :not(.workspace) {
+    zoom: var(--ui-scale, 1);
 }
 
 .perf *,

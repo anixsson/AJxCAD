@@ -2,7 +2,7 @@
 @if (Open)
 {
     <div class="modal-backdrop" @ref="_backdrop" tabindex="-1" @onkeydown="OnKeyDown" @onclick="Close" @oncontextmenu="Close" @oncontextmenu:preventDefault>
-        <section class="glass modal @(Glow ? "glow" : "")" role="dialog" aria-modal="true" aria-label="@Title" style="width:@(Width)px" @onclick:stopPropagation>
+        <section class="glass modal @(Glow ? "glow" : "")" role="dialog" aria-modal="true" aria-label="@Title" style="--modal-width:@(Width)px" @onclick:stopPropagation>
             <header class="modal-head">
                 <h2>@Title</h2>
                 <button type="button" class="modal-close" title="Close" aria-label="Close" @onclick="Close">✕</button>
@@ -16,7 +16,7 @@
     [Parameter] public bool Open { get; set; }
     [Parameter] public string Title { get; set; } = "";
     [Parameter] public bool Glow { get; set; }
-    [Parameter] public int Width { get; set; } = 420;
+    [Parameter] public int Width { get; set; } = 460;
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 

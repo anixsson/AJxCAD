@@ -96,6 +96,10 @@ Save and reopen drawings as `.ajx` project files. A project keeps its drawing da
 
 ## A workspace that suits you
 
+In **File > App settings > Interface size**, use the **− / +** buttons to change **UI scale** from **80% to 140%** or **Text size** from **100% to 160%**, in **10 percentage-point steps**. UI scale resizes menus and controls; Text size enlarges interface text without scaling icons or spacing. Buttons are disabled at each limit. Both apply immediately, work together, and are remembered on this computer. They do not change the drawing canvas, drawing text, measurements, or print/PDF output.
+
+Modal dialogs, tool information boxes, and the floating scale panel widen with text size as well as UI scale. Their widths stay within the available window space.
+
 In **File > App settings**, enable **Extended zoom range** to widen the view from the normal **1:1000–100:1** limits to **1:10000–1000:1**. The current limits are displayed below the checkbox. Turning it off clamps the current view to the normal range. This affects navigation only, not drawing sizes or print page scales. The choice is remembered on this computer.
 
 Use **Grid color** to choose one color for minor and major grid lines; major lines use stronger opacity. **Use theme default** restores the normal colors for the current appearance. A custom color is remembered across launches and appearance changes, including Paper. Origin axes are unchanged, and the grid is never printed or exported.
