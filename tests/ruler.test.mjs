@@ -113,7 +113,8 @@ test("Add points continues the measurement: total length grows and the area appe
 
     assert.equal(tool.stop(), true);
     assert.deepEqual(total(measures.at(-1)), { mode: "done", length: "110 mm", area: "1200 mm²", points: 4 });
-    assert.equal(tool.addPoints(), false);
+    assert.equal(tool.addPoints(), true, "a finished measurement can continue adding points");
+    tool.stop();
 
     click(tool, 200, 200);
     assert.equal(measures.at(-1), null, "a click after the result starts over");
@@ -173,6 +174,116 @@ function savedDrawing(tool, dpr = 1) {
     tool.drawSaved(g, view);
     return { texts, circles, view, g };
 }
+
+test("a reopened area can append points, stop and resume, then save the same measurement with undo", () => {
+    const { tool, measures } = setup([]);
+    triangle(tool);
+    tool.togglePoint(1);
+    tool.toggleDisplay("showAngles");
+    tool.save();
+    const original = structuredClone(bucket(MEASURES).items[0]);
+    tool.open(original.id);
+    assert.equal(tool.addPoints(), true);
+    assert.equal(tool.addPoints(), false, "already adding points");
+    assert.equal(measures.at(-1).saved, true);
+    click(tool, 0, 100);
+    assert.equal(measures.at(-1).nodes.length, 4);
+    assert.equal(measures.at(-1).area, "5000 mm²");
+    assert.equal(tool.undoStep(), true);
+    assert.equal(measures.at(-1).nodes.length, 3, "undo removes the appended point");
+    click(tool, 0, 100);
+    tool.stop();
+    click(tool, 200, 200);
+    assert.equal(measures.at(-1).nodes.length, 4, "editor ignores clicks until Add points");
+    assert.equal(tool.addPoints(), true);
+    click(tool, -100, 0);
+    tool.stop();
+    assert.deepEqual(bucket(MEASURES).items, [original], "adding only changes the draft");
+    tool.save();
+    assert.equal(bucket(MEASURES).items.length, 1, "updates the original instead of creating another area");
+    const extended = structuredClone(bucket(MEASURES).items[0]);
+    assert.equal(extended.id, original.id);
+    assert.deepEqual(extended.points, [
+        ...original.points,
+        { x: 0, y: 100, enabled: true },
+        { x: -100, y: 0, enabled: true }
+    ]);
+    assert.equal(extended.showAngles, false);
+    const text = serialize();
+    assert.equal(undo(), true);
+    tool.dataChanged();
+    assert.deepEqual(bucket(MEASURES).items, [original], "one undo restores the original area");
+    deserialize(text);
+    tool.open(original.id);
+    assert.equal(measures.at(-1).nodes.length, 5, "added points survive project reload");
+    assert.equal(measures.at(-1).points, 4, "excluded original points remain excluded");
+});
+
+test("cancelling continued points leaves a reopened area unchanged", () => {
+    for (const stop of ["cancel", "deactivate", "dataChanged"]) {
+        const { tool, measures } = setup([]);
+        triangle(tool);
+        tool.save();
+        const original = structuredClone(bucket(MEASURES).items[0]);
+        tool.open(original.id);
+        tool.addPoints();
+        click(tool, 0, 100);
+        tool[stop]();
+        assert.equal(measures.at(-1), null);
+        assert.deepEqual(bucket(MEASURES).items, [original], stop);
+        tool.open(original.id);
+        assert.equal(measures.at(-1).nodes.length, 3);
+    }
+});
+
+test("deleting point rows previews geometry, preserves coordinates, saves and undoes", () => {
+    const { tool, measures } = setup([]);
+    triangle(tool);
+    tool.addPoints();
+    click(tool, 0, 100);
+    tool.stop();
+    tool.save();
+    const original = structuredClone(bucket(MEASURES).items[0]);
+    tool.open(original.id);
+    tool.deletePoint(1);
+    assert.equal(measures.at(-1).nodes.length, 3);
+    assert.equal(measures.at(-1).area, "5000 mm²");
+    assert.deepEqual(measures.at(-1).nodes[1], {
+        label: "P2", x: "100 mm", y: "100 mm", selected: true
+    });
+    assert.deepEqual(bucket(MEASURES).items, [original]);
+    tool.cancel();
+    tool.open(original.id);
+    assert.equal(measures.at(-1).nodes.length, 4, "Cancel restores deleted points");
+    tool.deletePoint(1);
+    tool.save();
+    assert.deepEqual(bucket(MEASURES).items[0].points, original.points.filter((_, i) => i !== 1));
+    assert.equal(undo(), true);
+    tool.dataChanged();
+    assert.deepEqual(bucket(MEASURES).items, [original]);
+});
+
+test("point deletion validates requests and cannot save fewer than two included points", () => {
+    const { tool, measures } = setup([]);
+    assert.throws(() => tool.deletePoint(0), /Cannot delete/);
+    triangle(tool);
+    for (const index of [-1, 3, 0.5]) {
+        assert.throws(() => tool.deletePoint(index), /Cannot delete/);
+    }
+    tool.deletePoint(0);
+    assert.equal(measures.at(-1).area, null);
+    tool.deletePoint(0);
+    assert.throws(() => tool.save(), /at least two/);
+    tool.deletePoint(0);
+    assert.equal(measures.at(-1).nodes.length, 0);
+    assert.throws(() => tool.save(), /at least two/);
+    assert.equal(tool.addPoints(), true);
+    click(tool, 0, 0);
+    click(tool, 100, 0);
+    tool.stop();
+    tool.save();
+    assert.equal(bucket(MEASURES).items[0].points.length, 2);
+});
 
 test("saving a finished measurement persists its points and clickable labels with blue circles", () => {
     const { tool, measures } = setup([]);
@@ -447,9 +558,11 @@ test("a two-point measurement saved without dragging has no dimension, and a cli
 });
 
 test("an opened dimension can be dragged in the editor and saved again", () => {
-    const { tool } = setup([]);
+    const { tool, measures } = setup([]);
     bucket(MEASURES).items = [{ id: 7, points: [{ x: 0, y: 0, enabled: true }, { x: 0, y: 100, enabled: true }], dimension: { x: -20, y: 50 } }];
     tool.open(7);
+    assert.equal(measures.at(-1).dimension, true);
+    assert.equal(tool.addPoints(), false, "saved CAD dimensions remain two-point measurements");
     tool.pointerDown({ sx: -20, sy: 50 });
     tool.pointerMove({ sx: -40, sy: 50 });
     tool.pointerUp({});

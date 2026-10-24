@@ -186,6 +186,7 @@ export const rulerAddPoints = () => tools.ruler.addPoints();
 export const rulerStop = () => tools.ruler.stop();
 export const rulerSave = () => tools.ruler.save();
 export const rulerTogglePoint = index => tools.ruler.togglePoint(index);
+export const rulerDeletePoint = index => tools.ruler.deletePoint(index);
 export const rulerToggleDisplay = option => tools.ruler.toggleDisplay(option);
 export function editMeasurement(id) {
     if (toolId !== "select") throw new Error("Use Select to edit a saved measurement");

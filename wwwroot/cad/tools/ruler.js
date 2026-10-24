@@ -230,6 +230,7 @@ export function createRulerTool(env) {
                 area: active.length >= 3 ? env.formatArea(polygonArea(active)) : null,
                 points: active.length,
                 saved: editingId !== null,
+                dimension: dimension !== null,
                 nodes: pointRows(),
                 ...display
             });
@@ -479,9 +480,10 @@ export function createRulerTool(env) {
             env.redraw();
         },
 
-        // Continue a two-point measurement: following clicks add points to the total.
+        // Continue a new or reopened measurement without changing its saved version until Save.
         addPoints() {
-            if (phase !== "measured" || dimension !== null) return false;
+            if ((phase !== "measured" && phase !== "done") || dimension !== null) return false;
+            hover = null;
             setPhase("multi");
             env.log("action", "ruler: adding points");
             return true;
@@ -500,6 +502,16 @@ export function createRulerTool(env) {
                 throw new Error("Cannot toggle this measurement point");
             }
             points[index].enabled = points[index].enabled === false;
+            publish();
+            env.redraw();
+        },
+
+        deletePoint(index) {
+            if (phase !== "done" || !Number.isInteger(index) || !points[index]) {
+                throw new Error("Cannot delete this measurement point");
+            }
+            points.splice(index, 1);
+            if (!dimensionOf(included(), dimension)) dimension = null;
             publish();
             env.redraw();
         },
@@ -619,7 +631,7 @@ export function createRulerTool(env) {
                 env.redraw();
                 return;
             }
-            if (editingId !== null) return;
+            if (editingId !== null && phase !== "multi") return;
             const p = resolve(e.sx, e.sy);
             if (!p) return;
             if (phase === "multi") {
@@ -643,7 +655,7 @@ export function createRulerTool(env) {
                 const p = env.snap(e.sx, e.sy);
                 const first = dimension === null;
                 dimension = { x: p.x, y: p.y };
-                if (first && phase === "measured") publish();
+                if (first) publish();
                 env.redraw();
                 return;
             }

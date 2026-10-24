@@ -267,24 +267,35 @@
                             </button>
                         }
                     </div>
-                    <p class="process-text">Check the points to include. Blue circles mark included points. With two points, drag the blue ring to place a dimension line. Save keeps the measurement on the board; its text reopens this editor.</p>
+                    <p class="process-text">Check points to include, or delete unwanted points. Save to keep changes.</p>
                     <div class="stack-list measure-point-list" role="group" aria-label="Measurement points">
                         @{ var nodes = t.Nodes ?? []; }
                         @for (var i = 0; i < nodes.Length; i++)
                         {
                             var index = i;
                             var point = nodes[i];
-                            <button type="button" class="chip check-chip stack-end @(point.Selected ? "active" : "")"
-                                    role="checkbox" aria-checked="@(point.Selected.ToString().ToLowerInvariant())"
-                                    @onclick="() => RulerTogglePoint(index)">
-                                <span class="check-box" aria-hidden="true">@(point.Selected ? "✓" : "")</span>
-                                <span>@point.Label</span>
-                                <span class="stack-meta">x @point.X · y @point.Y</span>
-                            </button>
+                            <div class="measure-point-row">
+                                <button type="button" class="chip check-chip stack-end @(point.Selected ? "active" : "")"
+                                        role="checkbox" aria-checked="@(point.Selected.ToString().ToLowerInvariant())"
+                                        @onclick="() => RulerTogglePoint(index)">
+                                    <span class="check-box" aria-hidden="true">@(point.Selected ? "✓" : "")</span>
+                                    <span>@point.Label</span>
+                                    <span class="stack-meta">x @point.X · y @point.Y</span>
+                                </button>
+                                <button type="button" class="chip danger" aria-label="@($"Delete {point.Label}")"
+                                        title="@($"Delete {point.Label}")" @onclick="() => RulerDeletePoint(index)">Delete</button>
+                            </div>
                         }
                     </div>
+                    @if (!t.Dimension)
+                    {
+                        <div class="process-actions">
+                            <button type="button" class="chip" title="Continue adding points after the last included point"
+                                    @onclick="RulerAddPoints">Add points</button>
+                        </div>
+                    }
                     <div class="process-actions">
-                        <button type="button" class="chip" @onclick="CancelMeasurement">Cancel</button>
+                        <button type="button" class="chip measure-cancel" @onclick="CancelMeasurement">Cancel</button>
                         <button type="button" class="chip active default-action" data-default-action
                                 disabled="@(t.Points < 2)" @onclick="RulerSave">
                             @(t.Saved ? "Save changes" : "Save to board")<span class="key-hint">Space</span>
@@ -769,6 +780,11 @@
     private async Task RulerTogglePoint(int index)
     {
         if (_cad is not null) await _cad.InvokeVoidAsync("rulerTogglePoint", index);
+    }
+
+    private async Task RulerDeletePoint(int index)
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("rulerDeletePoint", index);
     }
 
     private async Task RulerToggleDisplay(string option)

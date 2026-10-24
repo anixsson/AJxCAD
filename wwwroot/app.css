@@ -720,6 +720,26 @@ button {
     overflow-y: auto;
 }
 
+.measure-point-row {
+    display: flex;
+    gap: 6px;
+}
+
+.measure-point-row .stack-end {
+    flex: 1;
+    min-width: 0;
+}
+
+.measure-point-row .danger {
+    flex: 0 0 auto;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+.process-actions .measure-cancel {
+    flex: 1;
+}
+
 .stack-end {
     justify-content: flex-start;
     padding: 6px 8px;

@@ -81,11 +81,26 @@ test("only Select opens saved measurement text; blue points select without openi
         assert.equal(info.saved, true);
         assert.equal(info.nodes.length, 3);
 
+        assert.equal(engine.rulerAddPoints(), true);
+        click(200, 500);
+        assert.equal(calls.findLast(c => c.name === "OnMeasureChanged").args[0].nodes.length, 4);
+        assert.equal(engine.getDataText(), saved, "continued points remain a draft");
+        engine.rulerStop();
+        engine.rulerSave();
+        const extended = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures").rows;
+        assert.equal(extended.length, 1, "continues the selected area instead of creating another");
+        assert.equal(extended[0][1].length, 4);
+        engine.undo();
+        assert.equal(engine.getDataText(), saved, "undo restores the original area");
+        engine.setTool("select");
+        flush();
+        click(area.x, area.y);
         engine.rulerTogglePoint(1);
+        engine.rulerDeletePoint(1);
         engine.rulerSave();
         const measures = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures");
         assert.equal(measures.rows.length, 1);
-        assert.equal(measures.rows[0][1][1].enabled, false);
+        assert.equal(measures.rows[0][1].length, 2);
         engine.undo();
         const restored = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures");
         assert.equal(restored.rows[0][1][1].enabled, true);
