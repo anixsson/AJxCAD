@@ -52,6 +52,10 @@ function drawText(g, item, view, preview = false) {
 export const textGeometry = {
     bucket: TEXTS,
     draw(g, items, view) {
+        if (view.savedOnly) {
+            for (const item of items) drawText(g, item, view);
+            return;
+        }
         let edited = null;
         for (const item of items) {
             if (item.id === previewItem?.id) edited = item;

@@ -17,6 +17,7 @@ import { createPageTool } from "./tools/page.js";
 import { PAGES, textSizeOf } from "./pages.js";
 import { pagePdf } from "./pdf.js";
 import { activeLayerId, normalizeLayers, layerState, addLayer, updateLayer, setActiveLayer, assignLayer, visibleItems, layerPrintable, requireLayer } from "./layers.js";
+import { SYMBOLS, symbolGeometry, createSymbolTool, prepareSymbolSource, refreshSymbol, setSymbolScale, clearSymbolSources, symbolSourceState } from "./symbols.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -36,7 +37,7 @@ let gridColor = null;
 const handlers = [];
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
-const geometries = [lineGeometry, shapeGeometry, textGeometry, pointGeometry];
+const geometries = [lineGeometry, shapeGeometry, textGeometry, pointGeometry, symbolGeometry];
 const tools = {};
 let toolId = "cross";
 
@@ -167,6 +168,12 @@ const env = {
     textChanged: anchor => dotnet?.invokeMethodAsync("OnTextChanged", anchor),
     pointChanged: info => dotnet?.invokeMethodAsync("OnPointChanged", info),
     pointSelectionChanged: id => tools.point.inspect(id),
+    symbolSelectionChanged: id => tools.symbol.inspect(id),
+    symbolChanged: info => dotnet?.invokeMethodAsync("OnSymbolChanged", info),
+    selectSymbol: id => {
+        if (visibleItems(SYMBOLS).some(item => item.id === id)) tools.select.selectSymbol(id);
+        else log("action", "Symbol placed on a hidden layer; show the layer to select it");
+    },
     capture: id => el.setPointerCapture(id)
 };
 
@@ -239,6 +246,36 @@ export const setLineMulti = on => tools.line.setMulti(on);
 export const setTextDraft = draft => tools.text.setDraft(draft);
 export const saveText = () => tools.text.save();
 export const cancelText = () => tools.text.cancel();
+export async function prepareSymbol(source, text) {
+    await prepareSymbolSource(source, text, readSymbolSource);
+    setTool("symbol");
+    tools.symbol.prepare(source);
+}
+export function updateSymbolScale(id, value) {
+    setSymbolScale(id, value);
+    tools.symbol.refresh();
+    draw();
+}
+const readSymbolSource = source => dotnet.invokeMethodAsync("ReadSymbolSource", source);
+export async function reloadSymbol(id, replacement = null, text = null) {
+    if (text !== null && (replacement === null || typeof text !== "string"))
+        throw new Error("Selected source text requires a replacement project");
+    try {
+        await refreshSymbol(id, readSymbolSource, replacement, text);
+    } finally {
+        tools.symbol.refresh();
+        draw();
+    }
+}
+export async function refreshSymbols() {
+    for (const item of [...bucket(SYMBOLS).items]) {
+        try {
+            await reloadSymbol(item.id);
+        } catch (error) {
+            log("error", `Symbol source unavailable: ${item.source}: ${error.message}`);
+        }
+    }
+}
 export const getPointSettings = () => pointSettings();
 export function updatePointSettings(scale, visibility) {
     setPointSettings(scale, visibility);
@@ -342,7 +379,8 @@ export function getPagePdf(id) {
     return {
         name: page.name,
         pdf: pagePdf(page, bucket(LINES).items, bucket(MEASURES).items,
-            { length: formatLength, area: formatArea }, bucket(SHAPES).items, bucket(TEXTS).items, bucket(POINTS).items)
+            { length: formatLength, area: formatArea }, bucket(SHAPES).items, bucket(TEXTS).items, bucket(POINTS).items,
+            bucket(SYMBOLS).items)
     };
 }
 
@@ -358,6 +396,7 @@ export function zoomToPage(id) {
 // Esc first cancels what the current tool is doing (a measurement, a Move); returns false if there was nothing.
 export function cancelCurrent() {
     if (toolId === "select" && tools.text.cancel()) return true;
+    if (toolId === "select" && tools.symbol.cancel()) return true;
     const tool = currentTool();
     return !!(tool.cancel ?? tool.cancelProcess)?.call(tool);
 }
@@ -370,6 +409,7 @@ export function undo() {
         normalizeLayers();
         for (const t of Object.values(tools)) t.dataChanged?.();
         dotnet?.invokeMethodAsync("OnLayersChanged", layerState());
+        if (bucket(SYMBOLS).items.some(item => !symbolSourceState(item).source)) void refreshSymbols();
     }
     draw();
 }
@@ -530,6 +570,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     tools.rectangle = createRectangleTool(env);
     tools.text = createTextTool(env);
     tools.point = createPointTool(env);
+    tools.symbol = createSymbolTool(env);
     tools.measurement = createMeasurementTool(env);
     tools.page = createPageTool(env);
 
@@ -829,6 +870,7 @@ export function generateTestData(kind, count, spacing) {
 
 export function loadDataText(text) {
     const n = deserialize(text);
+    clearSymbolSources();
     normalizeLayers();
     for (const t of Object.values(tools)) t.dataChanged?.();
     dotnet?.invokeMethodAsync("OnLayersChanged", layerState());
@@ -839,6 +881,7 @@ export function loadDataText(text) {
 
 export function newProject() {
     clearAll();
+    clearSymbolSources();
     normalizeLayers();
     for (const t of Object.values(tools)) t.dataChanged?.();
     dotnet?.invokeMethodAsync("OnLayersChanged", layerState());

@@ -320,6 +320,7 @@ export function createSelectTool(env) {
     function notifySelection() {
         const refs = [...selected.values()];
         env.pointSelectionChanged?.(refs.length === 1 && refs[0].geo.bucket === "points" ? refs[0].item.id : null);
+        env.symbolSelectionChanged?.(refs.length === 1 && refs[0].geo.bucket === "symbols" ? refs[0].item.id : null);
         env.measurementSelectionChanged?.(selectedMeasurementId());
         const items = selectedItems().length;
         if (items !== lastLines) {
@@ -394,7 +395,7 @@ export function createSelectTool(env) {
                 if (!all.some(p => selected.has(keyOf(geo, item, p.key)))) continue;
                 const selectedKeys = new Set(all.filter(p => selected.has(keyOf(geo, item, p.key))).map(p => p.key));
                 if (geo.drawMovePreview) {
-                    geo.drawMovePreview(g, view, item, selectedKeys, dx, dy);
+                    geo.drawMovePreview(g, view, item, selectedKeys, dx, dy, env.formatLength);
                     continue;
                 }
                 const points = all.filter(p => !p.handle);
@@ -440,6 +441,15 @@ export function createSelectTool(env) {
         },
         selectedLayerItems: () => [...new Set([...selected.values()].map(r => r.item))],
 
+        selectSymbol(id) {
+            const geo = geometries.find(geo => geo.bucket === "symbols");
+            const item = visibleItems("symbols").find(item => item.id === id);
+            if (!geo || !item) throw new Error(`Unknown visible symbol: ${id}`);
+            selected.clear();
+            for (const p of geo.points(item)) selected.set(keyOf(geo, item, p.key), { geo, item, key: p.key });
+            notifySelection();
+            env.redraw();
+        },
         selectLayer(id) {
             this.deactivate();
             for (const p of allPoints()) {
@@ -775,6 +785,8 @@ export function createSelectTool(env) {
                 let count = 0;
                 for (const item of visibleItems(geo.bucket)) {
                     const points = geo.points(item);
+                    if (points.length && points.every(p => selected.has(keyOf(geo, item, p.key))))
+                        geo.drawSelection?.(g, view, item);
                     if (points.length !== 2) continue;
                     if (!points.every(p => selected.has(keyOf(geo, item, p.key)))) continue;
                     const [a, b] = points.map(p => view.toScreen(p.x, p.y));
@@ -793,7 +805,7 @@ export function createSelectTool(env) {
             }
             g.lineWidth = 1.5 * d;
 
-            if (mode === "lines" && hover?.points && !drag && !isSelected(hover)) {
+            if (mode === "lines" && hover?.points?.length === 2 && !drag && !isSelected(hover)) {
                 const [a, b] = hover.points.map(p => view.toScreen(p.x, p.y));
                 g.beginPath();
                 g.moveTo(a.x * d, a.y * d);
@@ -866,6 +878,12 @@ export function createSelectTool(env) {
             }
 
             if (marker && drag?.kind === "move" && drag.moved) {
+                const drawn = new Set();
+                for (const { ref } of drag.origin.values()) {
+                    if (drawn.has(ref.item)) continue;
+                    ref.geo.drawEditFeedback?.(g, view, ref.item, env.formatLength);
+                    drawn.add(ref.item);
+                }
                 drawGuide(g, view, drag.anchor, marker);
                 drawSnapMarker(g, view, marker);
             }

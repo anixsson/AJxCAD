@@ -14,6 +14,26 @@ export function addShape(type, a, b) {
     return shape;
 }
 
+function drawSize(g, view, type, a, b, formatLength) {
+    const d = view.dpr, p = view.toScreen(a.x, a.y), q = view.toScreen(b.x, b.y);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillStyle = view.paper ? "#000" : "#fff";
+    g.shadowColor = view.paper ? "transparent" : "rgba(0,0,0,0.8)";
+    g.shadowBlur = view.fx && !view.paper ? 4 * d : 0;
+    if (type === "circle") {
+        g.fillText(`Radius ${formatLength(Math.hypot(dx, dy))}`, p.x * d, p.y * d);
+    } else {
+        g.textBaseline = "bottom";
+        g.fillText(`Width ${formatLength(Math.abs(dx))}`, (p.x + q.x) / 2 * d, (Math.min(p.y, q.y) - 8) * d);
+        g.textAlign = "left";
+        g.textBaseline = "middle";
+        g.fillText(`Height ${formatLength(Math.abs(dy))}`, (Math.max(p.x, q.x) + 8) * d, (p.y + q.y) / 2 * d);
+    }
+}
+
 function drawShape(g, shape, view, a = { x: shape.x1, y: shape.y1 }, b = { x: shape.x2, y: shape.y2 }, preview = false) {
     const d = view.dpr;
     const p = view.toScreen(a.x, a.y), q = view.toScreen(b.x, b.y);
@@ -93,7 +113,12 @@ export const shapeGeometry = {
         shape.y1 += dy;
         shape.y2 += dy;
     },
-    drawMovePreview(g, view, shape, selectedKeys, dx, dy) {
+    drawEditFeedback(g, view, shape, formatLength) {
+        g.save();
+        drawSize(g, view, shape.type, { x: shape.x1, y: shape.y1 }, { x: shape.x2, y: shape.y2 }, formatLength);
+        g.restore();
+    },
+    drawMovePreview(g, view, shape, selectedKeys, dx, dy, formatLength) {
         const moved = { ...shape };
         for (const p of this.points(shape)) {
             if (selectedKeys.has(p.key)) this.setPoint(moved, p.key, p.x + dx, p.y + dy);
@@ -101,6 +126,7 @@ export const shapeGeometry = {
         g.save();
         g.setLineDash([4 * view.dpr, 4 * view.dpr]);
         drawShape(g, moved, view, undefined, undefined, true);
+        this.drawEditFeedback(g, view, moved, formatLength);
         g.restore();
     },
     hitTest(shape, sx, sy, env) {
@@ -172,18 +198,7 @@ function createShapeTool(env, type, hotkey, label) {
             g.save();
             g.setLineDash([6 * view.dpr, 5 * view.dpr]);
             drawShape(g, { type }, view, start, hover);
-            const d = view.dpr, p = view.toScreen(hover.x, hover.y);
-            const dx = hover.x - start.x, dy = hover.y - start.y;
-            const size = type === "circle"
-                ? `Radius ${env.formatLength(Math.hypot(dx, dy))}`
-                : `Width ${env.formatLength(Math.abs(dx))} / Height ${env.formatLength(Math.abs(dy))}`;
-            g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
-            g.textAlign = "left";
-            g.textBaseline = "bottom";
-            g.fillStyle = view.paper ? "#000" : "#fff";
-            g.shadowColor = view.paper ? "transparent" : "rgba(0,0,0,0.8)";
-            g.shadowBlur = view.fx && !view.paper ? 4 * d : 0;
-            g.fillText(size, (p.x + 12) * d, (p.y - 12) * d);
+            drawSize(g, view, type, start, hover, env.formatLength);
             g.restore();
         }
     };

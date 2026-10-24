@@ -4,7 +4,7 @@ AJxCAD is a focused 2D CAD workspace for macOS and Windows, built with .NET MAUI
 
 Create precise 2D drawings in a clean workspace designed for quick drafting and easy navigation.
 
-In **Data buckets**, **Project** groups project settings, Pages and Layers. **Tools** contains Lines, Shapes, Text and Measurements. The Measurement tool keeps its existing `measures` bucket format for compatibility with saved projects.
+In **Data buckets**, **Project** groups project settings, Pages and Layers. **Tools** contains Lines, Shapes, Text, Points, Measurements and Symbols. The Measurement tool keeps its existing `measures` bucket format for compatibility with saved projects.
 
 ## Layers
 
@@ -12,7 +12,7 @@ The top-right board panel has **Pages** and **Layers** buttons to switch between
 
 In Layers, use **+ Add layer**, edit a layer's name directly, and choose its **Active** checkbox to use it for new lines, shapes, text, points and saved measurements (including areas and dimensions). Splitting a line keeps both pieces on the original layer.
 
-Use the select-all icon at the left of a layer row to replace the selection with all lines, shapes, text and points in that visible layer. Page frames and measurements are not included. Select board items, choose the destination as the active layer, then press **Move selection to active**. Selecting any endpoint moves the whole owning item to the layer, not just that point. You can also assign a saved measurement open in the Measurement editor. Adding or renaming a layer keeps the current selection.
+Use the select-all icon at the left of a layer row to replace the selection with all lines, shapes, text, points and symbol groups in that visible layer. Page frames and measurements are not included. Select board items, choose the destination as the active layer, then press **Move selection to active**. Selecting any endpoint moves the whole owning item to the layer, not just that point. You can also assign a saved measurement open in the Measurement editor. Adding or renaming a layer keeps the current selection.
 
 Each layer has **Show** and **Print** checkboxes. Turning Show off hides its items and excludes them from picking and snapping. Hidden layers never print. Turning Print off leaves a visible layer on the board but omits it from print preview, printing, and PDF export. Page frames do not belong to layers: they use their own visibility controls and remain available in Print / Export. Printed lines and measurements still follow their layer settings.
 
@@ -31,6 +31,22 @@ Click a corner where several lines meet (Nodes mode) to open the **Corner** box.
 Select also picks shapes and text, in addition to saved measurement points (blue circles). Shared-corner and rectangle selections can include both line endpoints and area points; the selection information box shows measurement points as blue checkbox options. Uncheck any points to leave them in place, then drag the selection or use **Actions > Move** to move it together. Only included measurement points are selectable. A selection belonging solely to one measurement shows its length and area without opening the editor. Moves update measurement labels and can be undone.
 
 While anything is selected, an Actions menu appears beside the toolmenu. **Move** opens a guide box: click a base point (such as a corner of the selection), press Next (or Space), then click the destination. The selection moves by that offset, with a live preview and offset distance; Esc or Cancel stops the move.
+
+## Symbol imports
+
+Choose **Symbol import** (I), press **Select project**, and choose another `.ajx` file. Its Tools buckets are loaded into an isolated source group and rendered as actual geometry, not as an image. Click the board to place the source project's **(0,0) origin**. Each source coordinate is preserved relative to that origin. Lines, shapes, text, points, measurements and nested symbol references stay separate from the host's own tool buckets.
+
+With **Select**, click the group to open its information box, which shows the source file's full location. Only the whole group can be selected, moved, scaled, assigned to a layer or deleted; source items and their nodes are not selectable or snap targets in the host. The **Scale factor** scales source coordinates around the group's origin (1 preserves drawing size). Placement, movement, scaling, replacement and deletion are undoable.
+
+Use the **- / +** buttons beside Scale factor to decrease or increase the symbol scale by **0.1** per click. The number field still accepts precise positive scale factors; minus is disabled at 0.1 or below to prevent a non-positive step.
+
+Use **Open source project** to edit the original project separately. A prompt offers to save the host first, open without saving, or cancel; canceling or failing the save keeps the host open. Save source edits there, then reopen the host or press **Refresh** to reload its linked Tools buckets. Opening the host automatically reloads its sources, including nested references. Circular imports are rejected rather than recursed indefinitely.
+
+The host's **Symbols** (`symbols`) bucket stores only each source location, group position, scale and host layer (plus its item ID). No source geometry, image or source project settings are embedded in the saved host. Source layer visibility and point marker settings are respected when rendering; source Print flags do not hide otherwise visible content. The host layer controls visibility and printing of the whole group. PDF output keeps imported geometry vector-based.
+
+If a source is deleted, moved, inaccessible or invalid, a crossed **Missing symbol import** placeholder appears. **Select another project** relinks it while preserving the host transform and layer; failed replacements preserve the previous link. On macOS, source-file access bookmarks stay in local app preferences, not in the project. On another computer, select the source files again to locate and authorize them.
+
+If macOS cannot retain source access, the selected file still imports and a warning explains that it may need to be selected again after restarting. Importing and relinking use the file picker's readable stream; a bookmark failure does not invalidate the project.
 
 ## Measuring
 
@@ -97,6 +113,8 @@ Save and reopen drawings as `.ajx` project files. A project keeps its drawing da
 The selected page's information box is titled **Page settings**. Expand **Page sizes** to choose a paper format; the collapsed header shows the current format (for example, **ISO A4** or **US Letter**) and paper dimensions. Orientation and scale remain available outside the accordion.
 
 ## A workspace that suits you
+
+When drawing or editing a circle, its live radius is shown at the circle centre. Rectangle dimensions are shown separately: width above the horizontal edge's midpoint and height beside the vertical edge's midpoint. These dimensions use the project's measurement units and appear alongside the existing Offset readout during edits; Move previews also show the resulting shape dimensions.
 
 In **File > App settings > Interface size**, use the **− / +** buttons to change **UI scale** from **80% to 140%** or **Text size** from **100% to 160%**, in **10 percentage-point steps**. UI scale resizes menus and controls; Text size enlarges interface text without scaling icons or spacing. Buttons are disabled at each limit. Both apply immediately, work together, and are remembered on this computer. They do not change the drawing canvas, drawing text, measurements, or print/PDF output.
 

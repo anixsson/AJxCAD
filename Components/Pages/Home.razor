@@ -114,6 +114,11 @@
         {
             <PointInfoBox Info="pointInfo" OnMarkerChanged="ChangePointMarker" />
         }
+        else if (_symbolInfo is not null)
+        {
+            <SymbolInfoBox Info="_symbolInfo" Busy="_symbolBusy" Error="@_symbolError" Warning="@_symbolWarning" OnChoose="ChooseSymbolProject"
+                           OnRefresh="RefreshSymbol" OnOpenSource="OpenSymbolSource" OnScale="ChangeSymbolScale" OnClose="CloseSymbol" OnError="ShowSymbolError" />
+        }
         else if (_textInfo is not null)
         {
             @TextInfoBox
@@ -367,6 +372,14 @@
                 </div>
             </aside>
         </div>
+    </div>
+}
+
+@if (_tool == "symbol")
+{
+    <div class="toolmenu-dock">
+        <SymbolInfoBox Info="_symbolInfo" Busy="_symbolBusy" Error="@_symbolError" Warning="@_symbolWarning" OnChoose="ChooseSymbolProject"
+                       OnRefresh="RefreshSymbol" OnOpenSource="OpenSymbolSource" OnScale="ChangeSymbolScale" OnClose="CloseSymbol" OnError="ShowSymbolError" />
     </div>
 }
 
@@ -1217,7 +1230,8 @@
         new("text", "Text", "T", "data", "<path d=\"M4 5h16M12 5v14\"/>"),
         new("point", "Point", "N", "data", "<circle cx=\"12\" cy=\"12\" r=\"6\" fill=\"white\"/><path d=\"M12 12h6a6 6 0 0 1-6 6zM12 12H6a6 6 0 0 1 6-6z\" style=\"fill:#e02020;stroke:none\"/><path d=\"M3 12h18M12 3v18\"/>"),
         new("circle", "Circle", "O", "data", "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/>"),
-        new("rectangle", "Rectangle", "R", "data", "<rect x=\"4\" y=\"5\" width=\"16\" height=\"14\"/>")
+        new("rectangle", "Rectangle", "R", "data", "<rect x=\"4\" y=\"5\" width=\"16\" height=\"14\"/>"),
+        new("symbol", "Symbol import", "I", "data", "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\"/><path d=\"M3 16l5-5 4 4 4-6 5 7M12 4v6m-3-3 3 3 3-3\"/>")
     ];
 
     private async Task SetTool(string name)
@@ -1471,6 +1485,120 @@
     }
 
     private string? _filePath;
+    private SymbolInfoBox.SymbolInfo? _symbolInfo;
+    private bool _symbolBusy;
+    private string? _symbolError;
+    private string? _symbolWarning;
+
+    [JSInvokable]
+    public void OnSymbolChanged(SymbolInfoBox.SymbolInfo? info)
+    {
+        if (_symbolInfo?.Source != info?.Source) _symbolWarning = null;
+        _symbolInfo = info;
+        _symbolError = null;
+        StateHasChanged();
+    }
+
+    public sealed record SymbolSourceResult(string? Text, string? Error);
+
+    [JSInvokable]
+    public async Task<SymbolSourceResult> ReadSymbolSource(string source)
+    {
+        try
+        {
+            return new(await SymbolSourceFiles.ReadTextAsync(source, warning => Log("warning", warning)), null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or FormatException)
+        {
+            Log("error", $"Symbol source unavailable: {source}: {ex.Message}");
+            return new(null, ex.Message);
+        }
+    }
+
+    private void ShowSymbolError(string error)
+    {
+        _symbolError = error;
+        Log("error", $"Symbol import: {error}");
+    }
+
+    private async Task SymbolCall(Func<IJSObjectReference, Task> action)
+    {
+        if (_cad is null || _symbolBusy) return;
+        _symbolBusy = true;
+        _symbolError = null;
+        try
+        {
+            await action(_cad);
+        }
+        catch (Exception ex) when (ex is JSException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ShowSymbolError(ex.Message);
+        }
+        finally
+        {
+            _symbolBusy = false;
+        }
+    }
+
+    private Task ChooseSymbolProject() => SymbolCall(async cad =>
+    {
+        var id = _symbolInfo?.Id;
+        var file = await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = "Import symbol from project", FileTypes = ProjectFileType });
+        if (file is null) return;
+        if (_filePath is not null && Path.GetFullPath(file.FullPath) == Path.GetFullPath(_filePath))
+            throw new InvalidOperationException("Select another project, not the current project.");
+        await using var stream = await file.OpenReadAsync();
+        using var reader = new StreamReader(stream);
+        var text = await reader.ReadToEndAsync();
+        var warning = SymbolSourceFiles.RememberAccess(file.FullPath);
+        if (id is not null)
+        {
+            await cad.InvokeVoidAsync("reloadSymbol", id.Value, file.FullPath, text);
+        }
+        else
+        {
+            await cad.InvokeVoidAsync("prepareSymbol", file.FullPath, text);
+        }
+        _symbolWarning = warning;
+        if (warning is not null) Log("warning", warning);
+    });
+
+    private Task RefreshSymbol() => SymbolCall(async cad =>
+    {
+        if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("reloadSymbol", id);
+    });
+
+    private Task ChangeSymbolScale(double scale) => SymbolCall(async cad =>
+    {
+        if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("updateSymbolScale", id, scale);
+    });
+
+    private async Task OpenSymbolSource()
+    {
+        if (_symbolInfo is not { } info || _cad is null || _symbolBusy) return;
+        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+        if (page is null) return;
+        var choice = await page.DisplayActionSheetAsync(
+            "Open source project? Save this host project first to keep your changes.", "Cancel", null,
+            "Save host and open source", "Open source without saving host");
+        if (choice is not ("Save host and open source" or "Open source without saving host")) return;
+        if (choice == "Save host and open source" && !await SaveProject(false)) return;
+        await SymbolCall(async cad =>
+        {
+            var text = await SymbolSourceFiles.ReadTextAsync(info.Source, warning => Log("warning", warning));
+            await cad.InvokeAsync<int>("loadDataText", text);
+            _filePath = info.Source;
+            await cad.InvokeVoidAsync("refreshSymbols");
+            await ApplyProject(await cad.InvokeAsync<ProjectData>("getProjectData"));
+            Log("action", $"opened symbol source {_filePath}");
+        });
+    }
+
+    private async Task CloseSymbol()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("cancelCurrent");
+        if (_tool == "symbol") await SetTool("select");
+    }
 
     private void BeginWindowDrag(MouseEventArgs e)
     {
@@ -1516,9 +1644,9 @@
         Log("action", "new project");
     }
 
-    private async Task SaveProject(bool saveAs)
+    private async Task<bool> SaveProject(bool saveAs)
     {
-        if (_cad is null) return;
+        if (_cad is null) return false;
         try
         {
             await SyncProject();
@@ -1530,7 +1658,7 @@
                 {
                     await File.WriteAllTextAsync(_filePath, text);
                     Log("action", $"saved {_filePath}");
-                    return;
+                    return true;
                 }
                 catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
                 {
@@ -1544,6 +1672,7 @@
             {
                 _filePath = result.FilePath;
                 Log("action", $"saved {_filePath}");
+                return true;
             }
             else if (result.Exception is not null)
             {
@@ -1555,6 +1684,7 @@
             Log("error", $"save failed: {ex.Message}");
             await Alert("Save failed", ex.Message);
         }
+        return false;
     }
 
     private async Task OpenProject()
@@ -1571,6 +1701,7 @@
 
             await _cad.InvokeAsync<int>("loadDataText", text);
             _filePath = file.FullPath;
+            await _cad.InvokeVoidAsync("refreshSymbols");
             await ApplyProject(await _cad.InvokeAsync<ProjectData>("getProjectData"));
             Log("action", $"opened {_filePath}");
         }

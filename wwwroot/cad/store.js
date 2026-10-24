@@ -103,13 +103,22 @@ export function serialize() {
     return `{"app":"ajxcad","format":${FORMAT},"buckets":[\n${parts.join(",\n")}\n]}`;
 }
 
-// Replaces every bucket with the ones in the text. Returns the number of buckets loaded.
-export function deserialize(text) {
+export function parseDataText(text) {
     const doc = JSON.parse(text);
     if (doc.app !== "ajxcad" || !Array.isArray(doc.buckets)) throw new Error("Not an AJxCAD data file");
     if (doc.format > FORMAT) throw new Error(`File format ${doc.format} is newer than this version (${FORMAT})`);
+    for (const entry of doc.buckets) {
+        if (typeof entry.name !== "string" || !Array.isArray(entry.fields) || !entry.fields.every(f => typeof f === "string") ||
+            !Array.isArray(entry.rows) || !entry.rows.every(Array.isArray))
+            throw new Error("Invalid AJxCAD bucket");
+    }
     for (const migrate of migrations) migrate(doc);
+    return doc;
+}
 
+// Replaces every bucket with the ones in the text. Returns the number of buckets loaded.
+export function deserialize(text) {
+    const doc = parseDataText(text);
     checkpoint();
     for (const b of buckets.values()) b.items = [];
     let maxId = 0;

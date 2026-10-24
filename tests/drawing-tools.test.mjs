@@ -33,8 +33,8 @@ const click = (tool, x, y) => tool.pointerDown({ sx: x, sy: y, detail: 1 });
 test("shape placement shows snapped radius or positive width and height in project units", () => {
     reset();
     for (const [create, expected] of [
-        [createCircleTool, "Radius 50 mm"],
-        [createRectangleTool, "Width 30 mm / Height 40 mm"]
+        [createCircleTool, [["Radius 50 mm", 40, -80]]],
+        [createRectangleTool, [["Width 30 mm", -20, -96], ["Height 40 mm", 56, 0]]]
     ]) {
         const tool = create(env());
         const labels = [];
@@ -50,12 +50,12 @@ test("shape placement shows snapped radius or positive width and height in proje
         assert.deepEqual(labels, [], "no size before moving from the first point");
         tool.pointerMove({ sx: -17, sy: -17 }); // grid point (-20, -20)
         tool.draw(g, view);
-        assert.deepEqual(labels.pop(), [expected, -56, 56], "uses world sizes, not screen pixels");
+        assert.deepEqual(labels.splice(0), expected, "labels use circle centre or rectangle edge midpoints");
         assert.equal(g.font, "24px system-ui, -apple-system, sans-serif");
         assert.equal(g.fillStyle, "#fff");
         assert.equal(g.shadowBlur, 8);
         tool.draw(g, { ...view, paper: true });
-        assert.equal(labels.pop()[0], expected);
+        assert.deepEqual(labels.splice(0), expected);
         assert.equal(g.fillStyle, "#000");
         assert.equal(g.shadowBlur, 0);
         tool.pointerLeave();
@@ -79,10 +79,12 @@ test("shape feedback updates with units and clears when cancelled or deactivated
         click(tool, 0, 0);
         tool.pointerMove({ sx: 30, sy: 40 });
         tool.draw(g, view);
-        assert.match(labels.pop(), /mm/);
+        assert.ok(labels.length > 0);
+        for (const label of labels.splice(0)) assert.match(label, /mm/);
         imperial = true;
         tool.draw(g, view);
-        assert.match(labels.pop(), /in/);
+        assert.ok(labels.length > 0);
+        for (const label of labels.splice(0)) assert.match(label, /in/);
         tool.cancel();
         tool.draw(g, view);
         assert.deepEqual(labels, []);
@@ -249,6 +251,34 @@ test("circle marquee selection selects both handles and the rectangle exposes fo
     ]);
     shapeGeometry.moveItem(rectangle, 15, -5);
     assert.deepEqual([rectangle.x1, rectangle.y1, rectangle.x2, rectangle.y2], [-5, -5, 115, 115]);
+});
+
+test("editing shapes shows live dimensions alongside offset and clears them on release", () => {
+    for (const [type, expected] of [
+        ["circle", ["Radius 50 mm"]],
+        ["rectangle", ["Width 30 mm", "Height 40 mm"]]
+    ]) {
+        reset();
+        addShape(type, { x: 0, y: 0 }, { x: 100, y: 80 });
+        const tool = createSelectTool(env({
+            geometries: [shapeGeometry], selectionGeometries: [shapeGeometry],
+            toWorld: (x, y) => ({ x, y }), capture() {}
+        }));
+        const labels = [];
+        const g = new Proxy({ fillText: text => labels.push(text) },
+            { get: (target, key) => target[key] ?? (() => {}) });
+        const view = { dpr: 1, paper: false, fx: false, width: 1000, height: 1000,
+            toScreen: (x, y) => ({ x, y }) };
+        tool.pointerDown({ sx: 100, sy: 80, pointerId: 1 });
+        tool.pointerMove({ sx: 30, sy: 40 });
+        tool.draw(g, view);
+        for (const label of expected) assert.ok(labels.includes(label), labels.join("; "));
+        assert.ok(labels.some(text => text.startsWith("Offset ")), "offset remains visible");
+        labels.length = 0;
+        tool.pointerUp({ sx: 30, sy: 40, pointerId: 1 });
+        tool.draw(g, view);
+        for (const label of expected) assert.ok(!labels.includes(label), "dimension feedback ends on release");
+    }
 });
 
 test("Select can move and delete shapes and text through their geometry anchors", () => {

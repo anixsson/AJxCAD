@@ -593,12 +593,12 @@ export function createMeasurementTool(env) {
         drawSaved(g, view) {
             textHits = [];
             for (const item of visibleItems(MEASURES)) {
-                if (view.printPx && !layerPrintable(item)) continue;
+                if (view.printPx && !view.sourceGroup && !layerPrintable(item)) continue;
                 if (item.id === editingId) continue;
                 renderingId = item.id;
                 const pts = item.points.filter(p => p.enabled !== false);
                 drawMeasurement(g, view, pts, "done", null, displayOf(item), item.dimension);
-                const dim = !view.printPx && dimensionOf(pts, item.dimension);
+                const dim = !view.printPx && !view.sourceGroup && dimensionOf(pts, item.dimension);
                 if (dim) drawHandle(g, view, dim.mid, false);
             }
             renderingId = null;

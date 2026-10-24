@@ -8,6 +8,7 @@ import { pageRect, paperSize, textSizeOf } from "./pages.js";
 import { pageComponentGeometry } from "./page-components.js";
 import { layerPrintable } from "./layers.js";
 import { pointSettings, markerVisible } from "./points.js";
+import { symbolSourceState, symbolBounds, symbolFormat } from "./symbols.js";
 import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, dimensionOf, readableAngle, PRINT_SIZES, scaleSizes } from "./tools/measurement.js";
 
 const PT_PER_MM = 72 / 25.4;
@@ -144,7 +145,8 @@ function measurement(world, pts, options, format, sz, fills, marks, dim = null) 
 }
 
 // `measures` are the saved measurement items; `format` gives { length(mm), area(mm²) } in the project units.
-export function pagePdf(page, lines, measures = [], format = { length: mm => `${+mm.toFixed(1)} mm`, area: mm2 => `${+mm2.toFixed(1)} mm²` }, shapes = [], texts = [], points = []) {
+export function pagePdf(page, lines, measures = [], format = { length: mm => `${+mm.toFixed(1)} mm`, area: mm2 => `${+mm2.toFixed(1)} mm²` }, shapes = [], texts = [], points = [], symbols = [], options = {}) {
+    const printable = options.printable ?? layerPrintable;
     const paper = paperSize(page);
     const w = paper.w * PT_PER_MM, h = paper.h * PT_PER_MM;
     const r = pageRect(page);
@@ -154,12 +156,12 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
 
     const path = [];
     for (const l of lines) {
-        if (!layerPrintable(l)) continue;
+        if (!printable(l)) continue;
         if (outside(l, r)) continue;
         path.push(`${px(l.x1)} ${py(l.y1)} m ${px(l.x2)} ${py(l.y2)} l`);
     }
     for (const shape of shapes) {
-        if (!layerPrintable(shape)) continue;
+        if (!printable(shape)) continue;
         if (shape.type === "circle") {
             const radius = Math.hypot(shape.x2 - shape.x1, shape.y2 - shape.y1);
             circle(path, (shape.x1 - r.left) * k, (shape.y1 - r.bottom) * k, radius * k);
@@ -173,10 +175,10 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         }
     }
 
-    const fills = [], marks = [];
-    const sz = scaleSizes(PRINT_SIZES, textSizeOf(page) / 100);
+    const fills = [], marks = [], measurementMarks = [];
+    const sz = scaleSizes(PRINT_SIZES, textSizeOf(page) / 100 * (options.annotationScale ?? 1));
     for (const item of measures) {
-        if (!layerPrintable(item)) continue;
+        if (!printable(item)) continue;
         const world = item.points.filter(p => p.enabled !== false);
         if (world.length < 2) continue;
         const dim = dimensionOf(world, item.dimension);
@@ -184,10 +186,10 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         const xs = reach.map(p => p.x), ys = reach.map(p => p.y);
         if (Math.max(...xs) < r.left || Math.min(...xs) > r.right || Math.max(...ys) < r.bottom || Math.min(...ys) > r.top) continue;
         const paperDim = dim && { length: dim.length, a: toPaper(dim.a), b: toPaper(dim.b), a2: toPaper(dim.a2), b2: toPaper(dim.b2) };
-        measurement(world, world.map(toPaper), displayOf(item), format, sz, fills, marks, paperDim);
+        measurement(world, world.map(toPaper), displayOf(item), format, sz, fills, measurementMarks, paperDim);
     }
     for (const item of texts) {
-        if (!layerPrintable(item)) continue;
+        if (!printable(item)) continue;
         const size = (item.fontSize ?? 4.5) * k;
         const family = item.fontFamily ?? "sans-serif";
         const font = family === "serif"
@@ -200,10 +202,10 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         if (item.underline) marks.push(`${n(x)} ${n(y - size * 0.15)} m ${n(x + textWidth(item.text, size))} ${n(y - size * 0.15)} l S`);
     }
 
-    const settings = pointSettings();
+    const settings = options.pointSettings ?? pointSettings();
     for (const item of points) {
-        if (!layerPrintable(item) || !markerVisible(item, settings)) continue;
-        const p = toPaper(item), unit = 0.75 * settings.scale / 100, radius = 6 * unit, reach = 9 * unit;
+        if (!printable(item) || !markerVisible(item, settings)) continue;
+        const p = toPaper(item), unit = 0.75 * settings.scale / 100 * (options.annotationScale ?? 1), radius = 6 * unit, reach = 9 * unit;
         if (p.x + reach < 0 || p.x - reach > w || p.y + reach < 0 || p.y - reach > h) continue;
         marks.push(`q 0 G 1 g ${n(unit)} w [] 0 d`);
         circle(marks, p.x, p.y, radius);
@@ -219,6 +221,33 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
             `${n(p.x)} ${n(p.y - reach)} m ${n(p.x)} ${n(p.y + reach)} l S Q`);
     }
 
+    for (const item of symbols) {
+        if (!printable(item)) continue;
+        const bounds = symbolBounds(item);
+        const x = (bounds.left - r.left) * k, y = (bounds.bottom - r.bottom) * k;
+        const width = (bounds.right - bounds.left) * k, height = (bounds.top - bounds.bottom) * k;
+        if (x + width < 0 || x > w || y + height < 0 || y > h) continue;
+        const state = symbolSourceState(item), ancestry = options.ancestry ?? new Set();
+        if (!state.source || ancestry.has(item.source)) {
+            marks.push(`q 0 G 0.6 w ${n(x)} ${n(y)} ${n(width)} ${n(height)} re S`,
+                `${n(x)} ${n(y)} m ${n(x + width)} ${n(y + height)} l`,
+                `${n(x)} ${n(y + height)} m ${n(x + width)} ${n(y)} l S 0 g`);
+            text(marks, "Missing symbol import", x + width / 2, y + height / 2, 9, true);
+            marks.push("Q");
+            continue;
+        }
+        const source = state.source;
+        const sourcePage = { ...page, x: (page.x - item.x) / item.scale, y: (page.y - item.y) / item.scale,
+            scale: page.scale / item.scale, compass: null, ruler: null };
+        marks.push(pagePdf(sourcePage, source.items("lines"), source.items("measures"), symbolFormat(source.project),
+            source.items("shapes"), source.items("texts"), source.items("points"), source.items("symbols"), {
+                contentOnly: true, printable: source.visible, pointSettings: source.settings,
+                annotationScale: (options.annotationScale ?? 1) * item.scale,
+                ancestry: new Set(ancestry).add(item.source)
+            }));
+    }
+
+    marks.push(...measurementMarks);
     for (const mark of pageComponentGeometry(page, format.length)) {
         if (mark.text !== undefined) {
             const p = toPaper(mark.at);
@@ -239,6 +268,7 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         ...marks,
         "Q"
     ].join("\n");
+    if (options.contentOnly) return content;
 
     const objects = [
         "<< /Type /Catalog /Pages 2 0 R >>",

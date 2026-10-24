@@ -1,0 +1,90 @@
+<section class="glass process-box symbol-info-box" aria-label="Symbol import" aria-live="polite">
+    <div class="process-step">Symbol import</div>
+    @if (Info is { } info)
+    {
+        <p class="process-text symbol-source" title="@info.Source">Source: @info.Source</p>
+        @if (info.Error is not null)
+        {
+            <p class="test-error" role="alert">Missing symbol import: @info.Error</p>
+        }
+        @if (info.Id is not null)
+        {
+            <label class="measure-caption" for="symbol-scale">Scale factor</label>
+            <div class="symbol-scale-row">
+                <input id="symbol-scale" class="text-input" type="number" min="0.000001" max="10000" step="0.1"
+                       value="@info.Scale.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                       disabled="@Busy" @onchange="ChangeScale" />
+                <button type="button" class="chip symbol-scale-button" aria-label="Decrease symbol scale"
+                        title="Decrease scale by 0.1" disabled="@(Busy || info.Scale <= 0.1)"
+                        @onclick="() => StepScale(-1)">-</button>
+                <button type="button" class="chip symbol-scale-button" aria-label="Increase symbol scale"
+                        title="Increase scale by 0.1" disabled="@(Busy || info.Scale >= 10000)"
+                        @onclick="() => StepScale(1)">+</button>
+            </div>
+            <p class="process-text">Linked Tools group. Source coordinates are relative to the group's origin. Select moves the whole group; individual source items cannot be selected here.</p>
+        }
+        else
+        {
+            <p class="process-text">Click the board to place the source project's origin. Its Tools buckets render as one read-only group.</p>
+        }
+    }
+    else
+    {
+        <p class="process-text">Select an AJxCAD project to reference its Tools buckets as a linked group. Only the source link, position, scale and host layer are saved here.</p>
+    }
+    @if (Warning is not null)
+    {
+        <p class="process-text" role="status">@Warning</p>
+    }
+    @if (Error is not null)
+    {
+        <p class="test-error" role="alert">@Error</p>
+    }
+    <div class="process-actions">
+        <button type="button" class="chip @(Info is null ? "active default-action" : "")" data-default-action="@(Info is null ? "" : null)"
+                disabled="@Busy" @onclick="OnChoose">@(Info is null ? "Select project" : "Select another project")</button>
+        @if (Info?.Id is not null)
+        {
+            <button type="button" class="chip" disabled="@Busy" @onclick="OnRefresh">Refresh</button>
+            <button type="button" class="chip" disabled="@Busy" @onclick="OnOpenSource">Open source project</button>
+        }
+        <button type="button" class="chip" disabled="@Busy" @onclick="OnClose">Close</button>
+    </div>
+    @if (Busy)
+    {
+        <p class="process-text">Loading source tool buckets...</p>
+    }
+</section>
+
+@code {
+    public sealed record SymbolInfo(int? Id, string Source, double Scale, string? Error);
+    [Parameter] public SymbolInfo? Info { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string? Warning { get; set; }
+    [Parameter] public EventCallback OnChoose { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    [Parameter] public EventCallback OnOpenSource { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<double> OnScale { get; set; }
+    [Parameter] public EventCallback<string> OnError { get; set; }
+
+    private Task StepScale(int direction)
+    {
+        if (Busy || Info is not { Id: not null } info) return Task.CompletedTask;
+        var value = Math.Clamp(Math.Round(info.Scale + direction * 0.1, 6), 0.000001, 10000);
+        return OnScale.InvokeAsync(value);
+    }
+
+    private async Task ChangeScale(ChangeEventArgs e)
+    {
+        if (!double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var value) ||
+            !double.IsFinite(value) || value <= 0 || value > 10000)
+        {
+            await OnError.InvokeAsync("Symbol scale must be greater than 0 and at most 10000.");
+            return;
+        }
+        await OnScale.InvokeAsync(value);
+    }
+}

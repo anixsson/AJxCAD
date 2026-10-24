@@ -70,6 +70,16 @@
             ("Print and export", "Only visible markers on printable layers are output. Marker size is fixed on paper (100% is a 3.175 mm circle) and follows the global scale, independently of page scale and measurement text size. Print preview shows the paper size"),
             ("Save and undo", "Point edits and global settings are undoable and saved in the project")
         ]),
+        new("Symbol import", "I", "Reference another .ajx project's Tools buckets as one read-only geometry group. No image or editable source items are copied into the host's buckets.",
+        [
+            ("Place", "Select a project, then click the board to place the source's (0,0) origin. Source coordinates stay relative to that origin. Hidden source layers are excluded; visible layers remain included regardless of their Print flags"),
+            ("Information", "Select the whole group to see its source location and scale. Individual source items and their nodes are not selectable or snap targets here"),
+            ("Move and scale", "Drag the symbol or use Actions > Move. Change its scale factor in the information box. Placement, movement, scaling, replacement and deletion support Undo"),
+            ("Edit source", "Open source project opens the original project for editing, with a prompt to save the host first, open without saving, or cancel. Save source changes there, then reopen the host"),
+            ("Refresh", "Refresh reloads source Tools buckets. Sources and nested references also reload automatically when the host opens; circular imports are rejected"),
+            ("Missing source", "A deleted, inaccessible or invalid source becomes a crossed Missing symbol import placeholder. Select another project relinks it while preserving position, scale and host layer"),
+            ("Storage and export", "The Symbols bucket saves only the source link, group position, scale and host layer. Source geometry stays external. The host layer controls group visibility and printing; PDF export retains vector geometry")
+        ]),
         new("Project files", "", "AJxCAD projects use the .ajx format. A saved project includes drawing data, its title, measuring system, reference unit and current view. Opening it restores these settings and the saved view.",
         [
             ("Cmd/Ctrl + N", "Create a new, empty project named Untitled"),

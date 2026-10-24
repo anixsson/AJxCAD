@@ -2033,3 +2033,37 @@ button {
 .paper .side-tabs {
     border-color: #ccc;
 }
+
+.symbol-source {
+    overflow-wrap: anywhere;
+}
+
+.symbol-info-box {
+    width: calc(560px * var(--text-scale, 1));
+}
+
+.symbol-info-box .process-actions {
+    flex-wrap: wrap;
+}
+
+.symbol-info-box .process-actions .chip {
+    padding: 4px 8px;
+    max-width: 100%;
+    white-space: normal;
+}
+
+.symbol-scale-row {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.symbol-scale-row .text-input {
+    min-width: 0;
+    flex: 1;
+}
+
+.symbol-scale-button {
+    flex: 0 0 34px;
+    padding: 4px 8px;
+}

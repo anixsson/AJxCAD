@@ -84,7 +84,7 @@ export const pointGeometry = {
         return distance <= Math.max(10, 9 * pointSettings().scale / 100) ? distance : null;
     },
     draw(g, items, view) {
-        const settings = pointSettings();
+        const settings = view.pointSettings ?? pointSettings();
         for (const item of items) drawMarker(g, view, item, settings);
     },
     drawMovePreview(g, view, item, keys, dx, dy) {
