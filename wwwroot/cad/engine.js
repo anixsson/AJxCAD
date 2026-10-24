@@ -7,7 +7,7 @@ import { getProject, updateProject, getView, setView } from "./project.js";
 import { addLine, lineGeometry, LINES } from "./lines.js";
 import { addShape, createCircleTool, createRectangleTool, shapeGeometry, SHAPES } from "./shapes.js";
 import { addText, createTextTool, textGeometry, TEXTS } from "./text.js";
-import { addPoint, createPointTool, pointGeometry, POINTS, setPointSettings, setPointMarker } from "./points.js";
+import { addPoint, createPointTool, pointGeometry, POINTS, pointSettings, setPointSettings, setPointMarker } from "./points.js";
 import { generateTestItems } from "./test-data.js";
 import { belowDetailThreshold } from "./optimizer.js";
 import { createLineTool } from "./tools/line.js";
@@ -239,6 +239,7 @@ export const setLineMulti = on => tools.line.setMulti(on);
 export const setTextDraft = draft => tools.text.setDraft(draft);
 export const saveText = () => tools.text.save();
 export const cancelText = () => tools.text.cancel();
+export const getPointSettings = () => pointSettings();
 export function updatePointSettings(scale, visibility) {
     setPointSettings(scale, visibility);
     tools.point.refresh();

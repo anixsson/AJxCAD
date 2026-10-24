@@ -628,6 +628,12 @@ button {
     flex: 1;
 }
 
+.text-font-size-slider {
+    width: 100%;
+    margin: 8px 0;
+    accent-color: #8fe3ff;
+}
+
 .text-font-size-button {
     flex: 0 0 34px;
     padding: 4px 8px;

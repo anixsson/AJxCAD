@@ -14,6 +14,7 @@
 const FORMAT = 1;
 const buckets = new Map();
 const history = [];
+const migrations = [];
 let nextId = 1;
 
 // Registers a bucket. `fields` lists the item properties stored per row, in order.
@@ -29,10 +30,16 @@ export function bucket(name) {
 }
 
 export const newId = () => nextId++;
+export const registerMigration = migrate => migrations.push(migrate);
 
-// Buckets with undoable:false (such as project settings) are left alone by undo.
+// An array limits undo to those fields, leaving the rest of the bucket unchanged.
 function snapshot() {
-    return [...buckets.values()].filter(b => b.undoable !== false).map(b => ({ name: b.name, items: structuredClone(b.items) }));
+    return [...buckets.values()].filter(b => b.undoable !== false).map(b => ({
+        name: b.name,
+        items: structuredClone(Array.isArray(b.undoable)
+            ? b.items.map(item => Object.fromEntries(b.undoable.map(field => [field, item[field]])))
+            : b.items)
+    }));
 }
 
 // Call right before a change that should be undoable.
@@ -44,8 +51,19 @@ export function checkpoint() {
 export function undo() {
     const previous = history.pop();
     if (!previous) return false;
-    for (const b of buckets.values()) if (b.undoable !== false) b.items = [];
-    for (const { name, items } of previous) bucket(name).items = items;
+    for (const b of buckets.values()) if (b.undoable !== false && !Array.isArray(b.undoable)) b.items = [];
+    for (const { name, items } of previous) {
+        const b = bucket(name);
+        if (Array.isArray(b.undoable)) {
+            for (let i = 0; i < Math.max(items.length, b.items.length); i++) {
+                const item = b.items[i] ?? (b.items[i] = { id: newId() });
+                for (const field of b.undoable) {
+                    if (items[i]?.[field] === undefined) delete item[field];
+                    else item[field] = items[i][field];
+                }
+            }
+        } else b.items = items;
+    }
     return true;
 }
 
@@ -90,6 +108,7 @@ export function deserialize(text) {
     const doc = JSON.parse(text);
     if (doc.app !== "ajxcad" || !Array.isArray(doc.buckets)) throw new Error("Not an AJxCAD data file");
     if (doc.format > FORMAT) throw new Error(`File format ${doc.format} is newer than this version (${FORMAT})`);
+    for (const migrate of migrations) migrate(doc);
 
     checkpoint();
     for (const b of buckets.values()) b.items = [];

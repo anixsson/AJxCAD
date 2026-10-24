@@ -172,6 +172,18 @@ function createShapeTool(env, type, hotkey, label) {
             g.save();
             g.setLineDash([6 * view.dpr, 5 * view.dpr]);
             drawShape(g, { type }, view, start, hover);
+            const d = view.dpr, p = view.toScreen(hover.x, hover.y);
+            const dx = hover.x - start.x, dy = hover.y - start.y;
+            const size = type === "circle"
+                ? `Radius ${env.formatLength(Math.hypot(dx, dy))}`
+                : `Width ${env.formatLength(Math.abs(dx))} / Height ${env.formatLength(Math.abs(dy))}`;
+            g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
+            g.textAlign = "left";
+            g.textBaseline = "bottom";
+            g.fillStyle = view.paper ? "#000" : "#fff";
+            g.shadowColor = view.paper ? "transparent" : "rgba(0,0,0,0.8)";
+            g.shadowBlur = view.fx && !view.paper ? 4 * d : 0;
+            g.fillText(size, (p.x + 12) * d, (p.y - 12) * d);
             g.restore();
         }
     };

@@ -13,7 +13,8 @@
 </Modal>
 
 <Modal Open="@(_dialog == "project")" Title="Project settings" Width="460" OnClose="CloseDialog">
-    <ProjectSettingsDialog ProjectName="@_projectName" ProjectNameChanged="SetProjectName" OnShowData="ShowData" />
+    <ProjectSettingsDialog ProjectName="@_projectName" ProjectNameChanged="SetProjectName" OnShowData="ShowData"
+                           PointSettings="_projectPointSettings" OnPointSettingsChanged="ChangePointSettings" PointError="@_pointSettingsError" />
 </Modal>
 
 <Modal Open="@(_dialog == "data")" Title="Data buckets" Width="560" OnClose="CloseDialog">
@@ -108,7 +109,7 @@
         }
         else if (_pointInfo is { Point: not null } pointInfo)
         {
-            <PointInfoBox Info="pointInfo" OnSettingsChanged="ChangePointSettings" OnMarkerChanged="ChangePointMarker" />
+            <PointInfoBox Info="pointInfo" OnMarkerChanged="ChangePointMarker" />
         }
         else if (_textInfo is not null)
         {
@@ -376,7 +377,7 @@
 @if (_tool == "point" && _pointInfo is { } pointToolInfo)
 {
     <div class="toolmenu-dock">
-        <PointInfoBox Info="pointToolInfo" OnSettingsChanged="ChangePointSettings" OnMarkerChanged="ChangePointMarker" />
+        <PointInfoBox Info="pointToolInfo" OnMarkerChanged="ChangePointMarker" />
     </div>
 }
 
@@ -830,11 +831,14 @@
     }
 
     private PointInfoBox.PointInfo? _pointInfo;
+    private PointInfoBox.SettingsChange _projectPointSettings = new(100, "local");
+    private string? _pointSettingsError;
 
     [JSInvokable]
     public void OnPointChanged(PointInfoBox.PointInfo? info)
     {
         _pointInfo = info;
+        if (info is not null) _projectPointSettings = new(info.Scale, info.Visibility);
         StateHasChanged();
     }
 
@@ -844,9 +848,12 @@
         {
             if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
             await _cad.InvokeVoidAsync("updatePointSettings", change.Scale, change.Visibility);
+            _projectPointSettings = await _cad.InvokeAsync<PointInfoBox.SettingsChange>("getPointSettings");
+            _pointSettingsError = null;
         }
         catch (Exception ex) when (ex is JSException or InvalidOperationException)
         {
+            _pointSettingsError = ex.Message;
             Log("error", $"Could not update point settings: {ex.Message}");
         }
     }
@@ -892,6 +899,10 @@
                         @onpointerleave="FontSizeHoldStop" @onpointercancel="FontSizeHoldStop"
                         @onclick="e => FontSizeClick(1, e)">+</button>
             </div>
+            <input class="text-font-size-slider" type="range" min="1" max="@MaxFontSize" step="0.5"
+                   aria-label="Text font size in millimetres"
+                   value="@textInfo.FontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                   @oninput="e => ChangeTextDraft(nameof(textInfo.FontSize), e.Value)" />
             <label class="measure-caption" for="board-text-family">Font family</label>
             <select id="board-text-family" class="text-input text-tool-input" value="@textInfo.FontFamily"
                     @onchange="e => ChangeTextDraft(nameof(textInfo.FontFamily), e.Value)">
@@ -1240,11 +1251,24 @@
         return _cad.InvokeAsync<DataDialog.BucketPage>("getBucketPage", name, offset).AsTask();
     }
 
-    private Task OpenDialog(string name)
+    private async Task OpenDialog(string name)
     {
+        if (name == "project")
+        {
+            _pointSettingsError = null;
+            try
+            {
+                if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+                _projectPointSettings = await _cad.InvokeAsync<PointInfoBox.SettingsChange>("getPointSettings");
+            }
+            catch (Exception ex) when (ex is JSException or InvalidOperationException)
+            {
+                _pointSettingsError = ex.Message;
+                Log("error", $"Could not load point settings: {ex.Message}");
+            }
+        }
         _dialog = name;
         Log("action", $"dialog opened ({name})");
-        return Task.CompletedTask;
     }
 
     private void CloseDialog()

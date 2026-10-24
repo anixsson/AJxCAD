@@ -38,7 +38,8 @@ test("Pages and Layers are project buckets; drawing tools own their buckets", ()
     const buckets = describe();
     assert.equal(buckets.find(b => b.name === PAGES).group, "project");
     assert.equal(buckets.find(b => b.name === LAYERS).group, "project");
-    assert.equal(buckets.find(b => b.name === "pointSettings").group, "project");
+    assert.equal(buckets.find(b => b.name === "project").group, "project");
+    assert.equal(buckets.some(b => b.name === "pointSettings"), false);
     assert.deepEqual(buckets.filter(b => b.group === "tool").map(b => b.name).sort(), ["lines", "measures", POINTS, SHAPES, TEXTS]);
     const tool = createMeasurementTool(environment());
     assert.equal(tool.id, "measurement");

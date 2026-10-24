@@ -1,15 +1,14 @@
 import { bucket, defineBucket, checkpoint, newId } from "./store.js";
 import { activeLayerId } from "./layers.js";
 import { drawSnapIndicator } from "./snap-indicator.js";
+import { getProject, updateProject } from "./project.js";
 
 export const POINTS = "points";
-const SETTINGS = "pointSettings";
 defineBucket(POINTS, { label: "Points", fields: ["id", "x", "y", "showMarker", "layerId"] });
-defineBucket(SETTINGS, { label: "Point settings", fields: ["id", "scale", "visibility"], group: "project" });
 
 export function pointSettings() {
-    const saved = bucket(SETTINGS).items[0];
-    return { scale: saved?.scale ?? 100, visibility: saved?.visibility ?? "local" };
+    const project = getProject();
+    return { scale: project.pointScale, visibility: project.pointVisibility };
 }
 
 export function setPointSettings(scale, visibility) {
@@ -18,9 +17,7 @@ export function setPointSettings(scale, visibility) {
     if (!["local", "on", "off"].includes(visibility))
         throw new Error("Unknown point visibility override.");
     checkpoint();
-    const items = bucket(SETTINGS).items;
-    if (!items.length) items.push({ id: newId(), scale, visibility });
-    else Object.assign(items[0], { scale, visibility });
+    updateProject({ pointScale: scale, pointVisibility: visibility });
 }
 
 export function markerVisible(item, settings = pointSettings()) {

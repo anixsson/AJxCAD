@@ -22,12 +22,77 @@ const env = extra => ({
         return { x: snap(x), y: snap(y), kind: "grid" };
     },
     scale: () => 1,
+    formatLength: mm => `${+mm.toFixed(3)} mm`,
     toScreen: (x, y) => ({ x, y }),
     redraw() {},
     log() {},
     ...extra
 });
 const click = (tool, x, y) => tool.pointerDown({ sx: x, sy: y, detail: 1 });
+
+test("shape placement shows snapped radius or positive width and height in project units", () => {
+    reset();
+    for (const [create, expected] of [
+        [createCircleTool, "Radius 50 mm"],
+        [createRectangleTool, "Width 30 mm / Height 40 mm"]
+    ]) {
+        const tool = create(env());
+        const labels = [];
+        const g = new Proxy({
+            fillText: (...args) => labels.push(args)
+        }, { get: (target, key) => target[key] ?? (() => {}) });
+        const view = { dpr: 2, paper: false, fx: true, toScreen: (x, y) => ({ x: 2 * x, y: -2 * y }) };
+        tool.pointerMove({ sx: 10, sy: 20 });
+        tool.draw(g, view);
+        assert.deepEqual(labels, [], "no size before the first click");
+        click(tool, 13, 17); // grid point (10, 20)
+        tool.draw(g, view);
+        assert.deepEqual(labels, [], "no size before moving from the first point");
+        tool.pointerMove({ sx: -17, sy: -17 }); // grid point (-20, -20)
+        tool.draw(g, view);
+        assert.deepEqual(labels.pop(), [expected, -56, 56], "uses world sizes, not screen pixels");
+        assert.equal(g.font, "24px system-ui, -apple-system, sans-serif");
+        assert.equal(g.fillStyle, "#fff");
+        assert.equal(g.shadowBlur, 8);
+        tool.draw(g, { ...view, paper: true });
+        assert.equal(labels.pop()[0], expected);
+        assert.equal(g.fillStyle, "#000");
+        assert.equal(g.shadowBlur, 0);
+        tool.pointerLeave();
+        tool.draw(g, view);
+        assert.deepEqual(labels, [], "leaving the canvas hides feedback");
+        tool.pointerMove({ sx: 40, sy: 60 });
+        click(tool, 40, 60);
+        tool.draw(g, view);
+        assert.deepEqual(labels, [], "placing the shape clears feedback");
+    }
+});
+
+test("shape feedback updates with units and clears when cancelled or deactivated", () => {
+    for (const create of [createCircleTool, createRectangleTool]) {
+        let imperial = false;
+        const tool = create(env({ formatLength: mm => imperial ? `${mm / 25.4} in` : `${mm} mm` }));
+        const labels = [];
+        const g = new Proxy({ fillText: text => labels.push(text) },
+            { get: (target, key) => target[key] ?? (() => {}) });
+        const view = { dpr: 1, paper: false, fx: false, toScreen: (x, y) => ({ x, y }) };
+        click(tool, 0, 0);
+        tool.pointerMove({ sx: 30, sy: 40 });
+        tool.draw(g, view);
+        assert.match(labels.pop(), /mm/);
+        imperial = true;
+        tool.draw(g, view);
+        assert.match(labels.pop(), /in/);
+        tool.cancel();
+        tool.draw(g, view);
+        assert.deepEqual(labels, []);
+        click(tool, 0, 0);
+        tool.pointerMove({ sx: 30, sy: 40 });
+        tool.deactivate();
+        tool.draw(g, view);
+        assert.deepEqual(labels, []);
+    }
+});
 
 test("circle and rectangle tools create their outline geometry from two points and support undo", () => {
     reset();

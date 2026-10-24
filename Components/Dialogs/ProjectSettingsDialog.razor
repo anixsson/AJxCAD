@@ -5,6 +5,28 @@
         <input class="text-input" type="text" maxlength="80" @bind="_draftProjectName" @bind:event="oninput" />
     </label>
 
+    <h3>Point markers</h3>
+    <p class="data-intro">These settings apply to every point in this project. Changes apply immediately, support undo and are saved with the project.</p>
+    <div class="text-font-size-row">
+        <span>Scale @PointSettings.Scale%</span>
+        <button type="button" class="chip" aria-label="Decrease point marker scale" disabled="@(PointSettings.Scale <= 25)"
+                @onclick="() => ChangePointScale(-25)">−</button>
+        <button type="button" class="chip" aria-label="Increase point marker scale" disabled="@(PointSettings.Scale >= 400)"
+                @onclick="() => ChangePointScale(25)">+</button>
+    </div>
+    <label class="setting-row">
+        <span>Visibility override</span>
+        <select class="text-input" aria-label="Project point marker visibility" value="@PointSettings.Visibility" @onchange="ChangePointVisibility">
+            <option value="local">Use local settings</option>
+            <option value="on">Force all markers on</option>
+            <option value="off">Force all markers off</option>
+        </select>
+    </label>
+    @if (PointError is not null)
+    {
+        <p class="test-error" role="alert">@PointError</p>
+    }
+
     <h3>Data</h3>
     <div class="setting-row">
         <span>All buckets stored in this project</span>
@@ -23,6 +45,15 @@
     [Parameter] public string ProjectName { get; set; } = "";
     [Parameter] public EventCallback<string> ProjectNameChanged { get; set; }
     [Parameter] public EventCallback OnShowData { get; set; }
+    [Parameter] public PointInfoBox.SettingsChange PointSettings { get; set; } = new(100, "local");
+    [Parameter] public EventCallback<PointInfoBox.SettingsChange> OnPointSettingsChanged { get; set; }
+    [Parameter] public string? PointError { get; set; }
+
+    private Task ChangePointScale(int delta) =>
+        OnPointSettingsChanged.InvokeAsync(new(PointSettings.Scale + delta, PointSettings.Visibility));
+
+    private Task ChangePointVisibility(ChangeEventArgs e) =>
+        OnPointSettingsChanged.InvokeAsync(new(PointSettings.Scale, e.Value?.ToString() ?? ""));
 
     private string _draftProjectName = "";
     private string? _lastProjectName;

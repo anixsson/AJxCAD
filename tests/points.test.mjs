@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bucket, clearAll, serialize, deserialize, undo } from "../wwwroot/cad/store.js";
+import { bucket, clearAll, describe, serialize, deserialize, undo } from "../wwwroot/cad/store.js";
+import { getProject, updateProject, setView } from "../wwwroot/cad/project.js";
 import { normalizeLayers, activeLayerId, updateLayer } from "../wwwroot/cad/layers.js";
 import {
     POINTS, addPoint, pointSettings, setPointSettings, setPointMarker,
@@ -12,6 +13,71 @@ function reset() {
     clearAll();
     normalizeLayers();
 }
+
+test("marker settings live only in the project bucket and undo preserves other project fields", () => {
+    reset();
+    updateProject({ name: "Plan", imperial: 1, unitMm: 25.4 });
+    setPointSettings(200, "on");
+    updateProject({ name: "Updated plan", unitMm: 304.8 });
+    setView(123, 456, 2);
+    assert.equal(undo(), true);
+    assert.deepEqual(pointSettings(), { scale: 100, visibility: "local" });
+    assert.equal(getProject().name, "Updated plan");
+    assert.equal(getProject().unitMm, 304.8);
+    assert.equal(getProject().viewX, 123);
+    assert.equal(getProject().viewY, 456);
+    assert.equal(getProject().viewZoom, 2);
+    setPointSettings(175, "off");
+    const doc = JSON.parse(serialize());
+    assert.equal(describe().some(b => b.name === "pointSettings"), false);
+    assert.equal(doc.buckets.some(b => b.name === "pointSettings"), false);
+    const project = doc.buckets.find(b => b.name === "project");
+    assert.equal(project.rows[0][project.fields.indexOf("pointScale")], 175);
+    assert.equal(project.rows[0][project.fields.indexOf("pointVisibility")], "off");
+    reset();
+    assert.deepEqual(pointSettings(), { scale: 100, visibility: "local" });
+    undo();
+    assert.deepEqual(pointSettings(), { scale: 175, visibility: "off" }, "undo New restores marker settings");
+});
+
+test("legacy marker settings migrate to Project without leaving a separate bucket", () => {
+    reset();
+    const legacy = { name: "pointSettings", v: 1, fields: ["id", "scale", "visibility"], rows: [[10, 250, "off"]] };
+    const project = { name: "project", v: 1, fields: ["id", "name"], rows: [[11, "Legacy plan"]] };
+    for (const entries of [[legacy], [legacy, project], [project, legacy], [{ ...project, rows: [] }, legacy]]) {
+        deserialize(JSON.stringify({ app: "ajxcad", format: 1, buckets: entries }));
+        assert.deepEqual(pointSettings(), { scale: 250, visibility: "off" });
+        assert.equal(describe().some(b => b.name === "pointSettings"), false);
+        assert.equal(JSON.parse(serialize()).buckets.some(b => b.name === "pointSettings"), false);
+        if (entries.includes(project)) assert.equal(getProject().name, "Legacy plan");
+    }
+    deserialize(JSON.stringify({ app: "ajxcad", format: 1, buckets: [
+        { ...project, fields: [...project.fields, "pointScale", "pointVisibility"], rows: [[11, "Modern", 125, "on"]] },
+        legacy
+    ] }));
+    assert.deepEqual(pointSettings(), { scale: 125, visibility: "on" }, "new fields take precedence");
+    deserialize(JSON.stringify({ app: "ajxcad", format: 1, buckets: [project] }));
+    assert.deepEqual(pointSettings(), { scale: 100, visibility: "local" }, "older projects without settings use defaults");
+});
+
+test("project settings can read marker preferences without selecting a point", async () => {
+    reset();
+    const { getPointSettings } = await import("../wwwroot/cad/engine.js");
+    assert.deepEqual(getPointSettings(), { scale: 100, visibility: "local" });
+    setPointSettings(175, "off");
+    assert.deepEqual(getPointSettings(), { scale: 175, visibility: "off" });
+    const snapshot = getPointSettings();
+    snapshot.scale = 400;
+    assert.equal(getPointSettings().scale, 175, "reading settings does not expose mutable stored data");
+    const saved = serialize();
+    reset();
+    assert.deepEqual(getPointSettings(), { scale: 100, visibility: "local" });
+    deserialize(saved);
+    assert.deepEqual(getPointSettings(), { scale: 175, visibility: "off" });
+    setPointSettings(200, "on");
+    undo();
+    assert.deepEqual(getPointSettings(), { scale: 175, visibility: "off" });
+});
 
 test("point placement snaps, uses the active layer, publishes information and is undoable", () => {
     reset();

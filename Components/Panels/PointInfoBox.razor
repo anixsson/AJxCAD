@@ -1,19 +1,5 @@
 <section class="glass process-box" aria-label="Point information" aria-live="polite">
     <div class="process-step">Point information</div>
-    <div class="measure-caption">Global marker settings</div>
-    <div class="text-font-size-row">
-        <span>Scale @Info.Scale%</span>
-        <button type="button" class="chip" aria-label="Decrease point marker scale" disabled="@(Info.Scale <= 25)"
-                @onclick="() => ChangeScale(-25)">−</button>
-        <button type="button" class="chip" aria-label="Increase point marker scale" disabled="@(Info.Scale >= 400)"
-                @onclick="() => ChangeScale(25)">+</button>
-    </div>
-    <label class="measure-caption" for="point-visibility">Global visibility override</label>
-    <select id="point-visibility" class="text-input" value="@Info.Visibility" @onchange="ChangeVisibility">
-        <option value="local">Use local settings</option>
-        <option value="on">Force all markers on</option>
-        <option value="off">Force all markers off</option>
-    </select>
     <div class="measure-caption">Local point data</div>
     @if (Info.Point is { } point)
     {
@@ -25,7 +11,7 @@
         </button>
         @if (Info.Visibility != "local")
         {
-            <p class="process-text">The global override is active. This local setting is remembered until the override is cleared.</p>
+            <p class="process-text">The project visibility override is active. This local setting is remembered until the override is cleared in File > Project settings.</p>
         }
     }
     else
@@ -40,10 +26,5 @@
     public sealed record SettingsChange(int Scale, string Visibility);
     public sealed record MarkerChange(int Id, bool Show);
     [Parameter, EditorRequired] public PointInfo Info { get; set; } = new(100, "local", null);
-    [Parameter] public EventCallback<SettingsChange> OnSettingsChanged { get; set; }
     [Parameter] public EventCallback<MarkerChange> OnMarkerChanged { get; set; }
-
-    private Task ChangeScale(int delta) => OnSettingsChanged.InvokeAsync(new(Info.Scale + delta, Info.Visibility));
-    private Task ChangeVisibility(ChangeEventArgs e) =>
-        OnSettingsChanged.InvokeAsync(new(Info.Scale, e.Value?.ToString() ?? ""));
 }
