@@ -45,8 +45,9 @@
         <aside class="glass tool-group" aria-label="@(group == "general" ? "General tools" : "Drawing tools")">
             @foreach (var t in _tools.Where(t => t.Group == group))
             {
-                <button type="button" class="tool-btn @(_tool == t.Id ? "active" : "")" title="@t.Title (@t.Hotkey)" aria-label="@t.Title" @onclick="() => SetTool(t.Id)">
+                <button type="button" class="tool-btn @(_tool == t.Id ? "active" : "")" aria-label="@t.Title (@t.Hotkey)" @onclick="() => SetTool(t.Id)">
                     <svg viewBox="0 0 24 24" aria-hidden="true">@((MarkupString)t.Icon)</svg>
+                    <span class="tool-tip" aria-hidden="true">@t.Title<kbd>@t.Hotkey</kbd></span>
                 </button>
             }
         </aside>
