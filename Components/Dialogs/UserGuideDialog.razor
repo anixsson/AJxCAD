@@ -41,10 +41,20 @@
             ("Draw", "Press L, then click a start and end point. Keep clicking to create connected lines"),
             ("Shapes", "Press O for a circle (click its centre, then its radius) or R for a rectangle (click opposite corners); both points snap to the grid"),
             ("Text", "Press T, click a grid-snapped anchor, enter text and choose Place text. Its information box then offers font size (1–1000 mm; − / + step 10 mm, faster while held), family, bold, italic and underline. With Select, click text to open the box and drag it to move the text while the box stays open"),
+            ("Point", "Press N and click to place a single point, snapping to existing nodes or the grid. Its fixed-screen-size marker has two opposite red quarters and extended crosshairs. Select one point to open its information box and drag to move it"),
             ("Edit", "Press S, select a line end and drag it to a new position"),
             ("Measure", "Press M, then click two points"),
             ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
             ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk")
+        ]),
+        new("Point", "N", "A single reference node with a lightweight vector marker. Points are saved with the project, belong to layers, support selection, movement and deletion, and are available as snap targets even when their marker is hidden.",
+        [
+            ("Place", "Press N and click the board. Placement snaps to existing drawing nodes or the grid; keep clicking to add more points"),
+            ("Information", "Use Select to choose one point and see its X/Y coordinates in millimetres and local Show marker toggle"),
+            ("Global scale", "The minus and plus buttons resize every marker from 25% to 400% in 25% steps, without changing coordinates. The default is 100%; markers do not grow with zoom"),
+            ("Global visibility", "Use local settings, force all markers on, or force all markers off. Overrides preserve local choices, which take effect again when you return to Use local settings"),
+            ("Print and export", "Only visible markers on printable layers are output. Marker size is fixed on paper (100% is a 3.175 mm circle) and follows the global scale, independently of page scale and measurement text size. Print preview shows the paper size"),
+            ("Save and undo", "Point edits and global settings are undoable and saved in the project")
         ]),
         new("Project files", "", "AJxCAD projects use the .ajx format. A saved project includes drawing data, its title, measuring system, reference unit and current view. Opening it restores these settings and the saved view.",
         [
@@ -67,8 +77,8 @@
         new("Layers", "", "Use the Pages and Layers buttons to switch tabs in the top-right board panel. Collapse the panel to its small icon or drag its left edge to resize it; the width is saved in app settings. Layers are saved in their own data bucket; older projects start with a visible, printable Default layer.",
         [
             ("Add and rename", "Press + Add layer, then edit its name directly"),
-            ("Active", "Choose the layer for newly drawn lines, shapes, text and saved measurements. Splitting a line preserves its original layer"),
-            ("Select layer items", "The icon at the left of each visible layer selects all its lines, shapes and text, replacing the previous selection. Page frames and measurements are not included"),
+            ("Active", "Choose the layer for newly drawn lines, shapes, text, points and saved measurements. Splitting a line preserves its original layer"),
+            ("Select layer items", "The icon at the left of each visible layer selects all its lines, shapes, text and points, replacing the previous selection. Page frames and measurements are not included"),
             ("Move selection to active", "Select board items, activate the destination layer, then move the selection to active. Whole lines and measurements move even if only one endpoint is selected. Saved measurements open in Measurement can also be assigned"),
             ("Show", "Hide or show all items on the layer. Hidden items cannot be picked or snapped to and never print"),
             ("Print", "Uncheck to exclude a visible layer from print preview, printing and PDF export. Pages do not belong to layers and remain available in Print / Export"),
@@ -184,7 +194,7 @@
         [
             ("Full effects", "Frosted glass, glows and animations"),
             ("Performance", "Solid panels without blur, glow or animation for faster drawing"),
-            ("Paper", "White paper with black and gray drawing lines, grid, measurements and controls throughout the app, without blur or glows. Measurement points are gray circles instead of blue")
+            ("Paper", "White paper with black and gray drawing lines, grid, measurements and controls throughout the app, without blur or glows. Measurement points are gray circles instead of blue; Point tool markers retain their red quarters")
         ]),
         new("Undo and keyboard shortcuts", "", "Undo drawing and line-end moves with Edit > Undo or the keyboard. Tool shortcuts are paused while a dialog is open or you are typing in an input.",
         [
@@ -201,9 +211,10 @@
             ("Expand / collapse", "Click the Debug log heading to show or hide its entries"),
             ("Clear", "Remove the current log entries"),
             ("History", "The panel keeps the latest 500 entries, with the newest at the bottom"),
-            ("Debug > Test data", "Expand Line debug, enter 1 to 10,000 lines and drag the spacing slider, then choose Add lines"),
-            ("Spacing", "Control the approximate distance between successive line centres in screen pixels. Lengths and directions vary randomly; spacing is not a minimum clearance"),
-            ("Viewport border", "Generated lines stay inside a 48 px inset of the current workspace. Zooming or panning later can move them off screen"),
+            ("Debug > Test data", "Expand Line, Circle, Rectangle, Text, Point or Measurement debug, enter 1 to 10,000 items and drag the spacing slider, then choose Add. Each section remembers its controls while the dialog is open"),
+            ("Generated items", "Items use the active layer. Text varies its family and styles; measurements alternate triangular areas and two-point CAD dimensions"),
+            ("Spacing", "Control the approximate distance between successive item centres in screen pixels. Sizes vary randomly; spacing is not a minimum clearance"),
+            ("Viewport border", "Generated geometry stays inside a 48 px inset of the current workspace. Zooming or panning later can move it off screen"),
             ("Undo test data", "One Undo removes the generated batch; existing geometry is kept"),
             ("Hide Debug menu", "Turn off the App settings toggle to hide the menu and debug window")
         ])

@@ -50,7 +50,7 @@
 @if (_showDebugMenu)
 {
     <Modal Open="@(_dialog == "testdata")" Title="Test data" Width="520" OnClose="CloseDialog">
-        <TestDataDialog OnGenerate="GenerateTestLines" />
+        <TestDataDialog OnGenerate="GenerateTestData" />
     </Modal>
 }
 
@@ -104,6 +104,10 @@
                     </div>
                 }
             </section>
+        }
+        else if (_pointInfo is { Point: not null } pointInfo)
+        {
+            <PointInfoBox Info="pointInfo" OnSettingsChanged="ChangePointSettings" OnMarkerChanged="ChangePointMarker" />
         }
         else if (_textInfo is not null)
         {
@@ -365,6 +369,13 @@
 {
     <div class="toolmenu-dock">
         @TextInfoBox
+    </div>
+}
+
+@if (_tool == "point" && _pointInfo is { } pointToolInfo)
+{
+    <div class="toolmenu-dock">
+        <PointInfoBox Info="pointToolInfo" OnSettingsChanged="ChangePointSettings" OnMarkerChanged="ChangePointMarker" />
     </div>
 }
 
@@ -641,14 +652,14 @@
         }
     }
 
-    private async Task GenerateTestLines(TestDataDialog.LineOptions options)
+    private async Task GenerateTestData(TestDataDialog.TestDataOptions options)
     {
         if (!_showDebugMenu)
             throw new InvalidOperationException("Test data is available only when the Debug menu is enabled.");
         if (_cad is null)
             throw new InvalidOperationException("The drawing workspace is not ready.");
 
-        await _cad.InvokeVoidAsync("generateTestLines", options.Count, options.Spacing);
+        await _cad.InvokeVoidAsync("generateTestData", options.Kind, options.Count, options.Spacing);
     }
 
     // Oldest first, newest at the bottom; capped so it stays cheap.
@@ -783,6 +794,41 @@
 
         await _cad.InvokeVoidAsync("setLineMulti", !_lineMulti);
         _lineMulti = !_lineMulti;
+    }
+
+    private PointInfoBox.PointInfo? _pointInfo;
+
+    [JSInvokable]
+    public void OnPointChanged(PointInfoBox.PointInfo? info)
+    {
+        _pointInfo = info;
+        StateHasChanged();
+    }
+
+    private async Task ChangePointSettings(PointInfoBox.SettingsChange change)
+    {
+        try
+        {
+            if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+            await _cad.InvokeVoidAsync("updatePointSettings", change.Scale, change.Visibility);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            Log("error", $"Could not update point settings: {ex.Message}");
+        }
+    }
+
+    private async Task ChangePointMarker(PointInfoBox.MarkerChange change)
+    {
+        try
+        {
+            if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+            await _cad.InvokeVoidAsync("updatePointMarker", change.Id, change.Show);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            Log("error", $"Could not update point marker: {ex.Message}");
+        }
     }
 
     public sealed record TextInfo(string Mode, int? Id, string Text, double X, double Y, double FontSize,
@@ -1121,6 +1167,7 @@
         new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>"),
         new("measurement", "Measurement", "M", "data", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>"),
         new("text", "Text", "T", "data", "<path d=\"M4 5h16M12 5v14\"/>"),
+        new("point", "Point", "N", "data", "<circle cx=\"12\" cy=\"12\" r=\"6\" fill=\"white\"/><path d=\"M12 12h6a6 6 0 0 1-6 6zM12 12H6a6 6 0 0 1 6-6z\" style=\"fill:#e02020;stroke:none\"/><path d=\"M3 12h18M12 3v18\"/>"),
         new("circle", "Circle", "O", "data", "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/>"),
         new("rectangle", "Rectangle", "R", "data", "<rect x=\"4\" y=\"5\" width=\"16\" height=\"14\"/>")
     ];

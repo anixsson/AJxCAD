@@ -317,6 +317,8 @@ export function createSelectTool(env) {
     }
 
     function notifySelection() {
+        const refs = [...selected.values()];
+        env.pointSelectionChanged?.(refs.length === 1 && refs[0].geo.bucket === "points" ? refs[0].item.id : null);
         env.measurementSelectionChanged?.(selectedMeasurementId());
         const items = selectedItems().length;
         if (items !== lastLines) {

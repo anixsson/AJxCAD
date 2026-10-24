@@ -32,3 +32,27 @@ export function generateLines(count, spacing, width, height, random = Math.rando
     }
     return lines;
 }
+
+export function generateTestItems(kind, count, spacing, width, height, random = Math.random) {
+    if (!["line", "circle", "rectangle", "text", "measurement", "point"].includes(kind))
+        throw new Error(`Unknown test data tool: ${kind}`);
+    const lines = generateLines(count, spacing, width, height, random);
+    if (kind === "line") return lines;
+    return lines.map((line, i) => {
+        const x = (line.x1 + line.x2) / 2, y = (line.y1 + line.y2) / 2;
+        const radius = Math.hypot(line.x2 - line.x1, line.y2 - line.y1) / 2;
+        if (kind === "point") return { x, y };
+        if (kind === "circle") return { x1: x, y1: y, x2: x + radius, y2: y };
+        if (kind === "rectangle")
+            return { x1: x - radius, y1: y - radius, x2: x + radius, y2: y + radius };
+        if (kind === "text") return {
+            text: `Text ${i + 1}`, x: x - radius, y,
+            fontSize: radius / 4, fontFamily: ["sans-serif", "serif", "monospace"][i % 3],
+            bold: i % 2 === 0, italic: i % 3 === 0, underline: i % 4 === 0
+        };
+        const a = { x: x - radius, y: y + radius }, b = { x: x + radius, y: y + radius };
+        return i % 2 === 0
+            ? { points: [a, b, { x, y: y - radius }] }
+            : { points: [a, b], dimension: { x, y } };
+    });
+}

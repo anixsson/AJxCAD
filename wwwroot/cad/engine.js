@@ -2,19 +2,20 @@
 // Everything pointer-related stays in JS so panning never round-trips through Blazor.
 // Tools live in ./tools, data lives in per-tool buckets in ./store.js.
 
-import { bucket, checkpoint, undo as undoData, describe, describePage, serialize, deserialize, clearAll } from "./store.js";
+import { bucket, checkpoint, newId, undo as undoData, describe, describePage, serialize, deserialize, clearAll } from "./store.js";
 import { getProject, updateProject, getView, setView } from "./project.js";
 import { addLine, lineGeometry, LINES } from "./lines.js";
-import { createCircleTool, createRectangleTool, shapeGeometry, SHAPES } from "./shapes.js";
-import { createTextTool, textGeometry, TEXTS } from "./text.js";
-import { generateLines } from "./test-data.js";
+import { addShape, createCircleTool, createRectangleTool, shapeGeometry, SHAPES } from "./shapes.js";
+import { addText, createTextTool, textGeometry, TEXTS } from "./text.js";
+import { addPoint, createPointTool, pointGeometry, POINTS, setPointSettings, setPointMarker } from "./points.js";
+import { generateTestItems } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
 import { createMeasurementTool, measurementGeometry, MEASURES } from "./tools/measurement.js";
 import { createPageTool } from "./tools/page.js";
 import { PAGES, textSizeOf } from "./pages.js";
 import { pagePdf } from "./pdf.js";
-import { normalizeLayers, layerState, addLayer, updateLayer, setActiveLayer, assignLayer, visibleItems, layerPrintable, requireLayer } from "./layers.js";
+import { activeLayerId, normalizeLayers, layerState, addLayer, updateLayer, setActiveLayer, assignLayer, visibleItems, layerPrintable, requireLayer } from "./layers.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -30,7 +31,7 @@ let paperTheme = false;
 const handlers = [];
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
-const geometries = [lineGeometry, shapeGeometry, textGeometry];
+const geometries = [lineGeometry, shapeGeometry, textGeometry, pointGeometry];
 const tools = {};
 let toolId = "cross";
 
@@ -129,6 +130,8 @@ const env = {
     measurementSelectionChanged: id => dotnet?.invokeMethodAsync("OnSelectedMeasurement",
         id === null ? null : tools.measurement.inspect(id)),
     textChanged: anchor => dotnet?.invokeMethodAsync("OnTextChanged", anchor),
+    pointChanged: info => dotnet?.invokeMethodAsync("OnPointChanged", info),
+    pointSelectionChanged: id => tools.point.inspect(id),
     capture: id => el.setPointerCapture(id)
 };
 
@@ -161,6 +164,7 @@ export function setTool(name) {
     if (toolId === "select" && name !== "text") tools.text.cancel();
     currentTool().deactivate?.();
     toolId = name;
+    currentTool().activate?.();
     el.classList.toggle("drawing", toolId !== "cross");
     el.classList.toggle("tool-select", toolId === "select");
     draw();
@@ -200,6 +204,16 @@ export const setLineMulti = on => tools.line.setMulti(on);
 export const setTextDraft = draft => tools.text.setDraft(draft);
 export const saveText = () => tools.text.save();
 export const cancelText = () => tools.text.cancel();
+export function updatePointSettings(scale, visibility) {
+    setPointSettings(scale, visibility);
+    tools.point.refresh();
+    draw();
+}
+export function updatePointMarker(id, show) {
+    setPointMarker(id, show);
+    tools.point.refresh();
+    draw();
+}
 export const measurementAddPoints = () => tools.measurement.addPoints();
 export const measurementStop = () => tools.measurement.stop();
 export const measurementSave = () => tools.measurement.save();
@@ -291,7 +305,7 @@ export function getPagePdf(id) {
     return {
         name: page.name,
         pdf: pagePdf(page, bucket(LINES).items, bucket(MEASURES).items,
-            { length: formatLength, area: formatArea }, bucket(SHAPES).items, bucket(TEXTS).items)
+            { length: formatLength, area: formatArea }, bucket(SHAPES).items, bucket(TEXTS).items, bucket(POINTS).items)
     };
 }
 
@@ -417,7 +431,8 @@ function render() {
     // Print preview: measurement labels at their printed size on the previewed page (screen px per point).
     const preview = tools.page.previewPage();
     const printPx = preview ? scale * preview.scale * (25.4 / 72) * textSizeOf(preview) / 100 : 0;
-    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, scale, fx: effects, paper: paperTheme, printPx };
+    const pointPrintPx = preview ? scale * preview.scale * 25.4 / 96 : 0;
+    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, scale, fx: effects, paper: paperTheme, printPx, pointPrintPx };
     tools.page.drawSaved(ctx, view);
     for (const geo of geometries) geo.draw(ctx, visibleItems(geo.bucket).filter(item => !preview || layerPrintable(item)), view);
     tools.measurement.drawSaved(ctx, view);
@@ -457,6 +472,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     tools.circle = createCircleTool(env);
     tools.rectangle = createRectangleTool(env);
     tools.text = createTextTool(env);
+    tools.point = createPointTool(env);
     tools.measurement = createMeasurementTool(env);
     tools.page = createPageTool(env);
 
@@ -721,15 +737,34 @@ export function setProjectData(changes) {
 }
 
 export function generateTestLines(count, spacing) {
-    const lines = generateLines(count, spacing, el.clientWidth, el.clientHeight);
+    generateTestData("line", count, spacing);
+}
+
+export function generateTestData(kind, count, spacing) {
+    const items = generateTestItems(kind, count, spacing, el.clientWidth, el.clientHeight);
     cancelAnimation();
     checkpoint();
-    for (const line of lines) {
-        const a = toWorld(line.x1, line.y1), b = toWorld(line.x2, line.y2);
-        addLine(a.x, a.y, b.x, b.y);
+    for (const item of items) {
+        if (kind === "point") {
+            const p = toWorld(item.x, item.y);
+            addPoint(p.x, p.y);
+        } else if (kind === "text") {
+            const p = toWorld(item.x, item.y);
+            addText(item.text, p.x, p.y, { ...item, fontSize: item.fontSize / scale });
+        } else if (kind === "measurement") {
+            bucket(MEASURES).items.push({
+                id: newId(), points: item.points.map(p => toWorld(p.x, p.y)),
+                ...(item.dimension ? { dimension: toWorld(item.dimension.x, item.dimension.y) } : {}),
+                showLengths: true, showAngles: true, showArea: true, layerId: activeLayerId()
+            });
+        } else {
+            const a = toWorld(item.x1, item.y1), b = toWorld(item.x2, item.y2);
+            if (kind === "line") addLine(a.x, a.y, b.x, b.y);
+            else addShape(kind, a, b);
+        }
     }
     for (const t of Object.values(tools)) t.deactivate?.();
-    log("action", `added ${lines.length} test lines (spacing ${spacing} px)`);
+    log("action", `added ${items.length} test ${kind} items (spacing ${spacing} px)`);
     draw();
 }
 

@@ -10,9 +10,9 @@ In **Data buckets**, **Project** groups project settings, Pages and Layers. **To
 
 The top-right board panel has **Pages** and **Layers** buttons to switch between tabs. Collapse the whole panel to a small icon with its top-right button. Drag the expanded panel's left edge to adjust its width; the width is saved in app settings and restored next time. The resize edge also supports Left/Right arrow keys when focused.
 
-In Layers, use **+ Add layer**, edit a layer's name directly, and choose its **Active** checkbox to use it for new lines, shapes, text and saved measurements (including areas and dimensions). Splitting a line keeps both pieces on the original layer.
+In Layers, use **+ Add layer**, edit a layer's name directly, and choose its **Active** checkbox to use it for new lines, shapes, text, points and saved measurements (including areas and dimensions). Splitting a line keeps both pieces on the original layer.
 
-Use the select-all icon at the left of a layer row to replace the selection with all lines, shapes and text in that visible layer. Page frames and measurements are not included. Select board items, choose the destination as the active layer, then press **Move selection to active**. Selecting any endpoint moves the whole owning item to the layer, not just that point. You can also assign a saved measurement open in the Measurement editor. Adding or renaming a layer keeps the current selection.
+Use the select-all icon at the left of a layer row to replace the selection with all lines, shapes, text and points in that visible layer. Page frames and measurements are not included. Select board items, choose the destination as the active layer, then press **Move selection to active**. Selecting any endpoint moves the whole owning item to the layer, not just that point. You can also assign a saved measurement open in the Measurement editor. Adding or renaming a layer keeps the current selection.
 
 Each layer has **Show** and **Print** checkboxes. Turning Show off hides its items and excludes them from picking and snapping. Hidden layers never print. Turning Print off leaves a visible layer on the board but omits it from print preview, printing, and PDF export. Page frames do not belong to layers: they use their own visibility controls and remain available in Print / Export. Printed lines and measurements still follow their layer settings.
 
@@ -62,6 +62,14 @@ Under **Print**, the **Text size** slider (50–400%) sets how large measurement
 
 Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the PDF in your default PDF app and opens its print dialog (if it only opens the PDF, print from that app), and **Export PDF…** saves a PDF where you choose. After saving, click the file name to open the PDF, or **Open location** to show it in Finder or Explorer. The output is a vector PDF of the drawing lines, shapes, text and saved measurements inside the page frame, on the page's paper size at its scale. Measurements print in the Paper look and follow their own **Lengths**, **Angles** and **Area** settings. The grid, unsaved measurements are not printed.
 
+## Points
+
+Choose **Point** (N) and click to place a single node, snapping to existing drawing nodes or the grid. Its lightweight canvas vector marker is a circle divided into four quarters, with two opposite quarters red and crosshairs extending beyond the circle. The marker has a fixed screen size rather than growing with zoom. Points follow layer visibility, support selection, movement and deletion, and remain snap targets when their marker is switched off.
+
+Select one point to open its information box. **Global marker settings** provides minus/plus buttons for a 25–400% size scale in 25% steps (default 100%), and three visibility modes: **Use local settings**, **Force all markers on**, and **Force all markers off**. **Local point data** shows X/Y coordinates in millimetres and a **Show marker locally** toggle. Overrides never change local choices; clearing the override restores their effect. Point data and global settings are saved with the project and are undoable.
+
+Printing and PDF export include only visible markers on printable layers. Their paper size is fixed independently of page scale and the measurement text-size slider: at 100%, the circle diameter is 3.175 mm. Print preview shows that paper size. Point markers retain their red quarters in the Paper appearance.
+
 ## Navigation and scale
 
 Pan and zoom the canvas as you work, or center the view on the origin. Grid spacing adapts to the zoom level. Choose metric or imperial measurements, set a 1:1 reference, and use the scale panel to check the current ratio and measured scale bar.
@@ -72,4 +80,6 @@ Save and reopen drawings as `.ajx` project files. A project keeps its drawing da
 
 ## A workspace that suits you
 
-Choose **Full effects**, **Performance**, or **Paper** in App settings. Paper uses a white drawing surface with black and gray lines, measurements, selection highlights, and controls throughout the app, without blur or glows. Your appearance choice is remembered on this computer and does not change project data. The read-only Data Buckets viewer lets you inspect the information stored in the current project.
+Under **Debug > Test data**, expand the Line, Circle, Rectangle, Text, Point or Measurement debug accordion to add 1–10,000 items on the active layer. Each section has its own count and spacing controls. Spacing is the approximate distance between successive centres in screen pixels, not a minimum gap. Generated geometry stays inside a 48 px viewport inset. Text varies font families and styles; measurements alternate triangular areas and two-point CAD dimensions. Existing data is kept, and one Undo removes the whole added batch.
+
+Choose **Full effects**, **Performance**, or **Paper** in App settings. Paper uses a white drawing surface with black and gray lines, measurements, selection highlights, and controls throughout the app, without blur or glows; point markers retain their red quarters. Your appearance choice is remembered on this computer and does not change project data. The read-only Data Buckets viewer lets you inspect the information stored in the current project.

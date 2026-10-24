@@ -6,6 +6,7 @@
 
 import { pageRect, paperSize, textSizeOf } from "./pages.js";
 import { layerPrintable } from "./layers.js";
+import { pointSettings, markerVisible } from "./points.js";
 import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, dimensionOf, readableAngle, PRINT_SIZES, scaleSizes } from "./tools/measurement.js";
 
 const PT_PER_MM = 72 / 25.4;
@@ -142,7 +143,7 @@ function measurement(world, pts, options, format, sz, fills, marks, dim = null) 
 }
 
 // `measures` are the saved measurement items; `format` gives { length(mm), area(mm²) } in the project units.
-export function pagePdf(page, lines, measures = [], format = { length: mm => `${+mm.toFixed(1)} mm`, area: mm2 => `${+mm2.toFixed(1)} mm²` }, shapes = [], texts = []) {
+export function pagePdf(page, lines, measures = [], format = { length: mm => `${+mm.toFixed(1)} mm`, area: mm2 => `${+mm2.toFixed(1)} mm²` }, shapes = [], texts = [], points = []) {
     const paper = paperSize(page);
     const w = paper.w * PT_PER_MM, h = paper.h * PT_PER_MM;
     const r = pageRect(page);
@@ -196,6 +197,25 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         const x = (item.x - r.left) * k, y = (item.y - r.bottom) * k;
         text(marks, item.text, x, y, size, false, font);
         if (item.underline) marks.push(`${n(x)} ${n(y - size * 0.15)} m ${n(x + textWidth(item.text, size))} ${n(y - size * 0.15)} l S`);
+    }
+
+    const settings = pointSettings();
+    for (const item of points) {
+        if (!layerPrintable(item) || !markerVisible(item, settings)) continue;
+        const p = toPaper(item), unit = 0.75 * settings.scale / 100, radius = 6 * unit, reach = 9 * unit;
+        if (p.x + reach < 0 || p.x - reach > w || p.y + reach < 0 || p.y - reach > h) continue;
+        marks.push(`q 0 G 1 g ${n(unit)} w [] 0 d`);
+        circle(marks, p.x, p.y, radius);
+        marks.push("f", "0.878 0.125 0.125 rg");
+        const c = radius * 0.5523;
+        for (const sign of [1, -1]) {
+            const dx = radius * sign, dy = -radius * sign;
+            marks.push(`${n(p.x)} ${n(p.y)} m ${n(p.x + dx)} ${n(p.y)} l`,
+                `${n(p.x + dx)} ${n(p.y - c * sign)} ${n(p.x + c * sign)} ${n(p.y + dy)} ${n(p.x)} ${n(p.y + dy)} c h f`);
+        }
+        circle(marks, p.x, p.y, radius);
+        marks.push(`${n(p.x - reach)} ${n(p.y)} m ${n(p.x + reach)} ${n(p.y)} l`,
+            `${n(p.x)} ${n(p.y - reach)} m ${n(p.x)} ${n(p.y + reach)} l S Q`);
     }
 
     // Clip to the paper; area shading goes under the lines (light grey), lines are stroked once in black,

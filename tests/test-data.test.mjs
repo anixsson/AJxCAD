@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateLines } from "../wwwroot/cad/test-data.js";
+import { generateLines, generateTestItems } from "../wwwroot/cad/test-data.js";
 
 function seededRandom() {
     let seed = 12345;
@@ -44,6 +44,45 @@ test("rejects invalid counts, spacing and workspace dimensions explicitly", () =
         assert.throws(() => generateLines(100, spacing, 1024, 768), /Spacing/);
     for (const [width, height] of [[100, 768], [1024, 0], [NaN, 768], [1024, Infinity]])
         assert.throws(() => generateLines(100, 24, width, height), /workspace/);
+});
+
+test("other tools generate the requested bounded, non-degenerate geometry", () => {
+    for (const kind of ["circle", "rectangle", "text", "measurement", "point"]) {
+        for (const [width, height] of [[1024, 768], [101, 101]]) {
+            const items = generateTestItems(kind, 10000, 200, width, height, seededRandom());
+            assert.equal(items.length, 10000);
+            const bounded = p => {
+                assert.ok(Number.isFinite(p.x) && p.x >= 48 - 1e-9 && p.x <= width - 48 + 1e-9);
+                assert.ok(Number.isFinite(p.y) && p.y >= 48 - 1e-9 && p.y <= height - 48 + 1e-9);
+            };
+            for (const item of items) {
+                if (kind === "point") {
+                    bounded(item);
+                } else if (kind === "circle") {
+                    const radius = item.x2 - item.x1;
+                    assert.ok(radius > 0);
+                    bounded({ x: item.x1 - radius, y: item.y1 - radius });
+                    bounded({ x: item.x1 + radius, y: item.y1 + radius });
+                } else if (kind === "rectangle") {
+                    assert.ok(item.x2 > item.x1 && item.y2 > item.y1);
+                    bounded({ x: item.x1, y: item.y1 });
+                    bounded({ x: item.x2, y: item.y2 });
+                } else if (kind === "text") {
+                    bounded(item);
+                    assert.ok(item.fontSize > 0);
+                    assert.match(item.text, /^Text \d+$/);
+                    assert.ok(["sans-serif", "serif", "monospace"].includes(item.fontFamily));
+                } else {
+                    item.points.forEach(bounded);
+                    assert.ok([2, 3].includes(item.points.length));
+                    if (item.dimension) bounded(item.dimension);
+                }
+            }
+        }
+        assert.throws(() => generateTestItems(kind, 0, 24, 1024, 768), /count/);
+        assert.throws(() => generateTestItems(kind, 1, -1, 1024, 768), /Spacing/);
+    }
+    assert.throws(() => generateTestItems("unknown", 10, 24, 1024, 768), /Unknown/);
 });
 
 test("engine adds bounded world-space lines, serializes them and undoes only the generated batch", async () => {
@@ -104,6 +143,36 @@ test("engine adds bounded world-space lines, serializes them and undoes only the
         const beforeInvalid = serialize();
         assert.throws(() => engine.generateTestLines(10001, 24), /count/);
         assert.equal(serialize(), beforeInvalid);
+
+        const { addLayer, activeLayerId } = await import("../wwwroot/cad/layers.js");
+        addLayer();
+        const layerId = activeLayerId();
+        for (const [kind, name] of [["circle", "shapes"], ["rectangle", "shapes"], ["text", "texts"], ["measurement", "measures"], ["point", "points"]]) {
+            const before = serialize();
+            engine.generateTestData(kind, 100, 24);
+            const items = bucket(name).items;
+            assert.equal(items.length, 100);
+            assert.ok(items.every(item => item.layerId === layerId));
+            assert.equal(new Set(items.map(item => item.id)).size, 100);
+            if (kind === "text") {
+                assert.equal(new Set(items.map(item => item.fontFamily)).size, 3);
+                assert.ok(items.every(item => item.fontSize > 0 && Number.isFinite(item.x) && Number.isFinite(item.y)));
+            } else if (kind === "measurement") {
+                assert.equal(items.filter(item => item.dimension).length, 50);
+                assert.equal(items.filter(item => item.points.length === 3).length, 50);
+            } else if (kind === "point") {
+                assert.ok(items.every(item => item.showMarker === true && Number.isFinite(item.x) && Number.isFinite(item.y)));
+            } else {
+                assert.ok(items.every(item => item.type === kind));
+            }
+            const savedItems = JSON.parse(engine.getDataText()).buckets.find(b => b.name === name);
+            assert.equal(savedItems.rows.length, 100);
+            engine.undo();
+            assert.equal(serialize(), before, "one undo restores all existing data");
+            const beforeInvalidBatch = serialize();
+            assert.throws(() => engine.generateTestData(kind, 0, 24), /count/);
+            assert.equal(serialize(), beforeInvalidBatch);
+        }
     } finally {
         engine.dispose();
         delete globalThis.window;
