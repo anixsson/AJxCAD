@@ -1,0 +1,42 @@
+<div class="settings">
+    <h3>General</h3>
+    <label class="setting-row">
+        <span>Title</span>
+        <input class="text-input" type="text" maxlength="80" @bind="_draftProjectName" @bind:event="oninput" />
+    </label>
+
+    <h3>Data</h3>
+    <div class="setting-row">
+        <span>All buckets stored in this project</span>
+        <button type="button" class="chip" @onclick="OnShowData">Data buckets…</button>
+    </div>
+
+    @if (_draftProjectName != ProjectName)
+    {
+        <div class="settings-actions">
+            <button type="button" class="chip active" @onclick="Save">Save</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string ProjectName { get; set; } = "";
+    [Parameter] public EventCallback<string> ProjectNameChanged { get; set; }
+    [Parameter] public EventCallback OnShowData { get; set; }
+
+    private string _draftProjectName = "";
+    private string? _lastProjectName;
+
+    protected override void OnParametersSet()
+    {
+        if (_lastProjectName == ProjectName) return;
+        _lastProjectName = ProjectName;
+        _draftProjectName = ProjectName;
+    }
+
+    private async Task Save()
+    {
+        await ProjectNameChanged.InvokeAsync(_draftProjectName);
+        _draftProjectName = ProjectName;
+    }
+}

@@ -1,0 +1,133 @@
+<div class="howto">
+    <p class="data-intro">Your guide to drawing, editing and managing projects in AJxCAD. Expand a topic below. Keyboard shortcuts use Cmd on macOS and Ctrl on Windows.</p>
+    @foreach (var s in _sections)
+    {
+        var open = _open == s.Title;
+        <section class="howto-item @(open ? "open" : "")">
+            <button type="button" class="howto-head" aria-expanded="@open.ToString().ToLowerInvariant()" @onclick="() => Toggle(s.Title)">
+                <span class="chevron @(open ? "open" : "")"></span>
+                <span class="howto-title">@s.Title</span>
+                @if (s.Key != "")
+                {
+                    <kbd>@s.Key</kbd>
+                }
+            </button>
+            <div class="accordion-body @(open ? "open" : "")">
+                <div class="howto-content">
+                    <p>@s.Summary</p>
+                    <dl class="about-keys">
+                        @foreach (var (k, d) in s.Keys)
+                        {
+                            <dt>@k</dt><dd>@d</dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private record Section(string Title, string Key, string Summary, (string, string)[] Keys);
+
+    private string? _open = "Getting started";
+
+    private void Toggle(string title) => _open = _open == title ? null : title;
+
+    private static readonly Section[] _sections =
+    [
+        new("Getting started", "", "Start with an empty workspace or open an existing .ajx project. Pick tools from the floating toolbar or use their keyboard shortcuts.",
+        [
+            ("Draw", "Press L, then click a start and end point. Keep clicking to create connected lines"),
+            ("Edit", "Press S, select a line end and drag it to a new position"),
+            ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
+            ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk")
+        ]),
+        new("Project files", "", "AJxCAD projects use the .ajx format. A saved project includes drawing data, its title, measuring system, reference unit and current view. Opening it restores these settings and the saved view.",
+        [
+            ("Cmd/Ctrl + N", "Create a new, empty project named Untitled"),
+            ("Cmd/Ctrl + O", "Choose a project file to open"),
+            ("Cmd/Ctrl + S", "Save to the current file, or choose a location for a new project"),
+            ("Cmd/Ctrl + Shift + S", "Choose a new save location with Save As"),
+            ("Before New or Open", "Save changes you want to keep; these actions replace the current project without a save prompt")
+        ]),
+        new("Project settings", "", "Open File > Project settings to edit the project title. Edits stay in the input field while you type and are not applied until you click Save.",
+        [
+            ("Title", "Enter up to 80 characters"),
+            ("Save button", "Appears when the title differs from the applied value; reverting the edit hides it"),
+            ("Save settings", "Apply the title to the project and title bar. Surrounding spaces are removed; an empty title becomes Untitled"),
+            ("Save to disk", "The settings Save button does not write a file. Use File > Save afterward to keep the changes on disk"),
+            ("Close without saving", "Unapplied title edits are discarded when you leave Project settings"),
+            ("Data buckets", "Open the project data viewer directly from this dialog")
+        ]),
+        new("Cross", "V", "The default tool. Nothing is drawn or changed; use it to look around the drawing.",
+        [
+            ("V", "Switch to the Cross tool"),
+            ("Esc", "Return to the Cross tool from any other tool")
+        ]),
+        new("Select", "S", "Edit the ends of lines. Line ends show as small squares; the one near your cursor is highlighted. Click it to select it, then drag to move it. Drag on empty space to select the line ends inside a rectangle. Lines that meet at a corner stay joined and move together.",
+        [
+            ("S", "Switch to the Select tool"),
+            ("Click", "Select a line end"),
+            ("Shift + click", "Add a line end; clicking an already-selected end removes it"),
+            ("Shift + Command (Mac) / Shift + Ctrl (Windows) + click", "Remove a line end from the selection"),
+            ("Drag", "Move the selected ends together (or just the one you grab)"),
+            ("Drag empty space", "Select the line ends inside the rectangle; hold Shift to add, or Shift + Command on Mac / Shift + Ctrl on Windows to remove"),
+            ("Click empty space", "Clear the selection"),
+            ("Cmd/Ctrl + Z", "Undo the move")
+        ]),
+        new("Line", "L", "Draw straight lines. Click to set the start, click again to place the end. The next line starts where the last one ended. Points snap to the grid and to existing line ends, and the length is shown while drawing.",
+        [
+            ("L", "Switch to the Line tool"),
+            ("Click", "Place a point"),
+            ("Shift", "Lock the angle to 45° steps"),
+            ("Double-click or Esc", "Finish and return to the Cross tool"),
+            ("Cmd/Ctrl + Z", "Cancel the current line, then undo placed lines")
+        ]),
+        new("Navigation and scale", "", "Pan and zoom in any tool. The scale panel shows the current ratio, grid spacing and a measured scale bar. Its expandable settings control the measuring system and 1:1 reference.",
+        [
+            ("Right mouse + drag", "Pan"),
+            ("Mouse wheel", "Zoom at the cursor"),
+            ("+ / − buttons", "Step the zoom; hold to zoom continuously"),
+            ("1:1", "Reset the zoom to the chosen reference scale"),
+            ("Center", "Return to the origin without changing the current zoom"),
+            ("Scale settings", "Use the scale panel chevron or View > Scale settings to expand the controls"),
+            ("Metric / Imperial", "Choose metric or imperial measurements"),
+            ("1:1 reference", "Choose mm, cm or m; or inches, feet or yards. At 1:1, the chosen unit spans one major grid cell"),
+            ("Grid", "Grid spacing adapts as you zoom; length labels use the selected measuring system")
+        ]),
+        new("Data buckets", "", "Open File > Data buckets to inspect the data stored in the current project. Expand a bucket to see its text representation. This viewer is read-only.",
+        [
+            ("Project", "The project bucket holds the title, measuring system, reference unit and saved view"),
+            ("Tools", "Drawing tools keep their geometry in separate buckets, such as lines"),
+            ("Item count", "Each bucket shows how many items it contains"),
+            ("Large buckets", "Text loads only when expanded, in pages of up to 100 rows. Use Previous and Next to inspect every row. Saving still includes all data"),
+            ("Project settings", "The Data buckets button opens the same viewer")
+        ]),
+        new("Appearance and performance", "", "Open File > App settings to choose how AJxCAD looks. This preference stays on this computer between runs and is not part of a project file.",
+        [
+            ("Full effects", "Frosted glass, glows and animations"),
+            ("Performance", "Solid panels without blur, glow or animation for faster drawing")
+        ]),
+        new("Undo and keyboard shortcuts", "", "Undo drawing and line-end moves with Edit > Undo or the keyboard. Tool shortcuts are paused while a dialog is open or you are typing in an input.",
+        [
+            ("Cmd/Ctrl + Z", "Undo a drawing edit. In the Line tool, first cancel the current line, then undo placed lines"),
+            ("Esc", "Close an open dialog or menu; otherwise return to the Cross tool"),
+            ("V / S / L", "Choose Cross, Select or Line when working in the workspace"),
+            ("Project settings", "Title changes are not part of drawing undo"),
+            ("Unavailable commands", "Redo, Cut, Copy and Paste are currently disabled")
+        ]),
+        new("Developer tools", "", "Debug builds show Dev Build and the app version in the title and start with the Debug menu enabled. Release builds omit the title label and start with the menu disabled. In either build, use File > App settings > Show Debug menu to change visibility for this session; the build default is restored at launch.",
+        [
+            ("Debug > Debug window", "Show or hide the log of tool actions, keyboard and mouse activity, focus changes and file operations"),
+            ("Expand / collapse", "Click the Debug log heading to show or hide its entries"),
+            ("Clear", "Remove the current log entries"),
+            ("History", "The panel keeps the latest 500 entries, with the newest at the bottom"),
+            ("Debug > Test data", "Expand Line debug, enter 1 to 10,000 lines and drag the spacing slider, then choose Add lines"),
+            ("Spacing", "Control the approximate distance between successive line centres in screen pixels. Lengths and directions vary randomly; spacing is not a minimum clearance"),
+            ("Viewport border", "Generated lines stay inside a 48 px inset of the current workspace. Zooming or panning later can move them off screen"),
+            ("Undo test data", "One Undo removes the generated batch; existing geometry is kept"),
+            ("Hide Debug menu", "Turn off the App settings toggle to hide the menu and debug window")
+        ])
+    ];
+}

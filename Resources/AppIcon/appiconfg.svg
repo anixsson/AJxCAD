@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3f86ee"/><stop offset="1" stop-color="#1b4aa8"/></linearGradient>
+<linearGradient id="fold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#bcd6ff"/></linearGradient>
+<pattern id="pg" width="17" height="17" patternUnits="userSpaceOnUse"><path d="M17 0H0V17" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1"/></pattern>
+<clipPath id="sheet"><path d="M98 66 H294 L358 130 V390 H98 Z"/></clipPath>
+</defs>
+
+<g transform="rotate(-8 228 228)">
+  <path d="M98 66 H294 L358 130 V390 H98 Z" transform="translate(6 16)" fill="#000010" fill-opacity="0.22"/>
+  <path d="M98 66 H294 L358 130 V390 H98 Z" transform="translate(4 10)" fill="#000010" fill-opacity="0.28"/>
+  <path d="M98 66 H294 L358 130 V390 H98 Z" transform="translate(2 5)" fill="#000010" fill-opacity="0.34"/>
+  <path d="M98 66 H294 L358 130 V390 H98 Z" fill="url(#paper)"/>
+  <g clip-path="url(#sheet)"><rect x="98" y="66" width="260" height="324" fill="url(#pg)"/></g>
+  <path d="M114 82 H280 L342 144 V374 H114 Z" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="2"/>
+  <path d="M294 66 V130 H358 Z" fill="url(#fold)" stroke="#ffffff" stroke-opacity="0.8" stroke-width="1.5" stroke-linejoin="round"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="206" cy="212" r="56" stroke-width="5"/>
+    <circle cx="206" cy="212" r="26" stroke-width="3.5" stroke-opacity="0.9"/>
+    <path d="M126 212 H286 M206 132 V292" stroke-width="2.5" stroke-dasharray="16 5 3 5" stroke="#bfe0ff"/>
+    <path d="M206 212 L246 172" stroke-width="3" stroke="#ffd36b"/>
+    <path d="M138 318 H300 V346 H138 Z" stroke-width="4"/>
+    <path d="M138 360 H300" stroke-width="2.5" stroke="#bfe0ff"/>
+    <path d="M138 352 V368 M300 352 V368" stroke-width="2.5" stroke="#bfe0ff"/>
+  </g>
+  <path d="M138 360 L152 355 V365 Z M300 360 L286 355 V365 Z" fill="#bfe0ff"/>
+  <circle cx="206" cy="212" r="4.5" fill="#ffffff"/>
+  <rect x="240" y="166" width="12" height="12" transform="rotate(45 246 172)" fill="#ff8fb8" stroke="#ffffff" stroke-width="2.5"/>
+</g>
+
+</svg>

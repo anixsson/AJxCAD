@@ -1,0 +1,31 @@
+<div class="settings">
+    <p class="data-intro">These settings belong to the app. Appearance is kept on this computer; developer tools reset at launch. Project settings are in File → Project settings.</p>
+
+    <h3>Appearance</h3>
+    <div class="mode-options">
+        <button type="button" class="mode-card @(!Performance ? "active" : "")" @onclick="() => PerformanceChanged.InvokeAsync(false)">
+            <strong>Full effects</strong>
+            <span>Frosted glass, glows and animations.</span>
+        </button>
+        <button type="button" class="mode-card @(Performance ? "active" : "")" @onclick="() => PerformanceChanged.InvokeAsync(true)">
+            <strong>Performance</strong>
+            <span>No blur, glow or animation. Solid panels, fastest drawing.</span>
+        </button>
+    </div>
+    <h3>Developer tools</h3>
+    <label class="setting-row setting-check">
+        <input type="checkbox" @bind="ShowDebugMenu" @bind:after="UpdateDebugMenu" />
+        <span class="setting-checkmark" aria-hidden="true"></span>
+        <span>Show Debug menu</span>
+    </label>
+    <p class="data-intro">Show the debug log and test data tools. Starts enabled in debug builds and disabled in release builds.</p>
+</div>
+
+@code {
+    [Parameter] public bool Performance { get; set; }
+    [Parameter] public EventCallback<bool> PerformanceChanged { get; set; }
+    [Parameter] public bool ShowDebugMenu { get; set; }
+    [Parameter] public EventCallback<bool> ShowDebugMenuChanged { get; set; }
+
+    private Task UpdateDebugMenu() => ShowDebugMenuChanged.InvokeAsync(ShowDebugMenu);
+}

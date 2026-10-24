@@ -1,0 +1,673 @@
+@page "/"
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="app @(_performance ? "perf" : "") @(NativeWindow.IsMac ? "mac" : "win")">
+<div class="workspace" @ref="_workspace">
+    <canvas @ref="_canvas"></canvas>
+</div>
+
+<Modal Open="@(_dialog == "settings")" Title="App settings" Width="460" OnClose="CloseDialog">
+    <SettingsDialog Performance="_performance" PerformanceChanged="SetPerformance" ShowDebugMenu="_showDebugMenu" ShowDebugMenuChanged="SetShowDebugMenu" />
+</Modal>
+
+<Modal Open="@(_dialog == "project")" Title="Project settings" Width="460" OnClose="CloseDialog">
+    <ProjectSettingsDialog ProjectName="@_projectName" ProjectNameChanged="SetProjectName" OnShowData="ShowData" />
+</Modal>
+
+<Modal Open="@(_dialog == "data")" Title="Data buckets" Width="560" OnClose="CloseDialog">
+    <DataDialog Buckets="_buckets" LoadPage="LoadBucketPage" />
+</Modal>
+
+<Modal Open="@(_dialog == "guide")" Title="AJxCAD User guide" Width="560" OnClose="CloseDialog">
+    <UserGuideDialog />
+</Modal>
+
+<Modal Open="@(_dialog == "about")" Title="About AJxCAD" Glow="true" OnClose="CloseDialog">
+    <AboutDialog />
+</Modal>
+
+@if (_showDebugMenu)
+{
+    <Modal Open="@(_dialog == "testdata")" Title="Test data" Width="520" OnClose="CloseDialog">
+        <TestDataDialog OnGenerate="GenerateTestLines" />
+    </Modal>
+}
+
+@if (_openMenu is not null)
+{
+    <div class="menu-backdrop" @onclick="CloseMenu" @oncontextmenu="CloseMenu" @oncontextmenu:preventDefault></div>
+}
+
+<div class="tool-dock">
+    @foreach (var group in new[] { "general", "data" })
+    {
+        <aside class="glass tool-group" aria-label="@(group == "general" ? "General tools" : "Drawing tools")">
+            @foreach (var t in _tools.Where(t => t.Group == group))
+            {
+                <button type="button" class="tool-btn @(_tool == t.Id ? "active" : "")" title="@t.Title (@t.Hotkey)" aria-label="@t.Title" @onclick="() => SetTool(t.Id)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">@((MarkupString)t.Icon)</svg>
+                </button>
+            }
+        </aside>
+    }
+</div>
+
+@if (_showDebugMenu && _debug)
+{
+    <aside class="glass debug-panel @(_debugOpen ? "open" : "")" aria-label="Debug log">
+        <div class="debug-head">
+            <button type="button" class="debug-toggle" aria-expanded="@_debugOpen.ToString().ToLowerInvariant()" @onclick="ToggleDebug">
+                <span class="chevron @(_debugOpen ? "" : "open")"></span>
+                <span>Debug log</span>
+                <span class="debug-count">@_log.Count</span>
+            </button>
+            @if (_debugOpen)
+            {
+                <button type="button" class="debug-clear" @onclick="() => _log.Clear()">clear</button>
+            }
+        </div>
+        <div class="debug-body">
+            <div class="debug-clip">
+                <div class="debug-lines" @ref="_logBox">
+                    @foreach (var line in _log)
+                    {
+                        <div class="debug-line @line.Kind"><span class="debug-time">@line.Time</span>@line.Text</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </aside>
+}
+
+<header class="titlebar" @onmousedown="BeginWindowDrag" @ondblclick="NativeWindow.ToggleMaximize">
+    @if (NativeWindow.IsMac)
+    {
+        <div class="glass win-dots" @onmousedown:stopPropagation @ondblclick:stopPropagation>
+            <button type="button" class="dot close" title="Close" aria-label="Close" @onclick="NativeWindow.Close"><svg viewBox="0 0 10 10"><path d="M2.2 2.2l5.6 5.6M7.8 2.2L2.2 7.8"/></svg></button>
+            <button type="button" class="dot min" title="Minimise" aria-label="Minimise" @onclick="NativeWindow.Minimize"><svg viewBox="0 0 10 10"><path d="M2 5h6"/></svg></button>
+            <button type="button" class="dot max" title="Maximise" aria-label="Maximise" @onclick="NativeWindow.ToggleMaximize"><svg viewBox="0 0 10 10" class="solid"><path d="M4.2 2.4h3.4v3.4zM5.8 7.6H2.4V4.2z"/></svg></button>
+        </div>
+    }
+    <div class="glass titlebar-title">
+        @_projectName
+        @if (BuildInfo.IsDebug)
+        {
+            <span class="dev-build">Dev Build @AppInfo.VersionString</span>
+        }
+    </div>
+    @if (!NativeWindow.IsMac)
+    {
+        <div class="glass win-caption" @onmousedown:stopPropagation @ondblclick:stopPropagation>
+            <button type="button" title="Minimise" aria-label="Minimise" @onclick="NativeWindow.Minimize">&#x2212;</button>
+            <button type="button" title="Maximise" aria-label="Maximise" @onclick="NativeWindow.ToggleMaximize">&#x25A1;</button>
+            <button type="button" class="close" title="Close" aria-label="Close" @onclick="NativeWindow.Close">&#x2715;</button>
+        </div>
+    }
+</header>
+
+<nav class="menu-bar" aria-label="Main menu">
+    <div class="glass menu-glass"></div>
+    <span class="float-menu-brand">AJxCAD</span>
+    @foreach (var menu in Menus)
+    {
+        var open = _openMenu == menu.Label;
+        <div class="menu-group">
+            <button type="button" class="float-btn @(open ? "open" : "")" aria-haspopup="menu" aria-expanded="@open.ToString().ToLowerInvariant()"
+                    @onclick="() => ToggleMenu(menu.Label)"
+                    @onpointerenter="() => HoverMenu(menu.Label)">@menu.Label</button>
+            @if (open)
+            {
+                <div class="glass flyout" role="menu">
+                    @foreach (var item in menu.Items)
+                    {
+                        if (item.IsSeparator)
+                        {
+                            <div class="flyout-sep" role="separator"></div>
+                        }
+                        else
+                        {
+                            var captured = item;
+                            <button type="button" class="flyout-item" role="menuitem" disabled="@(captured.Action is null)" @onclick="() => RunItem(captured)">
+                                <span class="flyout-check">@(captured.Checked?.Invoke() == true ? "✓" : "")</span>
+                                <span class="flyout-label">@captured.Label</span>
+                                <span class="flyout-shortcut">@captured.Shortcut</span>
+                            </button>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</nav>
+
+<aside class="float-panel scale-panel" aria-label="Scale">
+    <div class="scale-readout">
+        <div class="scale-actions">
+            <button type="button" class="float-btn @(IsOneToOne ? "active" : "")" title="Reset to 1:1" @onclick="ResetToOneToOne">1:1</button>
+            <button type="button" class="float-btn @(_centered ? "active" : "")" title="Return to the origin at the current scale" @onclick="CenterView">Center</button>
+        </div>
+        <span class="scale-ratio">@RatioText</span>
+    </div>
+    <div class="scale-grid-info">Grid @FormatLength(MinorMm) · Major @FormatLength(MinorMm * 10)</div>
+    <div class="scale-bar-row">
+        <div class="scale-bar" style="width:@Css(BarPx)px"></div>
+        <span class="scale-bar-label">@BarText</span>
+        <button type="button" class="accordion-toggle" title="Scale settings" aria-label="Scale settings" aria-expanded="@_settingsOpen.ToString().ToLowerInvariant()" @onclick="() => _settingsOpen = !_settingsOpen">
+            <span class="chevron @(_settingsOpen ? "open" : "")"></span>
+        </button>
+    </div>
+
+    <div class="accordion-body @(_settingsOpen ? "open" : "")">
+        <div class="accordion-inner">
+            <div class="unit-row" role="group" aria-label="Unit system">
+                <button type="button" class="chip @(!_imperial ? "active" : "")" @onclick="() => SetSystem(false)">Metric</button>
+                <button type="button" class="chip @(_imperial ? "active" : "")" @onclick="() => SetSystem(true)">Imperial</button>
+            </div>
+            <div class="unit-row" role="group" aria-label="1:1 equals">
+                <span class="unit-caption">1:1 =</span>
+                @foreach (var u in Units)
+                {
+                    <button type="button" class="chip @(u == _unit ? "active" : "")" @onclick="() => SetUnit(u)">@u.Label</button>
+                }
+            </div>
+            <div class="unit-row" role="group" aria-label="Zoom">
+                <span class="unit-caption">Zoom</span>
+                <button type="button" class="chip" title="Zoom out" @onpointerdown="() => HoldStart(-1)" @onpointerup="HoldStop" @onpointerleave="HoldStop" @onpointercancel="HoldStop">−</button>
+                <button type="button" class="chip" title="Zoom in" @onpointerdown="() => HoldStart(1)" @onpointerup="HoldStop" @onpointerleave="HoldStop" @onpointercancel="HoldStop">+</button>
+            </div>
+        </div>
+    </div>
+</aside>
+</div>
+
+@code {
+    private sealed record UnitDef(string Label, double Mm);
+
+    private static readonly UnitDef[] MetricUnits = [new("1 mm", 1), new("1 cm", 10), new("1 m", 1000)];
+    private static readonly UnitDef[] ImperialUnits = [new("1 in", 25.4), new("1 ft", 304.8), new("1 yd", 914.4)];
+
+    // At 1:1 one chosen unit is one major grid cell, this many CSS pixels wide.
+    private const double ReferencePx = 160;
+    private const double MaxBarPx = 140;
+
+    private sealed record MenuItem(string Label, string? Shortcut = null, Func<Task>? Action = null, Func<bool>? Checked = null)
+    {
+        public bool IsSeparator => Label == "-";
+    }
+
+    private sealed record MenuDef(string Label, MenuItem[] Items);
+
+    private static readonly MenuItem Separator = new("-");
+
+    private IEnumerable<MenuDef> Menus => (_menus ??=
+    [
+        new("File",
+        [
+            new("New", "⌘N", () => OnFileCommand("new")), new("Open…", "⌘O", () => OnFileCommand("open")),
+            new("Save", "⌘S", () => OnFileCommand("save")), new("Save As…", "⇧⌘S", () => OnFileCommand("saveas")),
+            Separator,
+            new("Project settings…", null, () => OpenDialog("project")),
+            new("Data buckets…", null, ShowData),
+            Separator,
+            new("App settings…", "⌘,", () => OpenDialog("settings")),
+            Separator,
+            new("Quit", "⌘Q", () => { Application.Current?.Quit(); return Task.CompletedTask; })
+        ]),
+        new("Edit",
+        [
+            new("Undo", "⌘Z", Undo), new("Redo", "⇧⌘Z"),
+            Separator,
+            new("Cut", "⌘X"), new("Copy", "⌘C"), new("Paste", "⌘V")
+        ]),
+        new("View",
+        [
+            new("Zoom to 1:1", null, ResetToOneToOne),
+            new("Center view", null, CenterView),
+            Separator,
+            new("Zoom in", null, () => StepZoom(1)),
+            new("Zoom out", null, () => StepZoom(-1)),
+            Separator,
+            new("Scale settings", null, () => { _settingsOpen = !_settingsOpen; return Task.CompletedTask; }, () => _settingsOpen)
+        ]),
+        new("Debug",
+        [
+            new("Debug window", null, () => { _debug = !_debug; return Task.CompletedTask; }, () => _debug),
+            new("Test data…", null, () => OpenDialog("testdata"))
+        ]),
+        new("Help",
+        [
+            new("User guide", null, () => OpenDialog("guide")),
+            new("About AJxCAD", null, () => OpenDialog("about"))
+        ])
+    ]).Where(menu => menu.Label != "Debug" || _showDebugMenu);
+
+    private MenuDef[]? _menus;
+    private string? _openMenu;
+
+    private void ToggleMenu(string label)
+    {
+        _openMenu = _openMenu == label ? null : label;
+        Log("action", $"menu {label}: {(_openMenu is null ? "closed" : "opened")}");
+    }
+    private void HoverMenu(string label) { if (_openMenu is not null) _openMenu = label; }
+    private void CloseMenu() => _openMenu = null;
+
+    private async Task RunItem(MenuItem item)
+    {
+        _openMenu = null;
+        if (item.Action is not null) await item.Action();
+    }
+
+    private async Task StepZoom(int direction)
+    {
+        await HoldStart(direction);
+        await HoldStop();
+    }
+
+    private string? _dialog;
+    private bool _debug = false;
+    private bool _showDebugMenu = BuildInfo.IsDebug;
+    private readonly List<(string Time, string Kind, string Text)> _log = new();
+
+    private ElementReference _logBox;
+    private bool _debugOpen = true;
+
+    private void ToggleDebug() => _debugOpen = !_debugOpen;
+
+    private void SetShowDebugMenu(bool show)
+    {
+        _showDebugMenu = show;
+        if (!_showDebugMenu)
+        {
+            _debug = false;
+            if (_openMenu == "Debug") _openMenu = null;
+            if (_dialog == "testdata") _dialog = null;
+        }
+    }
+
+    private async Task GenerateTestLines(TestDataDialog.LineOptions options)
+    {
+        if (!_showDebugMenu)
+            throw new InvalidOperationException("Test data is available only when the Debug menu is enabled.");
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("generateTestLines", options.Count, options.Spacing);
+    }
+
+    // Oldest first, newest at the bottom; capped so it stays cheap.
+    private void Log(string kind, string text)
+    {
+        _log.Add((DateTime.Now.ToString("HH:mm:ss.fff"), kind, text));
+        if (_log.Count > 500) _log.RemoveAt(0);
+    }
+
+    [JSInvokable]
+    public void OnLog(string kind, string text)
+    {
+        Log(kind, text);
+        StateHasChanged();
+    }
+    private string _tool = "cross";
+
+    // "general" tools work on any data; "data" tools each own a bucket of data (see wwwroot/cad/store.js).
+    private record ToolDef(string Id, string Title, string Hotkey, string Group, string Icon);
+
+    private static readonly ToolDef[] _tools =
+    [
+        new("cross", "Cross", "V", "general", "<path class=\"cross\" d=\"M12 3v7M12 14v7M3 12h7M14 12h7\"/>"),
+        new("select", "Select", "S", "general", "<path d=\"M5 3l14 8.5-6.2 1.6 3.7 6.4-2.6 1.5-3.7-6.4L5 18z\"/>"),
+        new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>")
+    ];
+
+    private async Task SetTool(string name)
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("setTool", name);
+    }
+
+    private async Task Undo()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("undo");
+    }
+
+    [JSInvokable]
+    public void OnToolChanged(string tool)
+    {
+        _tool = tool;
+        StateHasChanged();
+    }
+
+    private DataDialog.BucketInfo[] _buckets = [];
+
+    private async Task ShowData()
+    {
+        if (_cad is not null) _buckets = await _cad.InvokeAsync<DataDialog.BucketInfo[]>("getBuckets");
+        await OpenDialog("data");
+    }
+
+    private Task<DataDialog.BucketPage> LoadBucketPage(string name, int offset)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        return _cad.InvokeAsync<DataDialog.BucketPage>("getBucketPage", name, offset).AsTask();
+    }
+
+    private Task OpenDialog(string name)
+    {
+        _dialog = name;
+        Log("action", $"dialog opened ({name})");
+        return Task.CompletedTask;
+    }
+
+    private void CloseDialog()
+    {
+        Log("action", $"dialog closed ({_dialog})");
+        _dialog = null;
+    }
+
+    [JSInvokable]
+    public void OnEscape()
+    {
+        Log("action", $"OnEscape in Blazor (dialog={_dialog}, menu={_openMenu}, tool={_tool})");
+        if (_dialog is not null) _dialog = null;
+        else if (_openMenu is not null) _openMenu = null;
+        else if (_tool != "cross") _ = SetTool("cross");
+        else return;
+        StateHasChanged();
+    }
+
+    private ElementReference _workspace;
+    private ElementReference _canvas;
+    private DotNetObjectReference<Home>? _self;
+    private IJSObjectReference? _cad;
+
+    // Appearance is an app preference (kept between runs); project data lives in the "project" bucket.
+    private bool _performance = Preferences.Default.Get("performanceMode", false);
+    private string _projectName = "Untitled";
+
+    private async Task SetPerformance(bool on)
+    {
+        _performance = on;
+        Preferences.Default.Set("performanceMode", on);
+        if (_cad is not null) await _cad.InvokeVoidAsync("setEffects", !on);
+    }
+
+    private async Task SetProjectName(string name)
+    {
+        _projectName = string.IsNullOrWhiteSpace(name) ? "Untitled" : name.Trim();
+        if (_cad is not null) await _cad.InvokeVoidAsync("setProjectData", new { name = _projectName });
+    }
+
+    private async Task SyncProject()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("setProjectData", new { name = _projectName, imperial = _imperial ? 1 : 0, unitMm = _unit.Mm });
+    }
+
+    private string? _filePath;
+
+    private void BeginWindowDrag(MouseEventArgs e)
+    {
+        if (e.Button == 0) NativeWindow.BeginDrag();
+    }
+    private sealed record ProjectData(string Name, int Imperial, double UnitMm);
+
+    private static readonly FilePickerFileType ProjectFileType = new(new Dictionary<DevicePlatform, IEnumerable<string>>
+    {
+        [DevicePlatform.MacCatalyst] = ["public.data"],
+        [DevicePlatform.WinUI] = [".ajx"]
+    });
+
+    [JSInvokable]
+    public async Task OnFileCommand(string command)
+    {
+        _openMenu = null;
+        switch (command)
+        {
+            case "new": await NewProject(); break;
+            case "open": await OpenProject(); break;
+            case "save": await SaveProject(false); break;
+            case "saveas": await SaveProject(true); break;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Alert(string title, string message)
+    {
+        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+        if (page is not null) await page.DisplayAlertAsync(title, message, "OK");
+    }
+
+    private async Task NewProject()
+    {
+        if (_cad is null) return;
+        await _cad.InvokeVoidAsync("newProject");
+        _filePath = null;
+        _projectName = "Untitled";
+        await SyncProject();
+        Log("action", "new project");
+    }
+
+    private async Task SaveProject(bool saveAs)
+    {
+        if (_cad is null) return;
+        try
+        {
+            await SyncProject();
+            var text = await _cad.InvokeAsync<string>("getDataText");
+
+            if (!saveAs && _filePath is not null)
+            {
+                try
+                {
+                    await File.WriteAllTextAsync(_filePath, text);
+                    Log("action", $"saved {_filePath}");
+                    return;
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+                {
+                    Log("action", $"could not write {_filePath} ({ex.Message}), asking for a location");
+                }
+            }
+
+            await using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text));
+            var result = await CommunityToolkit.Maui.Storage.FileSaver.Default.SaveAsync($"{_projectName}.ajx", stream);
+            if (result.IsSuccessful)
+            {
+                _filePath = result.FilePath;
+                Log("action", $"saved {_filePath}");
+            }
+            else if (result.Exception is not null)
+            {
+                await Alert("Save failed", result.Exception.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("error", $"save failed: {ex.Message}");
+            await Alert("Save failed", ex.Message);
+        }
+    }
+
+    private async Task OpenProject()
+    {
+        if (_cad is null) return;
+        try
+        {
+            var file = await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = "Open project", FileTypes = ProjectFileType });
+            if (file is null) return;
+
+            string text;
+            await using (var stream = await file.OpenReadAsync())
+            using (var reader = new StreamReader(stream)) text = await reader.ReadToEndAsync();
+
+            await _cad.InvokeAsync<int>("loadDataText", text);
+            _filePath = file.FullPath;
+            await ApplyProject(await _cad.InvokeAsync<ProjectData>("getProjectData"));
+            Log("action", $"opened {_filePath}");
+        }
+        catch (Exception ex)
+        {
+            Log("error", $"open failed: {ex.Message}");
+            await Alert("Could not open file", "This is not a valid AJxCAD project file.\n\n" + ex.Message);
+        }
+    }
+
+    // Brings the scale panel in line with the project bucket that was just loaded.
+    private async Task ApplyProject(ProjectData p)
+    {
+        _projectName = p.Name;
+        _imperial = p.Imperial != 0;
+        _unit = Units.FirstOrDefault(u => Math.Abs(u.Mm - p.UnitMm) < 1e-9) ?? (_imperial ? ImperialUnits[1] : MetricUnits[2]);
+        if (_cad is null) return;
+        await _cad.InvokeVoidAsync("setImperial", _imperial);
+        await _cad.InvokeVoidAsync("setReference", _unit.Mm);
+        await _cad.InvokeVoidAsync("restoreView");
+    }
+
+    private bool _settingsOpen;
+    private bool _centered = true;
+    private bool _imperial;
+    private UnitDef _unit = MetricUnits[2];
+    private double _scale = ReferencePx / MetricUnits[2].Mm; // pixels per mm
+
+    private UnitDef[] Units => _imperial ? ImperialUnits : MetricUnits;
+    private double OneToOne => ReferencePx / _unit.Mm;
+
+    private double BarMm => NiceAtMost(MaxBarPx / (_scale * _unit.Mm)) * _unit.Mm;
+    private double BarPx => BarMm * _scale;
+    private string BarText => FormatLength(BarMm);
+
+    private double MinorMm
+    {
+        get
+        {
+            var v = 12 / (_scale * _unit.Mm);
+            var pow = Math.Pow(10, Math.Floor(Math.Log10(v)));
+            foreach (var m in new[] { 1, 2, 5, 10 })
+                if (m * pow >= v) return m * pow * _unit.Mm;
+            return 10 * pow * _unit.Mm;
+        }
+    }
+
+    private bool IsOneToOne => Math.Abs(_scale / OneToOne - 1) < 0.005;
+
+    private string RatioText
+    {
+        get
+        {
+            if (IsOneToOne) return "1 : 1";
+            var zoom = _scale / OneToOne;
+            var v = zoom >= 1 ? zoom : 1 / zoom;
+            var text = v.ToString(v < 10 ? "0.##" : v < 100 ? "0.#" : "0", System.Globalization.CultureInfo.InvariantCulture);
+            return zoom >= 1 ? $"{text} : 1" : $"1 : {text}";
+        }
+    }
+
+    private string FormatLength(double mm)
+    {
+        if (_imperial)
+        {
+            var inches = mm / 25.4;
+            if (inches < 12) return $"{Num(inches)} in";
+            if (inches < 12 * 5280) return $"{Num(inches / 12)} ft";
+            return $"{Num(inches / (12 * 5280))} mi";
+        }
+
+        if (mm < 10) return $"{Num(mm)} mm";
+        if (mm < 1000) return $"{Num(mm / 10)} cm";
+        if (mm < 1_000_000) return $"{Num(mm / 1000)} m";
+        return $"{Num(mm / 1_000_000)} km";
+    }
+
+    private static string Num(double v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_debug && _debugOpen && _cad is not null) await _cad.InvokeVoidAsync("stickToBottom", _logBox);
+        if (!firstRender) return;
+
+        _self = DotNetObjectReference.Create(this);
+        _cad = await JS.InvokeAsync<IJSObjectReference>("import", "./cad/engine.js");
+        await _cad.InvokeVoidAsync("init", _workspace, _canvas, _self, ReferencePx, _unit.Mm);
+        await _cad.InvokeVoidAsync("setEffects", !_performance);
+        await SyncProject();
+    }
+
+    // Called from cad.js when the scale changes (wheel zoom or buttons).
+    [JSInvokable]
+    public void OnScaleChanged(double scale)
+    {
+        _scale = scale;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnCenteredChanged(bool centered)
+    {
+        _centered = centered;
+        StateHasChanged();
+    }
+
+    // Stepping and the accelerating hold-to-zoom live in cad.js.
+    private async Task HoldStart(int direction)
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("holdZoomStart", direction);
+    }
+
+    private async Task HoldStop()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("holdZoomStop");
+    }
+
+    private async Task SetSystem(bool imperial)
+    {
+        if (_imperial == imperial) return;
+        _imperial = imperial;
+        if (_cad is not null) await _cad.InvokeVoidAsync("setImperial", imperial);
+        await SetUnit(imperial ? ImperialUnits[1] : MetricUnits[2]);
+    }
+
+    private async Task SetUnit(UnitDef unit)
+    {
+        _unit = unit;
+        if (_cad is not null) await _cad.InvokeVoidAsync("setReference", unit.Mm);
+        await SyncProject();
+    }
+
+    private async Task CenterView()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("center");
+    }
+
+    private async Task ResetToOneToOne()
+    {
+        if (_cad is not null) await _cad.InvokeVoidAsync("setScale", OneToOne);
+    }
+
+    // Largest 1-2-5 value (x 10^n) that is <= value.
+    private static double NiceAtMost(double value)
+    {
+        var pow = Math.Pow(10, Math.Floor(Math.Log10(value)));
+        foreach (var m in new[] { 5, 2, 1 })
+            if (m * pow <= value) return m * pow;
+        return pow;
+    }
+
+    private static string Css(double v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_cad is not null)
+        {
+            try
+            {
+                await _cad.InvokeVoidAsync("dispose");
+                await _cad.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+        }
+        _self?.Dispose();
+    }
+}

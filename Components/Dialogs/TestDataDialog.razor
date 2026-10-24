@@ -1,0 +1,73 @@
+<div class="howto">
+    <p class="data-intro">Add test geometry to the current project. Existing drawing data is kept. Use Undo once to remove the generated batch.</p>
+    <section class="howto-item @(_lineOpen ? "open" : "")">
+        <button type="button" class="howto-head" aria-expanded="@_lineOpen.ToString().ToLowerInvariant()" @onclick="() => _lineOpen = !_lineOpen">
+            <span class="chevron @(_lineOpen ? "open" : "")"></span>
+            <span class="howto-title">Line debug</span>
+        </button>
+        <div class="accordion-body @(_lineOpen ? "open" : "")">
+            <div class="howto-content settings">
+                <label class="setting-row">
+                    <span>Number of lines</span>
+                    <input class="text-input" type="number" min="1" max="10000" step="1" @bind="_count" disabled="@_busy" />
+                </label>
+                <label class="test-spacing">
+                    <span>Spacing: @_spacing px</span>
+                    <input type="range" min="0" max="200" step="1" @bind="_spacing" @bind:event="oninput" disabled="@_busy" />
+                </label>
+                <p class="data-intro">Separate lines with random lengths and directions. Spacing controls the approximate distance between successive line centres at the current zoom, not a guaranteed minimum gap. Lines reflect back inside a 48 px viewport border.</p>
+                @if (_error is not null)
+                {
+                    <p class="test-error" role="alert">@_error</p>
+                }
+                @if (_result is not null)
+                {
+                    <p role="status">@_result</p>
+                }
+                <div class="settings-actions">
+                    <button type="button" class="chip active" disabled="@_busy" @onclick="Generate">@(_busy ? "Adding…" : "Add lines")</button>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    public sealed record LineOptions(int Count, double Spacing);
+
+    [Parameter] public EventCallback<LineOptions> OnGenerate { get; set; }
+
+    private bool _lineOpen = true;
+    private bool _busy;
+    private int _count = 100;
+    private double _spacing = 24;
+    private string? _error;
+    private string? _result;
+
+    private async Task Generate()
+    {
+        if (_busy) return;
+        _error = null;
+        _result = null;
+        if (_count is < 1 or > 10000 || !double.IsFinite(_spacing) || _spacing is < 0 or > 200)
+        {
+            _error = "Enter 1 to 10,000 lines and spacing from 0 to 200 px.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await OnGenerate.InvokeAsync(new(_count, _spacing));
+            _result = $"Added {_count:N0} lines. Use Undo to remove this batch.";
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            _error = $"Could not add test lines: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

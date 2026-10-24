@@ -1,0 +1,42 @@
+@* Reusable frosted-glass dialog. Show it with @if / Open and put any content inside. *@
+@if (Open)
+{
+    <div class="modal-backdrop" @ref="_backdrop" tabindex="-1" @onkeydown="OnKeyDown" @onclick="Close" @oncontextmenu="Close" @oncontextmenu:preventDefault>
+        <section class="glass modal @(Glow ? "glow" : "")" role="dialog" aria-modal="true" aria-label="@Title" style="width:@(Width)px" @onclick:stopPropagation>
+            <header class="modal-head">
+                <h2>@Title</h2>
+                <button type="button" class="modal-close" title="Close" aria-label="Close" @onclick="Close">✕</button>
+            </header>
+            <div class="modal-body">@ChildContent</div>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool Glow { get; set; }
+    [Parameter] public int Width { get; set; } = 420;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ElementReference _backdrop;
+    private bool _wasOpen;
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await Close();
+    }
+
+    // Take keyboard focus when opened so Esc is received by the dialog.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            try { await _backdrop.FocusAsync(); } catch (InvalidOperationException) { }
+        }
+        _wasOpen = Open;
+    }
+}

@@ -1,0 +1,113 @@
+@implements IDisposable
+
+<div class="databuckets">
+    <p class="data-intro">Everything is stored in buckets. Expand a bucket to inspect its saved text, one page at a time. Saving a project always includes all rows.</p>
+    @if (Buckets.Length == 0)
+    {
+        <p class="data-empty">No data buckets.</p>
+    }
+
+    @if (Project.Length > 0)
+    {
+        <h3 class="data-group">Project</h3>
+        <div class="howto">
+            @foreach (var b in Project) { @Item(b) }
+        </div>
+    }
+
+    @if (Tools.Length > 0)
+    {
+        <h3 class="data-group">Tools</h3>
+        <div class="howto">
+            @foreach (var b in Tools) { @Item(b) }
+        </div>
+    }
+</div>
+
+@code {
+    public sealed record BucketInfo(string Name, string Label, string Group, int Count);
+    public sealed record BucketPage(int Offset, int Count, int Total, int PageSize, string Text);
+
+    [Parameter] public BucketInfo[] Buckets { get; set; } = [];
+    [Parameter, EditorRequired] public Func<string, int, Task<BucketPage>> LoadPage { get; set; } = default!;
+
+    private string? _open;
+    private BucketPage? _page;
+    private string? _error;
+    private bool _loading;
+    private int _offset;
+    private int _request;
+
+    private BucketInfo[] Project => Buckets.Where(b => b.Group == "project").ToArray();
+    private BucketInfo[] Tools => Buckets.Where(b => b.Group != "project").ToArray();
+
+    private async Task Toggle(string name)
+    {
+        _request++;
+        _open = _open == name ? null : name;
+        _page = null;
+        _error = null;
+        if (_open is not null) await ShowPage(name, 0);
+    }
+
+    private async Task ShowPage(string name, int offset)
+    {
+        var request = ++_request;
+        _offset = offset;
+        _loading = true;
+        _page = null;
+        _error = null;
+        try
+        {
+            var page = await LoadPage(name, offset);
+            if (request == _request) _page = page;
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            if (request == _request) _error = $"Could not load bucket data: {ex.Message}";
+        }
+        finally
+        {
+            if (request == _request) _loading = false;
+        }
+    }
+
+    public void Dispose() => _request++;
+
+    private RenderFragment Item(BucketInfo b) => @<section class="howto-item @(_open == b.Name ? "open" : "")">
+        <button type="button" class="howto-head" aria-expanded="@((_open == b.Name).ToString().ToLowerInvariant())" @onclick="() => Toggle(b.Name)">
+            <span class="chevron @(_open == b.Name ? "open" : "")"></span>
+            <span class="howto-title">@b.Label</span>
+            <kbd>@b.Name</kbd>
+            <span class="data-count">@b.Count @(b.Count == 1 ? "item" : "items")</span>
+        </button>
+        @if (_open == b.Name)
+        {
+            <div class="accordion-body open">
+                <div class="howto-content" aria-busy="@_loading.ToString().ToLowerInvariant()">
+                    @if (_loading)
+                    {
+                        <p role="status">Loading data...</p>
+                    }
+                    else if (_error is not null)
+                    {
+                        <p role="alert">@_error</p>
+                        <button type="button" class="chip" @onclick="() => ShowPage(b.Name, _offset)">Retry</button>
+                    }
+                    else if (_page is { } page)
+                    {
+                        @if (page.Total > 0)
+                        {
+                            <div class="data-paging">
+                                <button type="button" class="chip" disabled="@(page.Offset == 0)" @onclick="() => ShowPage(b.Name, Math.Max(0, page.Offset - page.PageSize))">Previous</button>
+                                <span role="status">Rows @(page.Offset + 1) to @(page.Offset + page.Count) of @(page.Total)</span>
+                                <button type="button" class="chip" disabled="@(page.Offset + page.Count >= page.Total)" @onclick="() => ShowPage(b.Name, page.Offset + page.Count)">Next</button>
+                            </div>
+                        }
+                        <pre class="data-text">@(page.Text)</pre>
+                    }
+                </div>
+            </div>
+        }
+    </section>;
+}
