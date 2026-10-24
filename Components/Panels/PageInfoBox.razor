@@ -1,7 +1,7 @@
 @using System.Globalization
 @* Information box for the selected page: edits preview live on the board until Save or Cancel. *@
 <section class="glass process-box page-box" aria-label="Page information" aria-live="polite">
-    <div class="process-step">Page@(Draft.Visible ? "" : " · hidden")@(Draft.Locked ? " · no select" : "")@(Dirty ? " · unsaved changes" : "")</div>
+    <div class="process-step">Page settings@(Draft.Visible ? "" : " · hidden")@(Draft.Locked ? " · no select" : "")@(Dirty ? " · unsaved changes" : "")</div>
 
     <label class="page-field">
         <span class="measure-caption">Name</span>
@@ -9,17 +9,26 @@
                @oninput="SetName" />
     </label>
 
-    <div class="measure-caption">Paper size</div>
-    @foreach (var group in Papers.GroupBy(p => p.Group))
+    <button type="button" class="accordion-toggle page-sizes-toggle" aria-expanded="@_pageSizesOpen.ToString().ToLowerInvariant()"
+            aria-controls="page-size-options" @onclick="() => _pageSizesOpen = !_pageSizesOpen">
+        <span>Page sizes · @SelectedPaper.Group @SelectedPaper.Label · @Draft.PaperSize</span>
+        <span class="chevron @(_pageSizesOpen ? "open" : "")" aria-hidden="true"></span>
+    </button>
+    @if (_pageSizesOpen)
     {
-        <div class="unit-row page-papers" role="group" aria-label="@group.Key paper sizes">
-            <span class="unit-caption">@group.Key</span>
-            @foreach (var paper in group)
+        <div id="page-size-options">
+            @foreach (var group in Papers.GroupBy(p => p.Group))
             {
-                var id = paper.Id;
-                <button type="button" class="chip @(Draft.Paper == id ? "active" : "")"
-                        aria-pressed="@((Draft.Paper == id).ToString().ToLowerInvariant())"
-                        @onclick="() => Set(PaperKey, id)">@paper.Label</button>
+                <div class="unit-row page-papers" role="group" aria-label="@group.Key paper sizes">
+                    <span class="unit-caption">@group.Key</span>
+                    @foreach (var paper in group)
+                    {
+                        var id = paper.Id;
+                        <button type="button" class="chip @(Draft.Paper == id ? "active" : "")"
+                                aria-pressed="@((Draft.Paper == id).ToString().ToLowerInvariant())"
+                                @onclick="() => Set(PaperKey, id)">@paper.Label</button>
+                    }
+                </div>
             }
         </div>
     }
@@ -106,6 +115,7 @@
 
 @code {
     private static readonly double[] Presets = [1, 10, 20, 50, 100, 200];
+    private PaperOption SelectedPaper => Papers.Single(p => p.Id == Draft.Paper);
 
     [Parameter, EditorRequired] public PageDraft Draft { get; set; } = default!;
     [Parameter, EditorRequired] public PaperOption[] Papers { get; set; } = [];
@@ -126,6 +136,7 @@
     private string _nameText = "";
     private string _scaleText = "";
     private int _scaleKey;
+    private bool _pageSizesOpen;
     private (int Id, int Revision)? _loaded;
     private double _loadedScale = double.NaN;
 

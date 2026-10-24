@@ -94,6 +94,8 @@ An **Optimize view** panel appears when any visible-layer objects fall below the
 
 Save and reopen drawings as `.ajx` project files. A project keeps its drawing data, title, measurement settings, reference unit, and current view together, so you can pick up where you left off.
 
+The selected page's information box is titled **Page settings**. Expand **Page sizes** to choose a paper format; the collapsed header shows the current format (for example, **ISO A4** or **US Letter**) and paper dimensions. Orientation and scale remain available outside the accordion.
+
 ## A workspace that suits you
 
 In **File > App settings > Interface size**, use the **− / +** buttons to change **UI scale** from **80% to 140%** or **Text size** from **100% to 160%**, in **10 percentage-point steps**. UI scale resizes menus and controls; Text size enlarges interface text without scaling icons or spacing. Buttons are disabled at each limit. Both apply immediately, work together, and are remembered on this computer. They do not change the drawing canvas, drawing text, measurements, or print/PDF output.

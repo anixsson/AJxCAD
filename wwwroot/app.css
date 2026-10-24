@@ -587,7 +587,7 @@ button {
 }
 
 .process-box {
-    width: calc(300px * var(--text-scale, 1));
+    width: calc(340px * var(--text-scale, 1));
     max-width: calc(100vw / var(--ui-scale, 1) - 32px);
     padding: 12px 14px;
 }
@@ -1018,9 +1018,24 @@ button {
 /* Page information box (bottom centre) */
 
 .page-box {
-    width: 380px;
+    width: calc(420px * var(--text-scale, 1));
     max-height: calc(100vh - 88px);
     overflow-y: auto;
+}
+
+.page-box .page-sizes-toggle {
+    width: 100%;
+    height: auto;
+    min-height: 32px;
+    margin: 8px 0 4px;
+    padding: 4px 6px;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+}
+
+.page-sizes-toggle .chevron {
+    flex-shrink: 0;
 }
 
 .page-field {
