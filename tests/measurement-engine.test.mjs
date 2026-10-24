@@ -50,6 +50,54 @@ test("only Select opens saved measurement text; blue points select without openi
             invokeMethodAsync: (name, ...args) => { calls.push({ name, args }); return Promise.resolve(); }
         }, 1000, 1000);
         flush();
+        for (const [key, tool] of [["o", "circle"], ["r", "rectangle"], ["t", "text"]]) {
+            document.dispatchEvent(Object.assign(new Event("keydown"), { key }));
+            assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], tool,
+                `${key.toUpperCase()} activates ${tool}`);
+            if (tool === "circle") {
+                click(600, 400);
+                click(660, 400);
+            } else if (tool === "rectangle") {
+                click(600, 600);
+                click(700, 700);
+            } else {
+                click(900, 100);
+                const textInfo = calls.findLast(c => c.name === "OnTextChanged").args[0];
+                assert.equal(textInfo.x, 380);
+                engine.setTextDraft({ ...textInfo, text: "Note" });
+                engine.saveText();
+                assert.equal(calls.findLast(c => c.name === "OnTextChanged").args[0].mode, "edit");
+            }
+        }
+        const drawingBuckets = engine.getBuckets();
+        assert.equal(drawingBuckets.find(b => b.name === "shapes").count, 2);
+        assert.equal(drawingBuckets.find(b => b.name === "texts").count, 1);
+        engine.setTool("select");
+        const textBefore = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "texts").rows[0];
+        const pointer = (type, x, y) => workspace.dispatchEvent(Object.assign(new Event(type), {
+            button: 0, clientX: x, clientY: y, detail: 1, pointerId: 1
+        }));
+        pointer("pointerdown", 900, 100);
+        pointer("pointermove", 1000, 100);
+        pointer("pointerup", 1000, 100);
+        flush();
+        assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], "select",
+            "Select stays active while text is edited");
+        assert.equal(calls.findLast(c => c.name === "OnTextChanged").args[0].mode, "edit",
+            "selecting a text label opens its information box");
+        const textAfter = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "texts").rows[0];
+        assert.notDeepEqual(textAfter, textBefore, "dragging the text origin moves it");
+        assert.equal(engine.removeSelectedItems(), 1, "the selected text can be deleted");
+        assert.equal(calls.findLast(c => c.name === "OnTextChanged").args[0], null,
+            "deleting the text closes its information box");
+        assert.equal(engine.getBuckets().find(b => b.name === "texts").count, 0);
+        engine.undo();
+        assert.equal(engine.getBuckets().find(b => b.name === "texts").count, 1);
+        pointer("pointerdown", 1000, 100);
+        pointer("pointerup", 1000, 100);
+        flush();
+        assert.equal(engine.cancelCurrent(), true, "Esc closes the text information box");
+        assert.equal(calls.findLast(c => c.name === "OnTextChanged").args[0], null);
         document.dispatchEvent(Object.assign(new Event("keydown"), { key: "m" }));
         assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], "measurement",
             "M activates the Measurement tool");

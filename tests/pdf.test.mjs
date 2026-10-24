@@ -12,9 +12,9 @@ test("the PDF is one A4 page with a valid cross-reference table", () => {
     assert.ok(/^[\x00-\x7f]*$/.test(pdf), "ASCII only, so string length equals byte length");
 
     const startxref = Number(pdf.match(/startxref\n(\d+)/)[1]);
-    assert.ok(pdf.slice(startxref).startsWith("xref\n0 6\n"));
+    assert.ok(pdf.slice(startxref).startsWith("xref\n0 17\n"));
     const offsets = [...pdf.slice(startxref).matchAll(/^(\d{10}) 00000 n $/gm)].map(m => Number(m[1]));
-    assert.equal(offsets.length, 5);
+    assert.equal(offsets.length, 16);
     offsets.forEach((o, i) => assert.ok(pdf.slice(o).startsWith(`${i + 1} 0 obj\n`), `object ${i + 1} offset`));
 
     const length = Number(pdf.match(/\/Length (\d+)/)[1]);
@@ -95,4 +95,16 @@ test("a dimensioned two-point measurement prints as a CAD dimension with rotated
     assert.equal(stream.match(/^h f$/gm).length, 2, "two filled arrows");
     // A vertical dimension reads bottom to top: rotation 90 degrees.
     assert.match(stream, /BT \/F1 7 Tf 0 1 -1 0 [\d.]+ [\d.]+ Tm \(100 mm\) Tj ET/);
+});
+
+test("shapes and text export alongside lines and measurements", () => {
+    const rectangle = { type: "rectangle", x1: 0, y1: 0, x2: 100, y2: 50 };
+    const circle = { type: "circle", x1: 100, y1: 100, x2: 150, y2: 100 };
+    const body = stream(pagePdf(page, [], [], undefined, [
+        rectangle,
+        circle
+    ], [{ text: "Note", x: 10, y: 20 }]));
+    assert.ok(body.includes(" c h\n"), "circle path is drawn");
+    assert.ok(body.includes(" re\n"), "rectangle path is drawn");
+    assert.ok(body.includes("(Note) Tj"), "text is printed");
 });

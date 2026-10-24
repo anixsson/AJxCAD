@@ -4,6 +4,7 @@
 
 import { checkpoint } from "../store.js";
 import { addLine } from "../lines.js";
+import { drawSnapIndicator } from "../snap-indicator.js";
 
 export function createLineTool(env) {
     let start = null;
@@ -102,7 +103,6 @@ export function createLineTool(env) {
                 }
             }
 
-            g.lineWidth = 1.5 * d;
             if (start) {
                 const p = view.toScreen(start.x, start.y);
                 g.fillStyle = (view.paper ? "#000" : "#ff8fe0");
@@ -110,12 +110,7 @@ export function createLineTool(env) {
                 g.arc(p.x * d, p.y * d, 3.5 * d, 0, Math.PI * 2);
                 g.fill();
             }
-            if (hover) {
-                const p = view.toScreen(hover.x, hover.y);
-                const r = (hover.kind === "end" ? 6 : 4) * d;
-                g.strokeStyle = hover.kind === "end" ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
-                g.strokeRect(p.x * d - r, p.y * d - r, r * 2, r * 2);
-            }
+            drawSnapIndicator(g, view, hover);
         }
     };
 }

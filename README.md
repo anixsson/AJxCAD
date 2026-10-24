@@ -2,17 +2,17 @@
 
 AJxCAD is a focused 2D CAD workspace for macOS and Windows, built with .NET MAUI and Blazor Hybrid.
 
-Create precise 2D line drawings in a clean workspace designed for quick drafting and easy navigation.
+Create precise 2D drawings in a clean workspace designed for quick drafting and easy navigation.
 
-In **Data buckets**, **Project** groups project settings, Pages and Layers. **Tools** contains only Lines and Measurements. The Measurement tool keeps its existing `measures` bucket format for compatibility with saved projects.
+In **Data buckets**, **Project** groups project settings, Pages and Layers. **Tools** contains Lines, Shapes, Text and Measurements. The Measurement tool keeps its existing `measures` bucket format for compatibility with saved projects.
 
 ## Layers
 
 The top-right board panel has **Pages** and **Layers** buttons to switch between tabs. Collapse the whole panel to a small icon with its top-right button. Drag the expanded panel's left edge to adjust its width; the width is saved in app settings and restored next time. The resize edge also supports Left/Right arrow keys when focused.
 
-In Layers, use **+ Add layer**, edit a layer's name directly, and choose its **Active** checkbox to use it for new lines, saved measurements (including areas and dimensions). Splitting a line keeps both pieces on the original layer.
+In Layers, use **+ Add layer**, edit a layer's name directly, and choose its **Active** checkbox to use it for new lines, shapes, text and saved measurements (including areas and dimensions). Splitting a line keeps both pieces on the original layer.
 
-Use the select-all icon at the left of a layer row to replace the selection with all lines and measurements in that visible layer. Page frames are not included. Select board items, choose the destination as the active layer, then press **Move selection to active**. Selecting any endpoint moves the whole owning line or measurement to the layer, not just that point. You can also assign a saved measurement open in the Measurement editor. Adding or renaming a layer keeps the current selection.
+Use the select-all icon at the left of a layer row to replace the selection with all lines, shapes and text in that visible layer. Page frames and measurements are not included. Select board items, choose the destination as the active layer, then press **Move selection to active**. Selecting any endpoint moves the whole owning item to the layer, not just that point. You can also assign a saved measurement open in the Measurement editor. Adding or renaming a layer keeps the current selection.
 
 Each layer has **Show** and **Print** checkboxes. Turning Show off hides its items and excludes them from picking and snapping. Hidden layers never print. Turning Print off leaves a visible layer on the board but omits it from print preview, printing, and PDF export. Page frames do not belong to layers: they use their own visibility controls and remain available in Print / Export. Printed lines and measurements still follow their layer settings.
 
@@ -22,11 +22,13 @@ Layers are stored in the **Layers** (`layers`) bucket, and board items store the
 
 Draw connected lines on an adaptive grid; press Space to end a chain and start a new one, or uncheck **Multi** in the Line toolmenu to draw one line at a time. Points snap to grid intersections and existing endpoints, while a live length label helps you see dimensions as you draw. Select and adjust line ends; while dragging, a dashed guide and live offset distance show the move from its starting point in your chosen measurement units. To delete lines, select them with **Select** and press **Delete** in the Actions bar, or Delete / Backspace: in Nodes mode every line touching a selected node is removed, in Lines mode the selected lines. Undo drawing edits when needed.
 
+Choose **Circle** (O) and click its centre and radius, or choose **Rectangle** (R) and click two opposite corners; these points snap to grid intersections. In Select, drag a rectangle around a circle to select it. Rectangles expose four corner nodes that can be dragged to resize them. Choose **Text** (T), click its grid-snapped anchor, enter up to 240 characters (a live preview appears on the board at its real size, scaling with zoom) and click **Place text**. The text information box then lets you change font size (1–1000 mm; the − / + buttons step 10 mm and repeat faster while held), family, bold, italic and underline. With Select active, click saved text to reopen the box; drag the text or its anchor to move it while the box stays open, then save changes or cancel. Shapes and text follow their layer visibility and print settings and are included in PDF export.
+
 The bottom-center toolmenu shows options for the active tool. In Select, switch between Nodes and Lines: click a line in Lines mode to select both ends, including shared corners. Every line with both ends selected is highlighted. Shift-click adds or toggles selection; drag a selected node or line to move the selection together. Rectangle selection continues to select enclosed line ends in either mode. In Lines mode, each selected line shows a diamond handle at its middle: drag it to split the line in two and move the new shared node (one undo restores the original line). Turn the handles off with the Middle checkbox in the Options bar, shown beside the toolmenu in Lines mode.
 
 Click a corner where several lines meet (Nodes mode) to open the **Corner** box. It lists every line end at that corner (L1, L2, …) with its length and far end, and the same labels appear on the board next to each line. Uncheck lines to leave them in place: only checked ends are selected and move, so you can pull one line off a shared corner. Click outside the selection or press Esc to close the box.
 
-Select also picks saved measurement points (blue circles). Shared-corner and rectangle selections can include both line endpoints and area points; the selection information box shows measurement points as blue checkbox options. Uncheck any points to leave them in place, then drag the selection or use **Actions > Move** to move both kinds together. Only included measurement points are selectable. A selection belonging solely to one measurement shows its length and area without opening the editor. Moves update measurement labels and can be undone.
+Select also picks shapes and text, in addition to saved measurement points (blue circles). Shared-corner and rectangle selections can include both line endpoints and area points; the selection information box shows measurement points as blue checkbox options. Uncheck any points to leave them in place, then drag the selection or use **Actions > Move** to move it together. Only included measurement points are selectable. A selection belonging solely to one measurement shows its length and area without opening the editor. Moves update measurement labels and can be undone.
 
 While anything is selected, an Actions menu appears beside the toolmenu. **Move** opens a guide box: click a base point (such as a corner of the selection), press Next (or Space), then click the destination. The selection moves by that offset, with a live preview and offset distance; Esc or Cancel stops the move.
 
@@ -58,7 +60,7 @@ Under **Print**, the **Text size** slider (50–400%) sets how large measurement
 
 ## Printing and PDF
 
-Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the PDF in your default PDF app and opens its print dialog (if it only opens the PDF, print from that app), and **Export PDF…** saves a PDF where you choose. After saving, click the file name to open the PDF, or **Open location** to show it in Finder or Explorer. The output is a vector PDF of the drawing lines and saved measurements inside the page frame, on the page's paper size at its scale. Measurements print in the Paper look and follow their own **Lengths**, **Angles** and **Area** settings. The grid, unsaved measurements are not printed.
+Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the PDF in your default PDF app and opens its print dialog (if it only opens the PDF, print from that app), and **Export PDF…** saves a PDF where you choose. After saving, click the file name to open the PDF, or **Open location** to show it in Finder or Explorer. The output is a vector PDF of the drawing lines, shapes, text and saved measurements inside the page frame, on the page's paper size at its scale. Measurements print in the Paper look and follow their own **Lengths**, **Angles** and **Area** settings. The grid, unsaved measurements are not printed.
 
 ## Navigation and scale
 

@@ -38,6 +38,7 @@
     {
         <p class="test-error" role="alert">@_deleteMeasurementError</p>
     }
+
     <div class="settings-actions">
         <button type="button" class="chip" disabled="@_deletingMeasurement" @onclick="CloseDialog">Cancel</button>
         <button type="button" class="chip danger" disabled="@_deletingMeasurement" @onclick="ConfirmDeleteMeasurement">
@@ -104,6 +105,10 @@
                 }
             </section>
         }
+        else if (_textInfo is not null)
+        {
+            @TextInfoBox
+        }
         else if (_stack is { } st)
         {
             <section class="glass process-box" role="dialog" aria-label="Selection points" aria-live="polite">
@@ -162,10 +167,10 @@
                         <button type="button" class="chip @(_moveStep is not null ? "active" : "")"
                                 title="Move the selection from a base point to a destination"
                                 disabled="@(_moveStep is not null)" @onclick="StartMove">Move</button>
-                        @if (_selectedLines > 0 && _moveStep is null)
+                        @if (_selectedItems > 0 && _moveStep is null)
                         {
-                            <button type="button" class="chip danger" title="Delete the lines of the selection (Delete or Backspace)"
-                                    @onclick="RemoveSelectedLines">Delete @_selectedLines line@(_selectedLines == 1 ? "" : "s")</button>
+                            <button type="button" class="chip danger" title="Delete selected drawing items (Delete or Backspace)"
+                                    @onclick="RemoveSelectedItems">Delete @_selectedItems item@(_selectedItems == 1 ? "" : "s")</button>
                         }
                         @if (_selectedMeasurement is not null && _moveStep is null)
                         {
@@ -353,6 +358,13 @@
                 </div>
             </aside>
         </div>
+    </div>
+}
+
+@if (_tool == "text")
+{
+    <div class="toolmenu-dock">
+        @TextInfoBox
     </div>
 }
 
@@ -686,18 +698,18 @@
         StateHasChanged();
     }
 
-    private int _selectedLines;
+    private int _selectedItems;
 
     [JSInvokable]
-    public void OnLineSelectionChanged(int count)
+    public void OnDrawingItemSelectionChanged(int count)
     {
-        _selectedLines = count;
+        _selectedItems = count;
         StateHasChanged();
     }
 
-    private async Task RemoveSelectedLines()
+    private async Task RemoveSelectedItems()
     {
-        if (_cad is not null) await _cad.InvokeAsync<int>("removeSelectedLines");
+        if (_cad is not null) await _cad.InvokeAsync<int>("removeSelectedItems");
     }
 
     [JSInvokable]
@@ -771,6 +783,161 @@
 
         await _cad.InvokeVoidAsync("setLineMulti", !_lineMulti);
         _lineMulti = !_lineMulti;
+    }
+
+    public sealed record TextInfo(string Mode, int? Id, string Text, double X, double Y, double FontSize,
+        string FontFamily, bool Bold, bool Italic, bool Underline);
+    private TextInfo? _textInfo;
+
+    private RenderFragment TextInfoBox => __builder =>
+    {
+    <section class="glass process-box" aria-label="Text tool" aria-live="polite">
+        <div class="process-step">@(_textInfo?.Mode == "edit" ? "Text information" : "Text")</div>
+        @if (_textInfo is { } textInfo)
+        {
+            <label class="measure-caption" for="board-text">Content</label>
+            <input id="board-text" class="text-input text-tool-input" type="text" maxlength="240" value="@textInfo.Text"
+                   @oninput="e => ChangeTextDraft(nameof(textInfo.Text), e.Value)" />
+            <label class="measure-caption" for="board-text-size">Font size (mm)</label>
+            <div class="text-font-size-row">
+                <input id="board-text-size" class="text-input" type="number" min="1" max="1000" step="0.5" value="@textInfo.FontSize"
+                       @onchange="e => ChangeTextDraft(nameof(textInfo.FontSize), e.Value)" />
+                <button type="button" class="chip text-font-size-button" title="Decrease font size"
+                        aria-label="Decrease font size"
+                        @onpointerdown="() => FontSizeHoldStart(-1)" @onpointerup="FontSizeHoldStop"
+                        @onpointerleave="FontSizeHoldStop" @onpointercancel="FontSizeHoldStop"
+                        @onclick="e => FontSizeClick(-1, e)">−</button>
+                <button type="button" class="chip text-font-size-button" title="Increase font size"
+                        aria-label="Increase font size"
+                        @onpointerdown="() => FontSizeHoldStart(1)" @onpointerup="FontSizeHoldStop"
+                        @onpointerleave="FontSizeHoldStop" @onpointercancel="FontSizeHoldStop"
+                        @onclick="e => FontSizeClick(1, e)">+</button>
+            </div>
+            <label class="measure-caption" for="board-text-family">Font family</label>
+            <select id="board-text-family" class="text-input text-tool-input" value="@textInfo.FontFamily"
+                    @onchange="e => ChangeTextDraft(nameof(textInfo.FontFamily), e.Value)">
+                <option value="sans-serif">Sans serif</option>
+                <option value="serif">Serif</option>
+                <option value="monospace">Monospace</option>
+            </select>
+            <div class="unit-row text-style-buttons" role="group" aria-label="Text styles">
+                @foreach (var (property, label, enabled) in new[]
+                {
+                    ("Bold", "Bold", textInfo.Bold),
+                    ("Italic", "Italic", textInfo.Italic),
+                    ("Underline", "Underline", textInfo.Underline)
+                })
+                {
+                    <button type="button" class="chip check-chip @(enabled ? "active" : "")" role="checkbox"
+                            aria-checked="@enabled.ToString().ToLowerInvariant()"
+                            @onclick="() => ChangeTextDraft(property, !enabled)">
+                        <span class="check-box" aria-hidden="true">@(enabled ? "✓" : "")</span>@label
+                    </button>
+                }
+            </div>
+            <div class="process-actions">
+                <button type="button" class="chip" @onclick="CancelText">Cancel</button>
+                <button type="button" class="chip active default-action" data-default-action
+                        disabled="@string.IsNullOrWhiteSpace(textInfo.Text)"
+                        @onclick="SaveText">@(textInfo.Mode == "edit" ? "Save changes" : "Place text")<span class="key-hint">Space</span></button>
+            </div>
+        }
+        else
+        {
+            <p class="process-text">Click the board to place a text anchor.</p>
+        }
+    </section>
+    };
+    private CancellationTokenSource? _fontSizeHold;
+
+    [JSInvokable]
+    public void OnTextChanged(TextInfo? info)
+    {
+        _textInfo = info;
+        StateHasChanged();
+    }
+
+    private async Task ChangeTextDraft(string property, object? value)
+    {
+        if (_cad is null || _textInfo is null)
+            throw new InvalidOperationException("The text editor is not open.");
+        _textInfo = property switch
+        {
+            nameof(TextInfo.Text) => _textInfo with { Text = value?.ToString() ?? "" },
+            nameof(TextInfo.FontSize) when double.TryParse(value?.ToString(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var size) => _textInfo with { FontSize = size },
+            nameof(TextInfo.FontFamily) => _textInfo with { FontFamily = value?.ToString() ?? "" },
+            nameof(TextInfo.Bold) => _textInfo with { Bold = Convert.ToBoolean(value) },
+            nameof(TextInfo.Italic) => _textInfo with { Italic = Convert.ToBoolean(value) },
+            nameof(TextInfo.Underline) => _textInfo with { Underline = Convert.ToBoolean(value) },
+            _ => throw new ArgumentOutOfRangeException(nameof(property), property, "Unknown text setting")
+        };
+        await _cad.InvokeVoidAsync("setTextDraft", new
+        {
+            mode = _textInfo.Mode, id = _textInfo.Id, text = _textInfo.Text,
+            x = _textInfo.X, y = _textInfo.Y, fontSize = _textInfo.FontSize,
+            fontFamily = _textInfo.FontFamily, bold = _textInfo.Bold,
+            italic = _textInfo.Italic, underline = _textInfo.Underline
+        });
+    }
+
+    private async Task FontSizeHoldStart(int direction)
+    {
+        FontSizeHoldStop();
+        if (_textInfo is null) return;
+
+        var hold = new CancellationTokenSource();
+        _fontSizeHold = hold;
+        var delay = 400;
+        try
+        {
+            await AdjustFontSize(direction);
+            while (!hold.IsCancellationRequested && _textInfo is not null)
+            {
+                await Task.Delay(delay, hold.Token);
+                delay = Math.Max(30, (int)(delay * 0.75));
+                await AdjustFontSize(direction);
+            }
+        }
+        catch (OperationCanceledException) when (hold.IsCancellationRequested) { }
+        finally
+        {
+            if (ReferenceEquals(_fontSizeHold, hold)) _fontSizeHold = null;
+            hold.Dispose();
+        }
+    }
+
+    private void FontSizeHoldStop()
+    {
+        _fontSizeHold?.Cancel();
+        _fontSizeHold = null;
+    }
+
+    private Task FontSizeClick(int direction, MouseEventArgs args) =>
+        args.Detail == 0 ? AdjustFontSize(direction) : Task.CompletedTask;
+
+    private const double FontSizeStep = 10;
+    private const double MaxFontSize = 1000;
+
+    private Task AdjustFontSize(int direction)
+    {
+        if (_textInfo is null) return Task.CompletedTask;
+        var size = Math.Clamp(_textInfo.FontSize + direction * FontSizeStep, 1, MaxFontSize);
+        if (size == _textInfo.FontSize) return Task.CompletedTask;
+        return ChangeTextDraft(nameof(TextInfo.FontSize), size.ToString(
+            System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private async Task SaveText()
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+        await _cad.InvokeVoidAsync("saveText");
+    }
+
+    private async Task CancelText()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("cancelText");
     }
     private Measurement? _measure;
 
@@ -952,7 +1119,10 @@
         new("select", "Select", "S", "general", "<path d=\"M5 3l14 8.5-6.2 1.6 3.7 6.4-2.6 1.5-3.7-6.4L5 18z\"/>"),
         new("page", "Page", "P", "data", "<path class=\"outline\" d=\"M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6\"/>"),
         new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>"),
-        new("measurement", "Measurement", "M", "data", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>")
+        new("measurement", "Measurement", "M", "data", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>"),
+        new("text", "Text", "T", "data", "<path d=\"M4 5h16M12 5v14\"/>"),
+        new("circle", "Circle", "O", "data", "<circle cx=\"12\" cy=\"12\" r=\"8.5\"/>"),
+        new("rectangle", "Rectangle", "R", "data", "<rect x=\"4\" y=\"5\" width=\"16\" height=\"14\"/>")
     ];
 
     private async Task SetTool(string name)
@@ -1423,6 +1593,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        FontSizeHoldStop();
         if (_cad is not null)
         {
             try

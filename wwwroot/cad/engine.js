@@ -5,6 +5,8 @@
 import { bucket, checkpoint, undo as undoData, describe, describePage, serialize, deserialize, clearAll } from "./store.js";
 import { getProject, updateProject, getView, setView } from "./project.js";
 import { addLine, lineGeometry, LINES } from "./lines.js";
+import { createCircleTool, createRectangleTool, shapeGeometry, SHAPES } from "./shapes.js";
+import { createTextTool, textGeometry, TEXTS } from "./text.js";
 import { generateLines } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
@@ -28,7 +30,7 @@ let paperTheme = false;
 const handlers = [];
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
-const geometries = [lineGeometry];
+const geometries = [lineGeometry, shapeGeometry, textGeometry];
 const tools = {};
 let toolId = "cross";
 
@@ -104,7 +106,13 @@ const env = {
     selectionGeometries: [...geometries, measurementGeometry],
     toWorld,
     toScreen,
+    scale: () => scale,
     snap,
+    gridSnap(sx, sy) {
+        const w = toWorld(sx, sy), g = minorStepMm();
+        const zero = value => Object.is(value, -0) ? 0 : value;
+        return { x: zero(Math.round(w.x / g) * g), y: zero(Math.round(w.y / g) * g), kind: "grid" };
+    },
     minorStepMm,
     formatLength,
     formatArea,
@@ -114,12 +122,13 @@ const env = {
     selectionChanged: count => dotnet?.invokeMethodAsync("OnSelectionChanged", count),
     processChanged: state => dotnet?.invokeMethodAsync("OnProcessChanged", state?.step ?? null, !!state?.hasBase),
     measureChanged: info => dotnet?.invokeMethodAsync("OnMeasureChanged", info),
-    lineSelectionChanged: count => dotnet?.invokeMethodAsync("OnLineSelectionChanged", count),
+    drawingItemSelectionChanged: count => dotnet?.invokeMethodAsync("OnDrawingItemSelectionChanged", count),
     stackChanged: info => dotnet?.invokeMethodAsync("OnStackChanged", info),
     pagesChanged: state => dotnet?.invokeMethodAsync("OnPagesChanged", state),
     viewSizeMm: () => ({ w: el.clientWidth / scale, h: el.clientHeight / scale }),
     measurementSelectionChanged: id => dotnet?.invokeMethodAsync("OnSelectedMeasurement",
         id === null ? null : tools.measurement.inspect(id)),
+    textChanged: anchor => dotnet?.invokeMethodAsync("OnTextChanged", anchor),
     capture: id => el.setPointerCapture(id)
 };
 
@@ -149,6 +158,7 @@ function cycleDefault(step) {
 export function setTool(name) {
     if (!tools[name] || name === toolId) return;
     log("action", `tool: ${toolId} -> ${name}`);
+    if (toolId === "select" && name !== "text") tools.text.cancel();
     currentTool().deactivate?.();
     toolId = name;
     el.classList.toggle("drawing", toolId !== "cross");
@@ -179,10 +189,17 @@ export const closeStack = () => tools.select.closeStack();
 export const startMove = () => tools.select.startMove();
 export const confirmMoveBase = () => tools.select.confirmMoveBase();
 export const cancelProcess = () => tools.select.cancelProcess();
-export const removeSelectedLines = () => tools.select.removeLines();
+export function removeSelectedItems() {
+    const removed = tools.select.removeSelectedItems();
+    if (removed) tools.text.closeIfDeleted();
+    return removed;
+}
 
 export const setMeasurementSnap = mode => tools.measurement.setSnapMode(mode);
 export const setLineMulti = on => tools.line.setMulti(on);
+export const setTextDraft = draft => tools.text.setDraft(draft);
+export const saveText = () => tools.text.save();
+export const cancelText = () => tools.text.cancel();
 export const measurementAddPoints = () => tools.measurement.addPoints();
 export const measurementStop = () => tools.measurement.stop();
 export const measurementSave = () => tools.measurement.save();
@@ -219,7 +236,7 @@ export function selectLayerItems(id) {
     if (!layer.visible) throw new Error("Show the layer before selecting its items");
     setTool("select");
     tools.select.selectLayer(id);
-    log("action", `selected lines and measurements in layer: ${layer.name}`);
+    log("action", `selected drawing items in layer: ${layer.name}`);
 }
 
 export function moveSelectionToLayer(id) {
@@ -236,6 +253,10 @@ export function editMeasurement(id) {
     if (toolId !== "select") throw new Error("Use Select to edit a saved measurement");
     setTool("measurement");
     tools.measurement.open(id);
+}
+export function editText(id) {
+    setTool("text");
+    tools.text.open(id);
 }
 export function deleteSelectedMeasurement() {
     const id = currentTool().selectedMeasurementId?.() ?? null;
@@ -267,7 +288,11 @@ export const deletePage = id => tools.page.deletePage(id);
 export function getPagePdf(id) {
     const page = bucket(PAGES).items.find(p => p.id === id);
     if (!page) throw new Error(`Unknown page: ${id}`);
-    return { name: page.name, pdf: pagePdf(page, bucket(LINES).items, bucket(MEASURES).items, { length: formatLength, area: formatArea }) };
+    return {
+        name: page.name,
+        pdf: pagePdf(page, bucket(LINES).items, bucket(MEASURES).items,
+            { length: formatLength, area: formatArea }, bucket(SHAPES).items, bucket(TEXTS).items)
+    };
 }
 
 // Glides the view so the whole page frame fits with a margin.
@@ -281,6 +306,7 @@ export function zoomToPage(id) {
 
 // Esc first cancels what the current tool is doing (a measurement, a Move); returns false if there was nothing.
 export function cancelCurrent() {
+    if (toolId === "select" && tools.text.cancel()) return true;
     const tool = currentTool();
     return !!(tool.cancel ?? tool.cancelProcess)?.call(tool);
 }
@@ -391,7 +417,7 @@ function render() {
     // Print preview: measurement labels at their printed size on the previewed page (screen px per point).
     const preview = tools.page.previewPage();
     const printPx = preview ? scale * preview.scale * (25.4 / 72) * textSizeOf(preview) / 100 : 0;
-    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects, paper: paperTheme, printPx };
+    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, scale, fx: effects, paper: paperTheme, printPx };
     tools.page.drawSaved(ctx, view);
     for (const geo of geometries) geo.draw(ctx, visibleItems(geo.bucket).filter(item => !preview || layerPrintable(item)), view);
     tools.measurement.drawSaved(ctx, view);
@@ -403,6 +429,13 @@ function render() {
         centered = isCentered;
         dotnet.invokeMethodAsync("OnCenteredChanged", isCentered);
     }
+}
+
+function textAt(sx, sy) {
+    for (const item of [...visibleItems(TEXTS)].reverse()) {
+        if (textGeometry.hitTest(item, sx, sy, env) !== null) return item.id;
+    }
+    return null;
 }
 
 export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
@@ -421,6 +454,9 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     tools.cross = { id: "cross", hotkey: "v" };
     tools.select = createSelectTool(env);
     tools.line = createLineTool(env);
+    tools.circle = createCircleTool(env);
+    tools.rectangle = createRectangleTool(env);
+    tools.text = createTextTool(env);
     tools.measurement = createMeasurementTool(env);
     tools.page = createPageTool(env);
 
@@ -441,7 +477,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
         if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(e) && cycleDefault(e.shiftKey ? -1 : 1)) {
             e.preventDefault();
         } else if ((e.key === "Delete" || e.key === "Backspace") && toolId === "select" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(e)) {
-            if (tools.select.removeLines()) e.preventDefault();
+            if (removeSelectedItems()) e.preventDefault();
         } else if (e.key === "Escape") {
             log("action", `Escape handled (tool=${toolId})`);
             dotnet.invokeMethodAsync("OnEscape");
@@ -482,18 +518,28 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
             const event = toolEvent(e);
             const measurement = toolId === "select" && !event.shift && tools.select.canOpenMeasurement()
                 ? tools.measurement.hitText(event.sx, event.sy) : null;
-            const page = toolId === "select" && measurement === null && !event.shift && tools.select.canOpenMeasurement()
+            const text = toolId === "select" && measurement === null && !event.shift
+                ? textAt(event.sx, event.sy) : null;
+            const page = toolId === "select" && measurement === null && text === null && !event.shift && tools.select.canOpenMeasurement()
                 && !tools.select.hits(event.sx, event.sy) ? tools.page.edgeAt(event.sx, event.sy) : null;
             if (measurement !== null) {
                 editMeasurement(measurement);
+            } else if (text !== null) {
+                // Select keeps the text information box open while the text anchor is dragged.
+                tools.text.open(text);
+                currentTool().pointerDown?.(event);
             } else if (page !== null) {
+                tools.text.cancel();
                 setTool("page");
                 tools.page.grab(page, event);
             } else {
+                if (toolId === "select" && !event.shift) tools.text.cancel();
                 currentTool().pointerDown?.(event);
             }
+
             return;
         }
+
         if (e.button !== 2) return;
         e.preventDefault();
         cancelAnimation();

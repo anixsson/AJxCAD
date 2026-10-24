@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { bucket, clearAll, describe, serialize, deserialize, undo } from "../wwwroot/cad/store.js";
 import { LAYERS, normalizeLayers, layerState, activeLayerId, addLayer, setActiveLayer, updateLayer, assignLayer, visibleItems, layerVisible, layerPrintable } from "../wwwroot/cad/layers.js";
 import { addLine, lineGeometry } from "../wwwroot/cad/lines.js";
+import { addShape, shapeGeometry, SHAPES } from "../wwwroot/cad/shapes.js";
+import { addText, textGeometry, TEXTS } from "../wwwroot/cad/text.js";
 import { addPage, PAGES } from "../wwwroot/cad/pages.js";
 import { createMeasurementTool, measurementGeometry, MEASURES } from "../wwwroot/cad/tools/measurement.js";
 import { createSelectTool } from "../wwwroot/cad/tools/select.js";
@@ -31,23 +33,25 @@ function environment(extra = {}) {
 }
 const pointer = (sx, sy) => ({ sx, sy, pointerId: 1 });
 
-test("Pages and Layers are project buckets; only Lines and Measurements are tool buckets", () => {
+test("Pages and Layers are project buckets; drawing tools own their buckets", () => {
     const buckets = describe();
     assert.equal(buckets.find(b => b.name === PAGES).group, "project");
     assert.equal(buckets.find(b => b.name === LAYERS).group, "project");
-    assert.deepEqual(buckets.filter(b => b.group === "tool").map(b => b.name).sort(), ["lines", "measures"]);
+    assert.deepEqual(buckets.filter(b => b.group === "tool").map(b => b.name).sort(), ["lines", "measures", SHAPES, TEXTS]);
     const tool = createMeasurementTool(environment());
     assert.equal(tool.id, "measurement");
     assert.equal(tool.hotkey, "m");
 });
 
-test("only new lines and measurements use the active layer; splitting preserves the source layer", () => {
+test("new lines, shapes, text and measurements use the active layer; splitting preserves its source layer", () => {
     const first = reset();
     const original = addLine(0, 0, 100, 0);
     addLayer();
     const active = activeLayerId();
     assert.notEqual(active, first);
     assert.equal(addLine(0, 20, 100, 20).layerId, active);
+    assert.equal(addShape("circle", { x: 5, y: 5 }, { x: 10, y: 5 }).layerId, active);
+    assert.equal(addText("Label", 5, 5).layerId, active);
     assert.equal(Object.hasOwn(addPage({}), "layerId"), false);
     const measurement = createMeasurementTool(environment());
     measurement.pointerDown(pointer(0, 0));

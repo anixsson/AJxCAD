@@ -78,17 +78,17 @@ test("dragging empty space selects enclosed line ends and Shift-drag adds to sel
     tool.pointerDown(pointer(-20, -20));
     tool.pointerMove(pointer(11, 1));
     tool.pointerUp(pointer(11, 1));
-    assert.equal(logs.at(-1).text, "selected 3 line ends");
+    assert.equal(logs.at(-1).text, "selected 3 drawing points");
 
     tool.pointerDown(pointer(20, 20, { shift: true }));
     tool.pointerMove(pointer(36, 31, { shift: true }));
     tool.pointerUp(pointer(36, 31, { shift: true }));
-    assert.equal(logs.at(-1).text, "selected 5 line ends");
+    assert.equal(logs.at(-1).text, "selected 5 drawing points");
 
     tool.pointerDown(pointer(19, 19, { shift: true, control: true }));
     tool.pointerMove(pointer(31, 31, { shift: true, control: true }));
     tool.pointerUp(pointer(31, 31, { shift: true, control: true }));
-    assert.equal(logs.at(-1).text, "selected 4 line ends");
+    assert.equal(logs.at(-1).text, "selected 4 drawing points");
 });
 
 test("clicking empty space still clears selection and dragging a selected node still moves it", () => {
@@ -111,7 +111,7 @@ test("clicking empty space still clears selection and dragging a selected node s
 
     tool.pointerDown(pointer(50, 50));
     tool.pointerUp(pointer(50, 50));
-    assert.equal(logs.at(-1).text, "selected 0 line ends");
+    assert.equal(logs.at(-1).text, "selected 0 drawing points");
 });
 
 test("moving selected ends draws a dashed guide from the original corner with the snapped offset", () => {
@@ -221,12 +221,12 @@ test("Lines mode respects Shift add, toggle and explicit removal, highlighting l
     click(50);
     click(250, { shift: true });
     assert.equal(highlightedPath(tool).length, 6);
-    assert.equal(logs.at(-1).text, "selected 6 line ends");
+    assert.equal(logs.at(-1).text, "selected 6 drawing points");
     click(250, { shift: true });
     assert.equal(highlightedPath(tool).length, 2);
     click(50, { shift: true, control: true });
     assert.deepEqual(highlightedPath(tool), []);
-    assert.equal(logs.at(-1).text, "selected 0 line ends");
+    assert.equal(logs.at(-1).text, "selected 0 drawing points");
     click(250);
     click(50);
     assert.deepEqual(highlightedPath(tool), [["moveTo", 0, 0], ["lineTo", 100, 0]]);
@@ -271,10 +271,10 @@ test("line picking uses screen-space segment distance, chooses the nearest line,
     tool.pointerDown(pointer(100, 31));
     tool.pointerUp(pointer(100, 31));
     assert.deepEqual(highlightedPath(tool), [["moveTo", 0, 20], ["lineTo", 100, 20]]);
-    assert.equal(logs.at(-1).text, "selected 2 line ends");
+    assert.equal(logs.at(-1).text, "selected 2 drawing points");
     tool.pointerDown(pointer(211, 40));
     tool.pointerUp(pointer(211, 40));
-    assert.equal(logs.at(-1).text, "selected 0 line ends");
+    assert.equal(logs.at(-1).text, "selected 0 drawing points");
 });
 
 test("rectangle selection still selects enclosed ends in Lines mode", () => {
@@ -299,10 +299,10 @@ test("line picking handles diagonal and zero-length lines without extending past
     assert.deepEqual(highlightedPath(tool), [["moveTo", 0, 0], ["lineTo", 100, 100]]);
     tool.pointerDown(pointer(111, 111));
     tool.pointerUp(pointer(111, 111));
-    assert.equal(logs.at(-1).text, "selected 0 line ends");
+    assert.equal(logs.at(-1).text, "selected 0 drawing points");
     tool.pointerDown(pointer(200, 200));
     tool.pointerUp(pointer(200, 200));
-    assert.equal(logs.at(-1).text, "selected 2 line ends");
+    assert.equal(logs.at(-1).text, "selected 2 drawing points");
     assert.deepEqual(highlightedPath(tool), [["moveTo", 200, 200], ["lineTo", 200, 200]]);
 });
 
@@ -668,15 +668,15 @@ test("Remove lines deletes only lines with both ends selected, reports the count
         { x1: 0, y1: 0, x2: 100, y2: 0 },
         { x1: 100, y1: 0, x2: 100, y2: 100 },
         { x1: 300, y1: 300, x2: 400, y2: 300 }
-    ], { lineSelectionChanged: n => counts.push(n) });
-    assert.equal(tool.removeLines(), 0, "nothing selected");
+    ], { drawingItemSelectionChanged: n => counts.push(n) });
+    assert.equal(tool.removeSelectedItems(), 0, "nothing selected");
 
     tool.setSelectionMode("lines");
     tool.pointerDown(pointer(50, 0));
     tool.pointerUp(pointer(50, 0));
     assert.deepEqual(counts, [1]);
     // The shared corner (100, 0) is selected, but the second line's other end is not.
-    assert.equal(tool.removeLines(), 1);
+    assert.equal(tool.removeSelectedItems(), 1);
     assert.deepEqual(lines.items.map(l => l.id), [2, 3]);
     assert.deepEqual(counts, [1, 0]);
 
@@ -690,13 +690,13 @@ test("in Nodes mode Delete removes every line touching a selected node", () => {
         { x1: 0, y1: 0, x2: 100, y2: 0 },
         { x1: 100, y1: 0, x2: 100, y2: 100 },
         { x1: 300, y1: 300, x2: 400, y2: 300 }
-    ], { lineSelectionChanged: n => counts.push(n) });
+    ], { drawingItemSelectionChanged: n => counts.push(n) });
     tool.pointerDown(pointer(100, 0)); // shared corner of lines 1 and 2
     tool.pointerUp(pointer(100, 0));
     assert.deepEqual(counts, [2]);
     tool.setSelectionMode("lines");
     assert.deepEqual(counts, [2, 0], "no line has both ends selected");
     tool.setSelectionMode("nodes");
-    assert.equal(tool.removeLines(), 2);
+    assert.equal(tool.removeSelectedItems(), 2);
     assert.deepEqual(lines.items.map(l => l.id), [3]);
 });

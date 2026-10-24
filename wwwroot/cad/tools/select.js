@@ -62,12 +62,25 @@ export function createSelectTool(env) {
                 }
             }
         }
-        if (!best) return null;
-        return {
-            x: best.x,
-            y: best.y,
-            refs: allPoints().filter(p => Math.abs(p.x - best.x) < SAME && Math.abs(p.y - best.y) < SAME)
-        };
+        if (best) {
+            return {
+                x: best.x,
+                y: best.y,
+                refs: allPoints().filter(p => Math.abs(p.x - best.x) < SAME && Math.abs(p.y - best.y) < SAME)
+            };
+        }
+        for (const geo of [...geometries].reverse()) {
+            if (!geo.hitTest) continue;
+            for (const item of visibleItems(geo.bucket)) {
+                if (geo.hitTest(item, sx, sy, env) === null) continue;
+                const w = env.toWorld(sx, sy);
+                return {
+                    x: w.x, y: w.y,
+                    refs: allPoints().filter(p => p.geo === geo && p.item === item)
+                }
+            }
+        }
+        return null;
     }
 
     const isSelected = node => node.refs.every(r => selected.has(refKey(r)));
@@ -79,6 +92,14 @@ export function createSelectTool(env) {
         for (const geo of geometries) {
             if (geo.annotation) continue;
             for (const item of visibleItems(geo.bucket)) {
+                if (geo.hitTest) {
+                    const distance = geo.hitTest(item, sx, sy, env);
+                    if (distance !== null && distance <= bestDist) {
+                        bestDist = distance;
+                        best = { ...env.toWorld(sx, sy), points: geo.points(item) };
+                    }
+                    continue;
+                }
                 const points = geo.points(item);
                 if (points.length !== 2) continue;
                 const [a, b] = points.map(p => env.toScreen(p.x, p.y));
@@ -152,11 +173,22 @@ export function createSelectTool(env) {
         for (const [key, ref] of base) selected.set(key, ref);
         const left = Math.min(rect.sx, rect.x), right = Math.max(rect.sx, rect.x);
         const top = Math.min(rect.sy, rect.y), bottom = Math.max(rect.sy, rect.y);
+        const bounds = { left, right, top, bottom };
         for (const p of allPoints()) {
             const s = env.toScreen(p.x, p.y);
             if (s.x >= left && s.x <= right && s.y >= top && s.y <= bottom) {
                 if (mode === "remove") selected.delete(refKey(p));
                 else selected.set(refKey(p), p);
+            }
+        }
+        for (const geo of geometries) {
+            if (!geo.selectRect) continue;
+            for (const item of visibleItems(geo.bucket)) {
+                for (const key of geo.selectRect(item, bounds, env) ?? []) {
+                    const ref = { geo, item, key };
+                    if (mode === "remove") selected.delete(refKey(ref));
+                    else selected.set(refKey(ref), ref);
+                }
             }
         }
     }
@@ -258,7 +290,7 @@ export function createSelectTool(env) {
     }
 
     function report() {
-        env.log("action", `selected ${selected.size} line end${selected.size === 1 ? "" : "s"}`);
+        env.log("action", `selected ${selected.size} drawing point${selected.size === 1 ? "" : "s"}`);
         notifySelection();
     }
 
@@ -286,10 +318,10 @@ export function createSelectTool(env) {
 
     function notifySelection() {
         env.measurementSelectionChanged?.(selectedMeasurementId());
-        const lines = selectedItems().length;
-        if (lines !== lastLines) {
-            lastLines = lines;
-            env.lineSelectionChanged?.(lines);
+        const items = selectedItems().length;
+        if (items !== lastLines) {
+            lastLines = items;
+            env.drawingItemSelectionChanged?.(items);
         }
         if (selected.size === lastCount) return;
         lastCount = selected.size;
@@ -305,9 +337,18 @@ export function createSelectTool(env) {
     const excludeSelected = (geo, item, key) => selected.has(keyOf(geo, item, key));
 
     function moveSelection(dx, dy) {
+        const moved = new Set();
         for (const r of selected.values()) {
-            const p = r.geo.points(r.item).find(q => q.key === r.key);
-            r.geo.setPoint(r.item, r.key, p.x + dx, p.y + dy);
+            const itemKey = keyOf(r.geo, r.item, "__item");
+            if (moved.has(itemKey)) continue;
+            const refs = [...selected.values()].filter(ref => ref.geo === r.geo && ref.item === r.item);
+            if (r.geo.moveItem && refs.length === r.geo.points(r.item).length) {
+                r.geo.moveItem(r.item, dx, dy);
+                moved.add(itemKey);
+            } else {
+                const p = r.geo.points(r.item).find(q => q.key === r.key);
+                r.geo.setPoint(r.item, r.key, p.x + dx, p.y + dy);
+            }
         }
     }
 
@@ -348,6 +389,11 @@ export function createSelectTool(env) {
             for (const item of visibleItems(geo.bucket)) {
                 const all = geo.points(item);
                 if (!all.some(p => selected.has(keyOf(geo, item, p.key)))) continue;
+                const selectedKeys = new Set(all.filter(p => selected.has(keyOf(geo, item, p.key))).map(p => p.key));
+                if (geo.drawMovePreview) {
+                    geo.drawMovePreview(g, view, item, selectedKeys, dx, dy);
+                    continue;
+                }
                 const points = all.filter(p => !p.handle);
                 if (points.length < 2) continue;
                 const screen = points.map(p => {
@@ -383,7 +429,7 @@ export function createSelectTool(env) {
         },
 
         // Deletes the lines with both ends selected (one undo step). Returns how many were removed.
-        removeLines() {
+        removeSelectedItems() {
             if (process || drag) return 0;
             const doomed = selectedItems();
             if (!doomed.length) return 0;
@@ -397,7 +443,7 @@ export function createSelectTool(env) {
             setStack(null);
             hover = null;
             hoverHandle = null;
-            env.log("action", `removed ${doomed.length} line${doomed.length === 1 ? "" : "s"}`);
+            env.log("action", `removed ${doomed.length} drawing item${doomed.length === 1 ? "" : "s"}`);
             notifySelection();
             env.redraw();
             return doomed.length;
@@ -524,7 +570,7 @@ export function createSelectTool(env) {
                 const dx = p.x - process.base.x, dy = p.y - process.base.y;
                 checkpoint();
                 moveSelection(dx, dy);
-                env.log("action", `moved ${selected.size} line end${selected.size === 1 ? "" : "s"} by ${env.formatLength(Math.hypot(dx, dy))}`);
+                env.log("action", `moved ${selected.size} drawing point${selected.size === 1 ? "" : "s"} by ${env.formatLength(Math.hypot(dx, dy))}`);
                 setProcess(null);
                 publishStack();
                 notifySelection();

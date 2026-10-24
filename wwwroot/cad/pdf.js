@@ -25,10 +25,10 @@ const ESCAPES = { "\\": "\\\\", "(": "\\(", ")": "\\)", "°": "\\260", "²": "\\
 const pdfString = text => `(${[...text].map(ch => ESCAPES[ch] ?? (ch < "\x7f" ? ch : "?")).join("")})`;
 
 // Text at (x, y); `center` centres it on that point horizontally and vertically.
-function text(out, str, x, y, size, center = false) {
+function text(out, str, x, y, size, center = false, font = "F1") {
     const tx = center ? x - textWidth(str, size) / 2 : x;
     const ty = center ? y - size * 0.35 : y;
-    out.push(`BT /F1 ${n(size)} Tf ${n(tx)} ${n(ty)} Td ${pdfString(str)} Tj ET`);
+    out.push(`BT /${font} ${n(size)} Tf ${n(tx)} ${n(ty)} Td ${pdfString(str)} Tj ET`);
 }
 
 // Circle path from four Bézier curves.
@@ -142,7 +142,7 @@ function measurement(world, pts, options, format, sz, fills, marks, dim = null) 
 }
 
 // `measures` are the saved measurement items; `format` gives { length(mm), area(mm²) } in the project units.
-export function pagePdf(page, lines, measures = [], format = { length: mm => `${+mm.toFixed(1)} mm`, area: mm2 => `${+mm2.toFixed(1)} mm²` }) {
+export function pagePdf(page, lines, measures = [], format = { length: mm => `${+mm.toFixed(1)} mm`, area: mm2 => `${+mm2.toFixed(1)} mm²` }, shapes = [], texts = []) {
     const paper = paperSize(page);
     const w = paper.w * PT_PER_MM, h = paper.h * PT_PER_MM;
     const r = pageRect(page);
@@ -155,6 +155,20 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         if (!layerPrintable(l)) continue;
         if (outside(l, r)) continue;
         path.push(`${px(l.x1)} ${py(l.y1)} m ${px(l.x2)} ${py(l.y2)} l`);
+    }
+    for (const shape of shapes) {
+        if (!layerPrintable(shape)) continue;
+        if (shape.type === "circle") {
+            const radius = Math.hypot(shape.x2 - shape.x1, shape.y2 - shape.y1);
+            circle(path, (shape.x1 - r.left) * k, (shape.y1 - r.bottom) * k, radius * k);
+        } else if (shape.type === "rectangle") {
+            const left = (Math.min(shape.x1, shape.x2) - r.left) * k;
+            const bottom = (Math.min(shape.y1, shape.y2) - r.bottom) * k;
+            const width = Math.abs(shape.x2 - shape.x1) * k, height = Math.abs(shape.y2 - shape.y1) * k;
+            path.push(`${n(left)} ${n(bottom)} ${n(width)} ${n(height)} re`);
+        } else {
+            throw new Error(`Unknown shape type: ${shape.type}`);
+        }
     }
 
     const fills = [], marks = [];
@@ -169,6 +183,19 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         if (Math.max(...xs) < r.left || Math.min(...xs) > r.right || Math.max(...ys) < r.bottom || Math.min(...ys) > r.top) continue;
         const paperDim = dim && { length: dim.length, a: toPaper(dim.a), b: toPaper(dim.b), a2: toPaper(dim.a2), b2: toPaper(dim.b2) };
         measurement(world, world.map(toPaper), displayOf(item), format, sz, fills, marks, paperDim);
+    }
+    for (const item of texts) {
+        if (!layerPrintable(item)) continue;
+        const size = (item.fontSize ?? 4.5) * k * PT_PER_MM;
+        const family = item.fontFamily ?? "sans-serif";
+        const font = family === "serif"
+            ? item.bold ? (item.italic ? "F8" : "F6") : (item.italic ? "F7" : "F5")
+            : family === "monospace"
+                ? item.bold ? (item.italic ? "F12" : "F10") : (item.italic ? "F11" : "F9")
+                : item.bold ? (item.italic ? "F4" : "F2") : (item.italic ? "F3" : "F1");
+        const x = (item.x - r.left) * k, y = (item.y - r.bottom) * k;
+        text(marks, item.text, x, y, size * textSizeOf(page) / 100, false, font);
+        if (item.underline) marks.push(`${n(x)} ${n(y - size * 0.15)} m ${n(x + textWidth(item.text, size))} ${n(y - size * 0.15)} l S`);
     }
 
     // Clip to the paper; area shading goes under the lines (light grey), lines are stroked once in black,
@@ -186,8 +213,20 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(w)} ${n(h)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>`,
         `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
-        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Italic /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Times-BoldItalic /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Oblique /Encoding /WinAnsiEncoding >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Courier-BoldOblique /Encoding /WinAnsiEncoding >>"
     ];
+    objects[2] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(w)} ${n(h)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R /F3 7 0 R /F4 8 0 R /F5 9 0 R /F6 10 0 R /F7 11 0 R /F8 12 0 R /F9 13 0 R /F10 14 0 R /F11 15 0 R /F12 16 0 R >> >> >>`;
     let out = "%PDF-1.4\n";
     const offsets = [];
     objects.forEach((body, i) => {

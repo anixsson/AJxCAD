@@ -39,6 +39,8 @@
         new("Getting started", "", "Start with an empty workspace or open an existing .ajx project. Pick tools from the floating toolbar or use their keyboard shortcuts; hover a tool to see its name and shortcut.",
         [
             ("Draw", "Press L, then click a start and end point. Keep clicking to create connected lines"),
+            ("Shapes", "Press O for a circle (click its centre, then its radius) or R for a rectangle (click opposite corners); both points snap to the grid"),
+            ("Text", "Press T, click a grid-snapped anchor, enter text and choose Place text. Its information box then offers font size (1–1000 mm; − / + step 10 mm, faster while held), family, bold, italic and underline. With Select, click text to open the box and drag it to move the text while the box stays open"),
             ("Edit", "Press S, select a line end and drag it to a new position"),
             ("Measure", "Press M, then click two points"),
             ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
@@ -50,7 +52,7 @@
             ("Cmd/Ctrl + O", "Choose a project file to open"),
             ("Cmd/Ctrl + S", "Save to the current file, or choose a location for a new project"),
             ("Cmd/Ctrl + Shift + S", "Choose a new save location with Save As"),
-            ("Cmd/Ctrl + P", "Open Print / Export: pick a page, then Print… opens the PDF in your default PDF app with its print dialog and Export PDF… saves a PDF (then click its name to open it, or Open location to show it in the folder). The drawing lines and saved measurements inside the page frame are output at the page's paper size and scale; measurements follow their Lengths, Angles and Area settings, and the grid is not included. The app shows the Paper look while this dialog is open"),
+            ("Cmd/Ctrl + P", "Open Print / Export: pick a page, then Print… opens the PDF in your default PDF app with its print dialog and Export PDF… saves a PDF (then click its name to open it, or Open location to show it in the folder). The drawing lines, shapes, text and saved measurements inside the page frame are output at the page's paper size and scale; measurements follow their Lengths, Angles and Area settings, and the grid is not included. The app shows the Paper look while this dialog is open"),
             ("Before New or Open", "Save changes you want to keep; these actions replace the current project without a save prompt")
         ]),
         new("Project settings", "", "Open File > Project settings to edit the project title. Edits stay in the input field while you type and are not applied until you click Save.",
@@ -65,8 +67,8 @@
         new("Layers", "", "Use the Pages and Layers buttons to switch tabs in the top-right board panel. Collapse the panel to its small icon or drag its left edge to resize it; the width is saved in app settings. Layers are saved in their own data bucket; older projects start with a visible, printable Default layer.",
         [
             ("Add and rename", "Press + Add layer, then edit its name directly"),
-            ("Active", "Choose the layer for newly drawn lines, saved measurements. Splitting a line preserves its original layer"),
-            ("Select layer items", "The icon at the left of each visible layer selects all its lines and measurements, replacing the previous selection. Page frames are not included"),
+            ("Active", "Choose the layer for newly drawn lines, shapes, text and saved measurements. Splitting a line preserves its original layer"),
+            ("Select layer items", "The icon at the left of each visible layer selects all its lines, shapes and text, replacing the previous selection. Page frames and measurements are not included"),
             ("Move selection to active", "Select board items, activate the destination layer, then move the selection to active. Whole lines and measurements move even if only one endpoint is selected. Saved measurements open in Measurement can also be assigned"),
             ("Show", "Hide or show all items on the layer. Hidden items cannot be picked or snapped to and never print"),
             ("Print", "Uncheck to exclude a visible layer from print preview, printing and PDF export. Pages do not belong to layers and remain available in Print / Export"),
@@ -79,7 +81,7 @@
         ]),
         new("Toolmenus and options", "", "The bottom-center bars show controls for the active tool. Checkbox buttons show a tick when enabled.",
         [
-            ("Toolmenu", "Select offers Nodes / Lines, Line offers Multi, and Measurement offers snapping options"),
+            ("Toolmenu", "Select offers Nodes / Lines, Line offers Multi, and Measurement offers snapping options. Text asks for its content after you click an anchor"),
             ("Side panel", "The top-right panel holds the Pages tab while the Page tool is active"),
             ("Actions bar", "Appears when something is selected; Move starts a guided move"),
             ("Options bar", "In Select's Lines mode, Middle shows or hides midpoint split handles"),
@@ -93,10 +95,10 @@
             ("Click", "Select a line end in Nodes mode, or both ends of a line in Lines mode; shared corners stay joined"),
             ("Highlights", "Every line with both ends selected lights up, including lines between selected corners"),
             ("Corner box", "In Nodes mode, click where several line ends meet. Each checkbox lists a label (L1, L2…), length and far-end coordinates; matching labels appear near the corner. Uncheck ends to leave them in place, then drag the corner to move only your picks. Esc closes the box without clearing your selection; clicking empty space closes it and clears the selection"),
-            ("Lines and areas", "Select blue saved measurement points as well as line ends. Shared corners and rectangle selections list area points as blue checkbox options. Only checked points move; dragging or Actions > Move moves both kinds together, with undo support"),
+            ("Drawing items and areas", "Select line ends, four rectangle corners, circle centre/radius handles, text anchors and blue saved measurement points. Rectangle selection selects enclosed corners and circles fully enclosed by the selection. Only checked points move; dragging or Actions > Move moves the selection together, with undo support"),
             ("Measurement-only selection", "When only points of one measurement are selected, its length and area information appears without opening the editor. Click its length text there, or a saved label on the board, to edit its options"),
             ("Pages", "Click a page frame's border or its name label (where no line end or line is) to switch to the Page tool with that page selected; keep holding to drag it. Hidden and No select pages are skipped"),
-            ("Delete", "Delete N lines in the Actions bar, or Delete / Backspace, removes lines: in Nodes mode every line touching a selected node, in Lines mode the selected lines. Measurements are not removed. One undo brings them back"),
+            ("Delete", "Delete selected items in the Actions bar, or Delete / Backspace, removes drawing items touching selected nodes (Nodes mode) or fully selected items (Lines mode). Measurements are not removed. One undo brings them back"),
             ("Split", "In Lines mode, drag the diamond handle in the middle of a selected line to split it into two lines and move the new shared node. One undo restores the line. Turn the handles on or off with the Middle checkbox in the Options bar"),
             ("Shift + click", "Add a line end; clicking an already-selected end removes it"),
             ("Shift + Command (Mac) / Shift + Ctrl (Windows) + click", "Remove a line end from the selection"),
@@ -173,7 +175,7 @@
         new("Data buckets", "", "Open File > Data buckets to inspect the data stored in the current project. Expand a bucket to see its text representation. This viewer is read-only.",
         [
             ("Project", "Project settings, Pages and Layers are grouped here. The project bucket holds the title, measuring system, reference unit and saved view"),
-            ("Tools", "Only the Line and Measurement tool buckets appear here: Lines and Measurements"),
+            ("Tools", "Line, Shape, Text and Measurement tools store their items in Lines, Shapes, Text and Measurements buckets"),
             ("Item count", "Each bucket shows how many items it contains"),
             ("Large buckets", "Text loads only when expanded, in pages of up to 100 rows. Use Previous and Next to inspect every row. Saving still includes all data"),
             ("Project settings", "The Data buckets button opens the same viewer")
@@ -189,7 +191,7 @@
             ("Cmd/Ctrl + Z", "Undo a drawing edit. In the Line tool, first cancel the current line, then undo placed lines"),
             ("Esc", "Close an open dialog or menu; otherwise return to the Cross tool"),
             ("Space", "Press the glowing default button in a guide box, such as Next in Move"),
-            ("V / S / L", "Choose Cross, Select or Line when working in the workspace"),
+            ("V / S / L / O / R / T", "Choose Cross, Select, Line, Circle, Rectangle or Text when working in the workspace"),
             ("Project settings", "Title changes are not part of drawing undo"),
             ("Unavailable commands", "Redo, Cut, Copy and Paste are currently disabled")
         ]),
