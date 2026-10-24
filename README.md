@@ -2,44 +2,20 @@
 
 AJxCAD is a focused 2D CAD workspace for macOS and Windows, built with .NET MAUI and Blazor Hybrid.
 
-## Features
+Create precise 2D line drawings in a clean workspace designed for quick drafting and easy navigation.
 
-- Draw and edit connected lines on an adaptive grid, with endpoint snapping and undo.
-- Save and open `.ajx` project files, including drawing data, project settings, and the saved view.
-- Inspect project and drawing data in the read-only Data Buckets viewer.
+## Drawing and editing
 
-## Requirements
+Draw connected lines on an adaptive grid. Points snap to grid intersections and existing endpoints, while a live length label helps you see dimensions as you draw. Select and adjust line ends, and undo drawing edits when needed.
 
-- .NET 10 SDK with the .NET MAUI workload.
-- Xcode for building and running on macOS, or Visual Studio with the .NET MAUI workload for Windows.
-- Node.js to run the JavaScript tests.
+## Navigation and scale
 
-## Build and run
+Pan and zoom the canvas as you work, or center the view on the origin. Grid spacing adapts to the zoom level. Choose metric or imperial measurements, set a 1:1 reference, and use the scale panel to check the current ratio and measured scale bar.
 
-Build for the current platform:
+## Projects
 
-```sh
-dotnet build AJxCAD.csproj
-```
+Save and reopen drawings as `.ajx` project files. A project keeps its drawing data, title, measurement settings, reference unit, and current view together, so you can pick up where you left off.
 
-Run on macOS:
+## A workspace that suits you
 
-```sh
-dotnet build AJxCAD.csproj -f net10.0-maccatalyst -t:Run
-```
-
-Run on Windows:
-
-```sh
-dotnet build AJxCAD.csproj -f net10.0-windows10.0.19041.0 -t:Run
-```
-
-## Tests
-
-```sh
-node --test tests/*.test.mjs
-```
-
-## Distribution
-
-The app currently uses the default `com.companyname.ajxcad` application identifier. Replace it with an identifier owned by the publisher before creating signed or store-distributed builds.
+Choose full visual effects or performance mode for the app's appearance on your computer. The read-only Data Buckets viewer lets you inspect the information stored in the current project.
