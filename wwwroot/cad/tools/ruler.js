@@ -83,6 +83,12 @@ export function corners(points) {
     return out;
 }
 
+// Label sizes: CSS px on screen, points in print. The board's print preview draws the print sizes,
+// converted to screen px for the previewed page (see pdf.js, which uses the same table).
+const SCREEN_SIZES = { length: 12, lengthOffset: 8, angle: 11, arcRadius: 18, arcMin: 4, angleGap: 14, area: 13, pillPad: 14, pillHeight: 22, dot: 3.5 };
+export const PRINT_SIZES = { length: 7, lengthOffset: 4, angle: 6.5, arcRadius: 9, arcMin: 2, angleGap: 7, area: 8, pillPad: 7, pillHeight: 11, dot: 1.5 };
+export const scaleSizes = (sizes, k) => Object.fromEntries(Object.entries(sizes).map(([key, v]) => [key, v * k]));
+
 export const formatAngle = deg => `${Number(deg.toFixed(1))}°`;
 
 const NODE_PX = 30; // how far from a line end a click may be in "nodes" mode
@@ -102,14 +108,15 @@ export function createRulerTool(env) {
         label: `P${i + 1}`, x: signed(p.x), y: signed(p.y), selected: p.enabled !== false
     }));
 
-    function recordText(g, view, text, x, y, centered = false) {
+    // `size` is the font size in CSS px; the clickable box grows with it.
+    function recordText(g, view, text, x, y, size, centered = false) {
         if (renderingId === null) return;
         const width = g.measureText(text).width / view.dpr;
         textHits.push({
             id: renderingId,
             left: x - (centered ? width / 2 : 0) - 5,
             right: x + (centered ? width / 2 : width) + 5,
-            top: y - (centered ? 12 : 16), bottom: y + (centered ? 12 : 5)
+            top: y - (centered ? size : size * 1.35), bottom: y + (centered ? size : size * 0.4)
         });
     }
 
@@ -181,13 +188,13 @@ export function createRulerTool(env) {
         return true;
     }
 
-    function drawPoint(g, view, p, filled) {
+    function drawPoint(g, view, p, filled, radius = SCREEN_SIZES.dot) {
         const d = view.dpr;
         const s = view.toScreen(p.x, p.y);
         if (filled) {
             g.fillStyle = (view.paper ? "#000" : "#8fe3ff");
             g.beginPath();
-            g.arc(s.x * d, s.y * d, 3.5 * d, 0, Math.PI * 2);
+            g.arc(s.x * d, s.y * d, radius * d, 0, Math.PI * 2);
             g.fill();
         } else {
             const r = (p.kind === "end" ? 6 : 4) * d;
@@ -196,12 +203,12 @@ export function createRulerTool(env) {
         }
     }
 
-    function angleMark(g, view, c) {
+    function angleMark(g, view, c, sz) {
         const d = view.dpr;
         const [a, v, b] = [c.a, c.v, c.b].map(p => view.toScreen(p.x, p.y));
         const la = Math.hypot(a.x - v.x, a.y - v.y), lb = Math.hypot(b.x - v.x, b.y - v.y);
-        const r = Math.min(18, la / 2, lb / 2);
-        if (r < 4) return;
+        const r = Math.min(sz.arcRadius, la / 2, lb / 2);
+        if (r < sz.arcMin) return;
         const a1 = Math.atan2(a.y - v.y, a.x - v.x);
         let delta = Math.atan2(b.y - v.y, b.x - v.x) - a1;
         while (delta > Math.PI) delta -= 2 * Math.PI;
@@ -213,27 +220,27 @@ export function createRulerTool(env) {
         g.stroke();
 
         const mid = a1 + delta / 2;
-        const tx = v.x + Math.cos(mid) * (r + 14), ty = v.y + Math.sin(mid) * (r + 14);
-        g.font = `600 ${11 * d}px system-ui, -apple-system, sans-serif`;
+        const tx = v.x + Math.cos(mid) * (r + sz.angleGap), ty = v.y + Math.sin(mid) * (r + sz.angleGap);
+        g.font = `600 ${sz.angle * d}px system-ui, -apple-system, sans-serif`;
         g.textAlign = "center";
         g.textBaseline = "middle";
         g.fillStyle = (view.paper ? "#000" : "#ffd678");
         g.shadowColor = (view.paper ? "transparent" : "rgba(0,0,0,0.8)");
         g.shadowBlur = view.fx ? 4 * d : 0;
         g.fillText(formatAngle(c.deg), tx * d, ty * d);
-        recordText(g, view, formatAngle(c.deg), tx, ty, true);
+        recordText(g, view, formatAngle(c.deg), tx, ty, sz.angle, true);
         g.shadowBlur = 0;
         g.textAlign = "start";
         g.textBaseline = "alphabetic";
     }
 
-    function areaLabel(g, view, text, at) {
+    function areaLabel(g, view, text, at, sz) {
         const d = view.dpr;
         const s = view.toScreen(at.x, at.y);
-        g.font = `600 ${13 * d}px system-ui, -apple-system, sans-serif`;
+        g.font = `600 ${sz.area * d}px system-ui, -apple-system, sans-serif`;
         g.textAlign = "center";
         g.textBaseline = "middle";
-        const w = g.measureText(text).width + 14 * d, h = 22 * d;
+        const w = g.measureText(text).width + sz.pillPad * d, h = sz.pillHeight * d;
         g.fillStyle = (view.paper ? "rgba(255,255,255,0.95)" : "rgba(20,16,44,0.78)");
         g.strokeStyle = (view.paper ? "rgba(0,0,0,0.7)" : "rgba(143,227,255,0.7)");
         g.lineWidth = 1 * d;
@@ -243,24 +250,25 @@ export function createRulerTool(env) {
         g.stroke();
         g.fillStyle = (view.paper ? "#000" : "#8fe3ff");
         g.fillText(text, s.x * d, s.y * d);
-        recordText(g, view, text, s.x, s.y, true);
+        recordText(g, view, text, s.x, s.y, sz.area, true);
         g.textAlign = "start";
         g.textBaseline = "alphabetic";
     }
 
-    function label(g, view, text, a, b) {
-        const d = view.dpr;
-        g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
+    function label(g, view, text, a, b, sz) {
+        const d = view.dpr, o = sz.lengthOffset;
+        g.font = `${sz.length * d}px system-ui, -apple-system, sans-serif`;
         g.fillStyle = (view.paper ? "#000" : "#fff");
         g.shadowColor = (view.paper ? "transparent" : "rgba(0,0,0,0.8)");
         g.shadowBlur = view.fx ? 4 * d : 0;
-        g.fillText(text, (a.x + b.x) / 2 * d + 8 * d, (a.y + b.y) / 2 * d - 8 * d);
-        recordText(g, view, text, (a.x + b.x) / 2 + 8, (a.y + b.y) / 2 - 8);
+        g.fillText(text, ((a.x + b.x) / 2 + o) * d, ((a.y + b.y) / 2 - o) * d);
+        recordText(g, view, text, (a.x + b.x) / 2 + o, (a.y + b.y) / 2 - o, sz.length);
         g.shadowBlur = 0;
     }
 
     function drawMeasurement(g, view, pts, state, cursor, options) {
         const d = view.dpr;
+        const sz = view.printPx ? scaleSizes(PRINT_SIZES, view.printPx) : SCREEN_SIZES;
         const live = (state === "picking" || state === "multi") && cursor;
         const path = live ? [...pts, cursor] : pts;
         const screen = path.map(p => view.toScreen(p.x, p.y));
@@ -294,19 +302,19 @@ export function createRulerTool(env) {
 
             for (let i = 1; options.showLengths && i < path.length; i++) {
                 const len = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
-                if (len > 0) label(g, view, env.formatLength(len), screen[i - 1], screen[i]);
+                if (len > 0) label(g, view, env.formatLength(len), screen[i - 1], screen[i], sz);
             }
         }
 
         if ((state === "multi" || state === "done") && path.length >= 3) {
-            if (options.showAngles) for (const c of corners(path)) angleMark(g, view, c);
+            if (options.showAngles) for (const c of corners(path)) angleMark(g, view, c, sz);
             const area = polygonArea(path);
-            if (options.showArea && area > 0) areaLabel(g, view, env.formatArea(area), polygonCentroid(path));
+            if (options.showArea && area > 0) areaLabel(g, view, env.formatArea(area), polygonCentroid(path), sz);
         }
 
         g.lineWidth = 1.5 * d;
         for (const p of pts) {
-            drawPoint(g, view, p, true);
+            drawPoint(g, view, p, true, sz.dot);
         }
         if (cursor) drawPoint(g, view, cursor, false);
     }

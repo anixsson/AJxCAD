@@ -78,3 +78,10 @@ test("measurements outside the frame and unchecked points are left out", () => {
     const body = stream(pagePdf(page, [], [partly], format));
     assert.ok(body.includes("(5000 cm\\262) Tj"), "area of the remaining triangle");
 });
+
+test("the page's text size scales measurement text and label boxes", () => {
+    const size = pdf => Number(stream(pdf).match(/\/F1 ([\d.]+) Tf/)[1]);
+    const normal = size(pagePdf(page, [], [square()], format));
+    const big = size(pagePdf({ ...page, textSize: 200 }, [], [square()], format));
+    assert.equal(big, normal * 2);
+});

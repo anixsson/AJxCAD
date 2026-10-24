@@ -46,6 +46,15 @@
         }
     </div>
 
+    <div class="measure-caption page-scale-caption">Print · measurement text and label boxes</div>
+    <div class="unit-row page-print" role="group" aria-label="Print">
+        <button type="button" class="chip @(Preview ? "active" : "")" aria-pressed="@Preview.ToString().ToLowerInvariant()"
+                title="Paper look, with measurement text at the size it prints on this page" @onclick="() => OnPreview.InvokeAsync(!Preview)">Print preview</button>
+        <input class="page-text-size" type="range" min="50" max="400" step="10" aria-label="Text size in print"
+               value="@Draft.TextSize.ToString(CultureInfo.InvariantCulture)" @oninput="SetTextSize" />
+        <span class="unit-caption page-text-value">@Num(Draft.TextSize)%</span>
+    </div>
+
     <dl class="measure-grid page-grid">
         <dt>Paper</dt><dd>@Draft.PaperSize</dd><dd>@Draft.ScaleLabel</dd>
         <dt>Covers</dt><dd>w @Draft.Width</dd><dd>h @Draft.Height</dd>
@@ -73,6 +82,8 @@
     [Parameter, EditorRequired] public PageDraft Draft { get; set; } = default!;
     [Parameter, EditorRequired] public PaperOption[] Papers { get; set; } = [];
     [Parameter] public bool Dirty { get; set; }
+    [Parameter] public bool Preview { get; set; }
+    [Parameter] public EventCallback<bool> OnPreview { get; set; }
     [Parameter] public string? Error { get; set; }
     [Parameter] public EventCallback<Dictionary<string, object>> OnChange { get; set; }
     [Parameter] public EventCallback<string> OnInvalid { get; set; }
@@ -103,7 +114,7 @@
         _loadedScale = Draft.Scale;
     }
 
-    private const string NameKey = "name", PaperKey = "paper", LandscapeKey = "landscape", ScaleKey = "scale";
+    private const string NameKey = "name", PaperKey = "paper", LandscapeKey = "landscape", ScaleKey = "scale", TextSizeKey = "textSize";
 
     private Task Set(string key, object value) => OnChange.InvokeAsync(new Dictionary<string, object> { [key] = value });
 
@@ -112,6 +123,12 @@
         _nameText = e.Value?.ToString() ?? "";
         return Set(NameKey, _nameText);
     }
+
+    // The slider updates the draft (and the board preview) while dragging.
+    private Task SetTextSize(ChangeEventArgs e) =>
+        double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var size)
+            ? Set(TextSizeKey, size)
+            : Task.CompletedTask;
 
     private async Task SetScaleText(ChangeEventArgs e)
     {

@@ -1,9 +1,10 @@
 // Minimal single-page vector PDF of a page frame: drawing lines and saved measurements inside the frame,
 // at the page's scale. Written by hand (PDF 1.4, ASCII only) so no library is needed.
-// Measurements follow their own Lengths / Angles / Area settings and use the Paper look.
+// Measurements follow their own Lengths / Angles / Area settings and use the Paper look; their text and label
+// boxes use PRINT_SIZES (points) times the page's text size.
 
-import { pageRect, paperSize } from "./pages.js";
-import { displayOf, polygonArea, polygonCentroid, corners, formatAngle } from "./tools/ruler.js";
+import { pageRect, paperSize, textSizeOf } from "./pages.js";
+import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, PRINT_SIZES, scaleSizes } from "./tools/ruler.js";
 
 const PT_PER_MM = 72 / 25.4;
 const n = v => `${+v.toFixed(3)}`;
@@ -52,7 +53,7 @@ function pill(out, x, y, w, h) {
 const polyline = pts => pts.map((p, i) => `${n(p.x)} ${n(p.y)} ${i ? "l" : "m"}`).join(" ");
 
 // One saved measurement, already in points. `fills` is drawn under the drawing lines, `marks` on top.
-function measurement(world, pts, options, format, fills, marks) {
+function measurement(world, pts, options, format, sz, fills, marks) {
     const closed = pts.length >= 3;
     if (closed && options.showArea) fills.push(`${polyline(pts)} h f`);
 
@@ -66,15 +67,15 @@ function measurement(world, pts, options, format, fills, marks) {
     if (options.showLengths) {
         for (let i = 1; i < pts.length; i++) {
             const len = Math.hypot(world[i].x - world[i - 1].x, world[i].y - world[i - 1].y);
-            if (len > 0) text(marks, format.length(len), (pts[i - 1].x + pts[i].x) / 2 + 4, (pts[i - 1].y + pts[i].y) / 2 + 4, 7);
+            if (len > 0) text(marks, format.length(len), (pts[i - 1].x + pts[i].x) / 2 + sz.lengthOffset, (pts[i - 1].y + pts[i].y) / 2 + sz.lengthOffset, sz.length);
         }
     }
 
     if (closed && options.showAngles) {
         for (const c of corners(pts)) {
             const la = Math.hypot(c.a.x - c.v.x, c.a.y - c.v.y), lb = Math.hypot(c.b.x - c.v.x, c.b.y - c.v.y);
-            const r = Math.min(9, la / 2, lb / 2);
-            if (r < 2) continue;
+            const r = Math.min(sz.arcRadius, la / 2, lb / 2);
+            if (r < sz.arcMin) continue;
             const a1 = Math.atan2(c.a.y - c.v.y, c.a.x - c.v.x);
             let delta = Math.atan2(c.b.y - c.v.y, c.b.x - c.v.x) - a1;
             while (delta > Math.PI) delta -= 2 * Math.PI;
@@ -85,15 +86,15 @@ function measurement(world, pts, options, format, fills, marks) {
             });
             marks.push("0 G 0.75 w", polyline(arc), "S");
             const mid = a1 + delta / 2;
-            text(marks, formatAngle(c.deg), c.v.x + Math.cos(mid) * (r + 7), c.v.y + Math.sin(mid) * (r + 7), 6.5, true);
+            text(marks, formatAngle(c.deg), c.v.x + Math.cos(mid) * (r + sz.angleGap), c.v.y + Math.sin(mid) * (r + sz.angleGap), sz.angle, true);
         }
     }
 
     if (closed && options.showArea) {
         const area = polygonArea(world);
         if (area > 0) {
-            const label = format.area(area), at = polygonCentroid(pts), size = 8;
-            const w = textWidth(label, size) + 7, h = 11;
+            const label = format.area(area), at = polygonCentroid(pts), size = sz.area;
+            const w = textWidth(label, size) + sz.pillPad, h = sz.pillHeight;
             marks.push("1 g 0.3 G 0.5 w");
             pill(marks, at.x, at.y, w, h);
             marks.push("B 0 g");
@@ -101,7 +102,7 @@ function measurement(world, pts, options, format, fills, marks) {
         }
     }
 
-    for (const p of pts) circle(marks, p.x, p.y, 1.5);
+    for (const p of pts) circle(marks, p.x, p.y, sz.dot);
     marks.push("f");
 }
 
@@ -121,12 +122,13 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
     }
 
     const fills = [], marks = [];
+    const sz = scaleSizes(PRINT_SIZES, textSizeOf(page) / 100);
     for (const item of measures) {
         const world = item.points.filter(p => p.enabled !== false);
         if (world.length < 2) continue;
         const xs = world.map(p => p.x), ys = world.map(p => p.y);
         if (Math.max(...xs) < r.left || Math.min(...xs) > r.right || Math.max(...ys) < r.bottom || Math.min(...ys) > r.top) continue;
-        measurement(world, world.map(toPaper), displayOf(item), format, fills, marks);
+        measurement(world, world.map(toPaper), displayOf(item), format, sz, fills, marks);
     }
 
     // Clip to the paper; area shading goes under the lines (light grey), lines are stroked once in black,

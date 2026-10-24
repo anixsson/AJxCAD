@@ -132,7 +132,7 @@ test("the draft previews changes; Save stores them and Cancel restores the page"
 
     tool.setDraft({ name: "  Plan  ", landscape: true, scale: 20 });
     tool.save();
-    assert.deepEqual({ ...items()[0] }, { id, name: "Plan", paper: "A4", landscape: 1, scale: 20, x: 0, y: 0, visible: 1, locked: 0 });
+    assert.deepEqual({ ...items()[0] }, { id, name: "Plan", paper: "A4", landscape: 1, scale: 20, x: 0, y: 0, visible: 1, locked: 0, textSize: 100 });
     assert.equal(last().dirty, false);
     assert.equal(last().pages[0].summary, "A4 landscape · 1:20");
 
@@ -197,15 +197,15 @@ test("page names fill the lowest free number", () => {
 });
 
 test("pages are saved and loaded with the project", () => {
-    setup([{ name: "Sheet", paper: "Tabloid", landscape: 1, scale: 25, x: 12.5, y: -40, visible: 0, locked: 1 }]);
+    setup([{ name: "Sheet", paper: "Tabloid", landscape: 1, scale: 25, x: 12.5, y: -40, visible: 0, locked: 1, textSize: 150 }]);
     const text = serialize();
     const doc = JSON.parse(text);
     const entry = doc.buckets.find(b => b.name === PAGES);
-    assert.deepEqual(entry.fields, ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked"]);
+    assert.deepEqual(entry.fields, ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked", "textSize"]);
     bucket(PAGES).items = [];
     deserialize(text);
     const [page] = bucket(PAGES).items;
-    assert.deepEqual({ ...page, id: 0 }, { id: 0, name: "Sheet", paper: "Tabloid", landscape: 1, scale: 25, x: 12.5, y: -40, visible: 0, locked: 1 });
+    assert.deepEqual({ ...page, id: 0 }, { id: 0, name: "Sheet", paper: "Tabloid", landscape: 1, scale: 25, x: 12.5, y: -40, visible: 0, locked: 1, textSize: 150 });
 });
 
 test("No select pages cannot be clicked or dragged on the board but stay editable from the panel", () => {
@@ -242,4 +242,46 @@ test("pages from older files without the locked field are selectable", () => {
     tool.pointerDown({ sx: 0, sy: 0 });
     assert.equal(last().selectedId, 900);
     assert.equal(last().pages[0].locked, false);
+});
+
+test("text size is part of the draft, saved per page, and older pages default to 100%", () => {
+    const { tool, last, items } = setup([{ name: "P", paper: "A4", scale: 10, x: 0, y: 0 }]);
+    delete items()[0].textSize; // a page from an older file
+    const id = items()[0].id;
+    tool.select(id);
+    assert.equal(last().draft.textSize, 100);
+    assert.equal(last().dirty, false, "a missing value is not an unsaved change");
+
+    tool.setDraft({ textSize: 250 });
+    assert.equal(last().dirty, true);
+    assert.equal(items()[0].textSize, undefined, "stored page is unchanged until Save");
+    assert.throws(() => tool.setDraft({ textSize: 20 }), /Text size/);
+    assert.throws(() => tool.setDraft({ textSize: 1000 }), /Text size/);
+    tool.save();
+    assert.equal(items()[0].textSize, 250);
+    assert.equal(undo(), true);
+    assert.equal(items()[0].textSize, undefined);
+});
+
+test("print preview follows the selected page's draft and ends when the selection does", () => {
+    const { tool, last, items } = setup([{ name: "P", paper: "A4", scale: 10, x: 0, y: 0 }]);
+    assert.throws(() => tool.setPreview(true), /Select a page/);
+    const id = items()[0].id;
+    tool.select(id);
+    assert.equal(last().preview, false);
+    assert.equal(tool.previewPage(), null);
+
+    tool.setPreview(true);
+    assert.equal(last().preview, true);
+    tool.setDraft({ scale: 50, textSize: 200 });
+    assert.equal(tool.previewPage().scale, 50, "the unsaved draft is previewed live");
+    assert.equal(tool.previewPage().textSize, 200);
+
+    tool.setPreview(false);
+    assert.equal(tool.previewPage(), null);
+    tool.setPreview(true);
+    tool.select(null);
+    assert.equal(last().preview, false);
+    tool.select(id);
+    assert.equal(last().preview, false, "a new selection starts without preview");
 });

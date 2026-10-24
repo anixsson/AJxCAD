@@ -896,6 +896,26 @@ button {
     padding: 4px 8px;
 }
 
+.page-print {
+    align-items: center;
+}
+
+.page-text-size {
+    flex: 1 1 auto;
+    min-width: 80px;
+    accent-color: #8fe3ff;
+}
+
+.page-text-value {
+    flex: 0 0 40px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.paper .page-text-size {
+    accent-color: #000;
+}
+
 .page-grid {
     margin: 6px 0 10px;
 }

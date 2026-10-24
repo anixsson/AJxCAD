@@ -7,7 +7,7 @@ import { bucket, defineBucket, newId } from "./store.js";
 
 export const PAGES = "pages";
 
-defineBucket(PAGES, { label: "Pages", fields: ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked"] });
+defineBucket(PAGES, { label: "Pages", fields: ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked", "textSize"] });
 
 // Portrait width × height in mm.
 export const PAPERS = [
@@ -25,6 +25,12 @@ export const PAPERS = [
 ];
 
 export const MIN_SCALE = 0.01;
+// Measurement text and label boxes in print, as a percentage of the normal print size.
+export const MIN_TEXT_SIZE = 50;
+export const MAX_TEXT_SIZE = 400;
+export const textSizeOf = page => page.textSize ?? 100; // older files have no value
+export const validTextSize = v => typeof v === "number" && Number.isFinite(v) && v >= MIN_TEXT_SIZE && v <= MAX_TEXT_SIZE;
+
 export const MAX_SCALE = 100000;
 
 export function paperOf(id) {
@@ -60,11 +66,12 @@ export const isVisible = page => page.visible !== 0 && page.visible !== false;
 // "No select": the frame cannot be clicked or dragged on the board (older files have no value: selectable).
 export const isLocked = page => page.locked === 1 || page.locked === true;
 
-export function addPage({ name, paper = "A4", landscape = 0, scale = 1, x = 0, y = 0, visible = 1, locked = 0 }) {
+export function addPage({ name, paper = "A4", landscape = 0, scale = 1, x = 0, y = 0, visible = 1, locked = 0, textSize = 100 }) {
     paperOf(paper);
     if (!validScale(scale)) throw new Error(`Page scale must be between ${MIN_SCALE} and ${MAX_SCALE}`);
+    if (!validTextSize(textSize)) throw new Error(`Text size must be between ${MIN_TEXT_SIZE}% and ${MAX_TEXT_SIZE}%`);
     const items = bucket(PAGES).items;
-    const page = { id: newId(), name: name ?? nextPageName(), paper, landscape: landscape ? 1 : 0, scale, x, y, visible: visible ? 1 : 0, locked: locked ? 1 : 0 };
+    const page = { id: newId(), name: name ?? nextPageName(), paper, landscape: landscape ? 1 : 0, scale, x, y, visible: visible ? 1 : 0, locked: locked ? 1 : 0, textSize };
     items.push(page);
     return page;
 }

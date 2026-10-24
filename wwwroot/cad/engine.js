@@ -10,7 +10,7 @@ import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
 import { createRulerTool, measurementGeometry, MEASURES } from "./tools/ruler.js";
 import { createPageTool } from "./tools/page.js";
-import { PAGES } from "./pages.js";
+import { PAGES, textSizeOf } from "./pages.js";
 import { pagePdf } from "./pdf.js";
 
 const MIN_MINOR_PX = 12;
@@ -184,6 +184,7 @@ export const startPlacePage = () => tools.page.startPlacing();
 export const selectPage = id => tools.page.select(id);
 export const setPageDraft = changes => tools.page.setDraft(changes);
 export const savePage = () => tools.page.save();
+export const setPagePreview = on => tools.page.setPreview(on);
 export const setPageVisible = (id, on) => tools.page.setVisible(id, on);
 export const setPageLocked = (id, on) => tools.page.setLocked(id, on);
 export const deletePage = id => tools.page.deletePage(id);
@@ -311,7 +312,10 @@ function render() {
     ctx.fillRect(0, Math.round(oy - aw / 2), w, aw);
     ctx.shadowBlur = 0;
 
-    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects, paper: paperTheme };
+    // Print preview: measurement labels at their printed size on the previewed page (screen px per point).
+    const preview = tools.page.previewPage();
+    const printPx = preview ? scale * preview.scale * (25.4 / 72) * textSizeOf(preview) / 100 : 0;
+    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects, paper: paperTheme, printPx };
     tools.page.drawSaved(ctx, view);
     for (const geo of geometries) geo.draw(ctx, bucket(geo.bucket).items, view);
     tools.ruler.drawSaved(ctx, view);

@@ -3,16 +3,18 @@
 //  - Click a visible frame to select it, drag to move it. Click empty space to clear the selection.
 //  - The selected page's information box edits a draft (name, paper, orientation, scale) that previews
 //    live on the board; Save stores it (undoable), Cancel or Esc goes back to the stored page.
+//  - Print preview (selected page) switches to the Paper look and draws measurement text and label boxes
+//    at the size they will print on that page, following the draft's scale and text size live.
 
 import { bucket, checkpoint } from "../store.js";
-import { PAGES, PAPERS, addPage, drawPages, isLocked, isVisible, nextPageName, pageRect, paperSize, paperOf, scaleLabel, validScale, MIN_SCALE, MAX_SCALE } from "../pages.js";
+import { PAGES, PAPERS, addPage, drawPages, isLocked, isVisible, nextPageName, pageRect, paperSize, paperOf, scaleLabel, validScale, MIN_SCALE, MAX_SCALE, textSizeOf, validTextSize, MIN_TEXT_SIZE, MAX_TEXT_SIZE } from "../pages.js";
 
 const HIT_PX = 6;
 const MAX_NAME = 60;
 const FIT = 0.5; // a new first page covers about half the view
 
-const DRAFT_FIELDS = ["name", "paper", "landscape", "scale"];
-const pick = page => Object.fromEntries(DRAFT_FIELDS.map(f => [f, page[f]]));
+const DRAFT_FIELDS = ["name", "paper", "landscape", "scale", "textSize"];
+const pick = page => Object.fromEntries(DRAFT_FIELDS.map(f => [f, f === "textSize" ? textSizeOf(page) : page[f]]));
 
 // Largest 1-2-5 value (x 10^n) that is <= v.
 function niceAtMost(v) {
@@ -29,6 +31,7 @@ export function createPageTool(env) {
     let drag = null;
     let template = null; // paper, orientation and scale for the next new page
     let revision = 0; // bumps whenever the draft is reset from the stored page, so inputs know to reload
+    let preview = false; // print preview of the selected page
 
     const items = () => bucket(PAGES).items;
     const find = id => items().find(p => p.id === id) ?? null;
@@ -37,7 +40,9 @@ export function createPageTool(env) {
     const shown = page => (page.id === selectedId && draft ? { ...page, ...draft } : page);
     const dirty = () => {
         const page = selected();
-        return !!page && !!draft && DRAFT_FIELDS.some(f => page[f] !== draft[f]);
+        if (!page || !draft) return false;
+        const stored = pick(page);
+        return DRAFT_FIELDS.some(f => stored[f] !== draft[f]);
     };
     const signed = v => (v < 0 ? "−" : "") + env.formatLength(Math.abs(v));
 
@@ -50,7 +55,7 @@ export function createPageTool(env) {
             const rect = pageRect(view);
             info = {
                 id: page.id, revision, name: draft.name, paper: draft.paper, landscape: !!draft.landscape, scale: draft.scale,
-                scaleLabel: scaleLabel(draft.scale),
+                textSize: draft.textSize, scaleLabel: scaleLabel(draft.scale),
                 paperSize: `${+paper.w.toFixed(1)} × ${+paper.h.toFixed(1)} mm`,
                 width: env.formatLength(rect.w), height: env.formatLength(rect.h),
                 x: signed(page.x), y: signed(page.y), visible: isVisible(page), locked: isLocked(page)
@@ -63,6 +68,7 @@ export function createPageTool(env) {
             })),
             selectedId: page ? page.id : null,
             placing,
+            preview: preview && !!page,
             dirty: dirty(),
             draft: info,
             papers: PAPERS.map(({ id, label, group }) => ({ id, label, group }))
@@ -76,6 +82,7 @@ export function createPageTool(env) {
         const page = id === null ? null : find(id);
         if (id !== null && !page) throw new Error(`Unknown page: ${id}`);
         selectedId = page ? page.id : null;
+        if (!page) preview = false;
         reset();
     }
 
@@ -114,6 +121,7 @@ export function createPageTool(env) {
         if (next.name.length > MAX_NAME) throw new Error(`Page name can be at most ${MAX_NAME} characters`);
         paperOf(next.paper);
         if (!validScale(next.scale)) throw new Error(`Scale must be a number between ${MIN_SCALE} and ${MAX_SCALE}`);
+        if (!validTextSize(next.textSize)) throw new Error(`Text size must be between ${MIN_TEXT_SIZE}% and ${MAX_TEXT_SIZE}%`);
     }
 
     return {
@@ -122,6 +130,19 @@ export function createPageTool(env) {
 
         state,
         selectedId: () => selectedId,
+
+        setPreview(on) {
+            if (on && !selected()) throw new Error("Select a page to preview it");
+            preview = !!on;
+            env.log("action", `page print preview ${preview ? "on" : "off"}`);
+            changed();
+        },
+
+        // The page being previewed, with its draft applied, or null.
+        previewPage() {
+            const page = selected();
+            return preview && page ? shown(page) : null;
+        },
 
         deactivate() {
             placing = false;
@@ -197,7 +218,7 @@ export function createPageTool(env) {
             checkpoint();
             Object.assign(page, next);
             reset();
-            template = { paper: page.paper, landscape: page.landscape, scale: page.scale };
+            template = { paper: page.paper, landscape: page.landscape, scale: page.scale, textSize: textSizeOf(page) };
             env.log("action", `page saved: ${page.name}`);
             changed();
         },
@@ -244,7 +265,7 @@ export function createPageTool(env) {
                 const t = newTemplate();
                 checkpoint();
                 const page = addPage({ name: nextPageName(), ...t, x: p.x, y: p.y });
-                template = { paper: page.paper, landscape: page.landscape, scale: page.scale };
+                template = { paper: page.paper, landscape: page.landscape, scale: page.scale, textSize: textSizeOf(page) };
                 placing = false;
                 hover = null;
                 select(page.id);

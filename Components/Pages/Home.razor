@@ -355,6 +355,7 @@
         else if (pages.Draft is { } draft)
         {
             <PageInfoBox Draft="draft" Papers="pages.Papers" Dirty="pages.Dirty" Error="@_pageError"
+                         Preview="pages.Preview" OnPreview="SetPagePreview"
                          OnChange="SetPageDraft" OnInvalid="ShowPageError" OnSave="SavePage" OnCancel="CancelPage"
                          OnDelete="() => DeletePage(draft.Id)" OnZoom="() => ZoomToPage(draft.Id)" />
         }
@@ -847,6 +848,7 @@
     private Task SetPageLocked((int Id, bool Locked) change) => PageCall("setPageLocked", change.Id, change.Locked);
     private Task SetPageDraft(Dictionary<string, object> changes) => PageCall("setPageDraft", changes);
     private Task SavePage() => PageCall("savePage");
+    private Task SetPagePreview(bool on) => PageCall("setPagePreview", on);
     private Task DeletePage(int id) => PageCall("deletePage", id);
     private Task ZoomToPage(int id) => PageCall("zoomToPage", id);
 
@@ -939,7 +941,9 @@
     private string _projectName = "Untitled";
 
     // The Print / Export dialog shows the app in Paper without changing the saved preference.
-    private string EffectiveAppearance => _dialog == "print" ? "paper" : _appearance;
+    // Paper while the Print dialog is open or a page is in print preview.
+    private string EffectiveAppearance =>
+        _dialog == "print" || (_tool == "page" && _pages?.Preview == true) ? "paper" : _appearance;
     private string? _appliedAppearance;
 
     private bool _printing;
