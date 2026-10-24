@@ -8,7 +8,7 @@ import { addLine, lineGeometry, LINES } from "./lines.js";
 import { generateLines } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
-import { createRulerTool, measurementGeometry } from "./tools/ruler.js";
+import { createRulerTool, measurementGeometry, MEASURES } from "./tools/ruler.js";
 import { createPageTool } from "./tools/page.js";
 import { PAGES } from "./pages.js";
 import { pagePdf } from "./pdf.js";
@@ -192,7 +192,7 @@ export const deletePage = id => tools.page.deletePage(id);
 export function getPagePdf(id) {
     const page = bucket(PAGES).items.find(p => p.id === id);
     if (!page) throw new Error(`Unknown page: ${id}`);
-    return { name: page.name, pdf: pagePdf(page, bucket(LINES).items) };
+    return { name: page.name, pdf: pagePdf(page, bucket(LINES).items, bucket(MEASURES).items, { length: formatLength, area: formatArea }) };
 }
 
 // Glides the view so the whole page frame fits with a margin.

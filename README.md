@@ -36,7 +36,7 @@ Click a frame to select it and drag it anywhere on the board. In the panel, clic
 
 ## Printing and PDF
 
-Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the PDF in your default PDF app and opens its print dialog (if it only opens the PDF, print from that app), and **Export PDF…** saves a PDF where you choose. The output is a vector PDF of the drawing lines inside the page frame, on the page's paper size at its scale. Measurements and the grid are not printed.
+Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the PDF in your default PDF app and opens its print dialog (if it only opens the PDF, print from that app), and **Export PDF…** saves a PDF where you choose. After saving, click the file name to open the PDF, or **Open location** to show it in Finder or Explorer. The output is a vector PDF of the drawing lines and saved measurements inside the page frame, on the page's paper size at its scale. Measurements print in the Paper look and follow their own **Lengths**, **Angles** and **Area** settings. The grid, unsaved measurements and page frames are not printed.
 
 ## Navigation and scale
 

@@ -26,11 +26,64 @@ export const measurementGeometry = {
 };
 
 const defaultDisplay = () => ({ showLengths: true, showAngles: true, showArea: true });
-const displayOf = item => ({
+export const displayOf = item => ({
     showLengths: item.showLengths !== false,
     showAngles: item.showAngles !== false,
     showArea: item.showArea !== false
 });
+
+// Shoelace formula; the shape is closed back to the first point.
+export function polygonArea(pts) {
+    let sum = 0;
+    for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        sum += a.x * b.y - b.x * a.y;
+    }
+    return Math.abs(sum) / 2;
+}
+
+// Area-weighted centre of the polygon; falls back to the point average when it is (nearly) flat.
+export function polygonCentroid(pts) {
+    let a2 = 0, cx = 0, cy = 0;
+    for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        const c = p.x * q.y - q.x * p.y;
+        a2 += c;
+        cx += (p.x + q.x) * c;
+        cy += (p.y + q.y) * c;
+    }
+    if (Math.abs(a2) < 1e-9) {
+        return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+    }
+    return { x: cx / (3 * a2), y: cy / (3 * a2) };
+}
+
+// Angle at v between the lines v→a and v→b, in degrees (0–180); null if either line has no length.
+function angleAt(a, v, b) {
+    const ux = a.x - v.x, uy = a.y - v.y, wx = b.x - v.x, wy = b.y - v.y;
+    if (Math.hypot(ux, uy) < 1e-9 || Math.hypot(wx, wy) < 1e-9) return null;
+    return Math.abs(Math.atan2(ux * wy - uy * wx, ux * wx + uy * wy)) * 180 / Math.PI;
+}
+
+// Every corner of the closed shape (the last point joins back to the first).
+export function corners(points) {
+    // The cursor point can sit on the last clicked point; repeated points are not corners.
+    const path = points.filter((p, i) => {
+        const q = points[(i - 1 + points.length) % points.length];
+        return points.length < 2 || Math.hypot(p.x - q.x, p.y - q.y) > 1e-9;
+    });
+    const out = [];
+    const n = path.length;
+    if (n < 3) return out;
+    for (let i = 0; i < n; i++) {
+        const a = path[(i - 1 + n) % n], v = path[i], b = path[(i + 1) % n];
+        const deg = angleAt(a, v, b);
+        if (deg !== null) out.push({ a, v, b, deg });
+    }
+    return out;
+}
+
+export const formatAngle = deg => `${Number(deg.toFixed(1))}°`;
 
 const NODE_PX = 30; // how far from a line end a click may be in "nodes" mode
 
@@ -81,16 +134,6 @@ export function createRulerTool(env) {
         let total = 0;
         for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
         return total;
-    }
-
-    // Shoelace formula; the shape is closed back to the first point.
-    function polygonArea(pts) {
-        let sum = 0;
-        for (let i = 0; i < pts.length; i++) {
-            const a = pts[i], b = pts[(i + 1) % pts.length];
-            sum += a.x * b.y - b.x * a.y;
-        }
-        return Math.abs(sum) / 2;
     }
 
     function publish() {
@@ -151,49 +194,6 @@ export function createRulerTool(env) {
             g.strokeStyle = p.kind === "end" ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
             g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
         }
-    }
-
-    // Area-weighted centre of the polygon; falls back to the point average when it is (nearly) flat.
-    function polygonCentroid(pts) {
-        let a2 = 0, cx = 0, cy = 0;
-        for (let i = 0; i < pts.length; i++) {
-            const p = pts[i], q = pts[(i + 1) % pts.length];
-            const c = p.x * q.y - q.x * p.y;
-            a2 += c;
-            cx += (p.x + q.x) * c;
-            cy += (p.y + q.y) * c;
-        }
-        if (Math.abs(a2) < 1e-9) {
-            return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
-        }
-        return { x: cx / (3 * a2), y: cy / (3 * a2) };
-    }
-
-    const formatAngle = deg => `${Number(deg.toFixed(1))}°`;
-
-    // Angle at v between the lines v→a and v→b, in degrees (0–180); null if either line has no length.
-    function angleAt(a, v, b) {
-        const ux = a.x - v.x, uy = a.y - v.y, wx = b.x - v.x, wy = b.y - v.y;
-        if (Math.hypot(ux, uy) < 1e-9 || Math.hypot(wx, wy) < 1e-9) return null;
-        return Math.abs(Math.atan2(ux * wy - uy * wx, ux * wx + uy * wy)) * 180 / Math.PI;
-    }
-
-    // Every corner of the closed shape (the last point joins back to the first).
-    function corners(points) {
-        // The cursor point can sit on the last clicked point; repeated points are not corners.
-        const path = points.filter((p, i) => {
-            const q = points[(i - 1 + points.length) % points.length];
-            return points.length < 2 || Math.hypot(p.x - q.x, p.y - q.y) > 1e-9;
-        });
-        const out = [];
-        const n = path.length;
-        if (n < 3) return out;
-        for (let i = 0; i < n; i++) {
-            const a = path[(i - 1 + n) % n], v = path[i], b = path[(i + 1) % n];
-            const deg = angleAt(a, v, b);
-            if (deg !== null) out.push({ a, v, b, deg });
-        }
-        return out;
     }
 
     function angleMark(g, view, c) {

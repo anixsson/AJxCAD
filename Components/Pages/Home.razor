@@ -21,7 +21,7 @@
 
 <Modal Open="@(_dialog == "print")" Title="Print / Export" Width="460" OnClose="CloseDialog">
     <PrintDialog Pages="@(_pages?.Pages ?? [])" Busy="_printing" Error="@_printError" Status="@_printStatus"
-                 OnPrint="PrintPage" OnExport="ExportPage" ExportedPath="@_exportedPath" OnOpenLocation="OpenExportLocation" />
+                 OnPrint="PrintPage" OnExport="ExportPage" ExportedPath="@_exportedPath" OnOpenLocation="OpenExportLocation" OnOpenFile="OpenExportedFile" />
 </Modal>
 
 <Modal Open="@(_dialog == "guide")" Title="AJxCAD User guide" Width="560" OnClose="CloseDialog">
@@ -1024,17 +1024,22 @@
         return null;
     });
 
-    private void OpenExportLocation()
+    private void OpenExportLocation() => RunExportedFileAction("open location", PrintService.RevealFile);
+
+    private void OpenExportedFile() => RunExportedFileAction("open pdf", PrintService.OpenFile);
+
+    private void RunExportedFileAction(string what, Action<string> action)
     {
         if (_exportedPath is null) return;
+        _printError = null;
         try
         {
-            PrintService.RevealFile(_exportedPath);
+            action(_exportedPath);
         }
         catch (Exception ex)
         {
             _printError = ex.Message;
-            Log("error", $"open location failed: {ex.Message}");
+            Log("error", $"{what} failed: {ex.Message}");
         }
     }
 

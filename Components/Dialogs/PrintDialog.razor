@@ -5,7 +5,7 @@
 }
 else
 {
-    <p class="data-intro">Choose the page to print. Drawing lines inside its frame are printed at the page's scale.</p>
+    <p class="data-intro">Choose the page to print. Drawing lines and saved measurements inside its frame are printed at the page's scale.</p>
     <div class="stack-list print-pages" role="radiogroup" aria-label="Pages">
         @foreach (var row in Pages)
         {
@@ -22,15 +22,21 @@ else
 {
     <p class="test-error" role="alert">@Error</p>
 }
-@if (Status is not null)
+@if (ExportedPath is not null)
+{
+    @* After an export: the file name opens the PDF, Open location shows it in Finder / Explorer. *@
+    <p class="data-intro print-saved" role="status">
+        Saved
+        <button type="button" class="text-link" title="@ExportedPath" disabled="@Busy" @onclick="OnOpenFile">@System.IO.Path.GetFileName(ExportedPath)</button>
+        ·
+        <button type="button" class="text-link" disabled="@Busy" @onclick="OnOpenLocation">Open location</button>
+    </p>
+}
+else if (Status is not null)
 {
     <p class="data-intro" role="status">@Status</p>
 }
 <div class="settings-actions">
-    @if (ExportedPath is not null)
-    {
-        <button type="button" class="chip" disabled="@Busy" @onclick="OnOpenLocation">Open location</button>
-    }
     <button type="button" class="chip" disabled="@(Busy || _selected is null)" @onclick="() => OnExport.InvokeAsync(_selected!.Value)">Export PDF…</button>
     <button type="button" class="chip active" disabled="@(Busy || _selected is null)" @onclick="() => OnPrint.InvokeAsync(_selected!.Value)">Print…</button>
 </div>
@@ -45,6 +51,7 @@ else
     // The last exported PDF; shows the Open location button.
     [Parameter] public string? ExportedPath { get; set; }
     [Parameter] public EventCallback OnOpenLocation { get; set; }
+    [Parameter] public EventCallback OnOpenFile { get; set; }
 
     private int? _selected;
 

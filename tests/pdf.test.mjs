@@ -12,9 +12,9 @@ test("the PDF is one A4 page with a valid cross-reference table", () => {
     assert.ok(/^[\x00-\x7f]*$/.test(pdf), "ASCII only, so string length equals byte length");
 
     const startxref = Number(pdf.match(/startxref\n(\d+)/)[1]);
-    assert.ok(pdf.slice(startxref).startsWith("xref\n0 5\n"));
+    assert.ok(pdf.slice(startxref).startsWith("xref\n0 6\n"));
     const offsets = [...pdf.slice(startxref).matchAll(/^(\d{10}) 00000 n $/gm)].map(m => Number(m[1]));
-    assert.equal(offsets.length, 4);
+    assert.equal(offsets.length, 5);
     offsets.forEach((o, i) => assert.ok(pdf.slice(o).startsWith(`${i + 1} 0 obj\n`), `object ${i + 1} offset`));
 
     const length = Number(pdf.match(/\/Length (\d+)/)[1]);
@@ -38,4 +38,43 @@ test("lines are placed at the page scale and lines outside the frame are left ou
 
 test("landscape swaps the paper size", () => {
     assert.match(pagePdf({ ...page, landscape: 1 }, []), /\/MediaBox \[0 0 841\.89 595\.276\]/);
+});
+
+const square = (extra = {}) => ({
+    id: 1,
+    points: [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 1000 }, { x: 0, y: 1000 }],
+    ...extra
+});
+const format = { length: mm => `${mm / 10} cm`, area: mm2 => `${mm2 / 100} cm²` };
+const stream = pdf => pdf.slice(pdf.indexOf("stream\n") + 7, pdf.indexOf("\nendstream"));
+
+test("saved measurements print with their lengths, angles and area", () => {
+    const pdf = pagePdf(page, [], [square()], format);
+    const body = stream(pdf);
+    assert.equal((body.match(/\(100 cm\) Tj/g) ?? []).length, 3, "a length label per measured line");
+    assert.equal((body.match(/\(90\\260\) Tj/g) ?? []).length, 4, "an angle at every corner, with a degree sign");
+    assert.ok(body.includes("(10000 cm\\262) Tj"), "area label with a superscript two");
+    assert.ok(body.includes("0.94 g"), "the area is shaded");
+    assert.ok(pdf.includes("/BaseFont /Helvetica"));
+    assert.ok(/^[\x00-\x7f]*$/.test(pdf), "still ASCII only");
+});
+
+test("each measurement's display settings decide what is printed", () => {
+    const body = stream(pagePdf(page, [], [square({ showLengths: false, showAngles: false, showArea: false })], format));
+    assert.ok(!body.includes("Tj"), "no labels");
+    assert.ok(!body.includes("0.94 g"), "no shading");
+    assert.ok(body.includes("[4 3] 0 d"), "the measured lines are still drawn");
+
+    const lengthsOnly = stream(pagePdf(page, [], [square({ showAngles: false, showArea: false })], format));
+    assert.equal((lengthsOnly.match(/Tj/g) ?? []).length, 3);
+});
+
+test("measurements outside the frame and unchecked points are left out", () => {
+    const far = { id: 2, points: [{ x: 9000, y: 9000 }, { x: 9500, y: 9000 }] };
+    assert.ok(!stream(pagePdf(page, [], [far], format)).includes("[4 3] 0 d"));
+
+    const partly = square();
+    partly.points[3].enabled = false; // only three corners: a triangle
+    const body = stream(pagePdf(page, [], [partly], format));
+    assert.ok(body.includes("(5000 cm\\262) Tj"), "area of the remaining triangle");
 });

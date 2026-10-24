@@ -1739,6 +1739,30 @@ button {
     background: #777;
 }
 
+.text-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.text-link:hover:not(:disabled) {
+    text-decoration-thickness: 2px;
+}
+
+.text-link:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.print-saved {
+    overflow-wrap: anywhere;
+}
+
 .paper :is(.side-empty, .page-meta, .page-columns) {
     color: #000;
 }

@@ -27,6 +27,18 @@ public static class PrintService
 #endif
     }
 
+    // Opens the file in the system's default app for it.
+    public static void OpenFile(string path)
+    {
+#if MACCATALYST
+        // No existence check, as for RevealFile.
+        OpenInDefaultApp(path, print: false);
+#elif WINDOWS
+        if (!File.Exists(path)) throw new FileNotFoundException("The exported file is no longer there.", path);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+#endif
+    }
+
     // Shows the file selected in Finder / Explorer.
     public static void RevealFile(string path)
     {
