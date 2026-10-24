@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bucket, undo } from "../wwwroot/cad/store.js";
+import { bucket, undo, newId } from "../wwwroot/cad/store.js";
 import { createSelectTool } from "../wwwroot/cad/tools/select.js";
 
 const lines = bucket("lines");
@@ -18,6 +18,13 @@ function setup(items, overrides = {}) {
             setPoint(line, key, x, y) {
                 if (key === "a") { line.x1 = x; line.y1 = y; }
                 else { line.x2 = x; line.y2 = y; }
+            },
+            split(line, x, y) {
+                const added = { id: newId() + 1000, x1: x, y1: y, x2: line.x2, y2: line.y2 };
+                lines.items.push(added);
+                line.x2 = x;
+                line.y2 = y;
+                return { added, joint: [{ item: line, key: "b" }, { item: added, key: "a" }] };
             }
         }],
         toWorld: (x, y) => ({ x, y }),
@@ -41,7 +48,7 @@ function draw(tool, { dpr = 1, fx = false, toScreen = (x, y) => ({ x, y }) } = {
     const strokes = [];
     let path = [];
     const g = {};
-    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText"]) {
+    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText", "closePath", "fill"]) {
         g[method] = (...args) => {
             calls.push([method, ...args]);
             if (method === "beginPath") path = [];
@@ -181,13 +188,13 @@ test("Lines mode selects both ends and shared corners, and dragging moves them t
     tool.pointerDown(pointer(50, 0));
     tool.pointerUp(pointer(50, 0));
     assert.deepEqual(highlightedPath(tool), [["moveTo", 0, 0], ["lineTo", 100, 0]]);
-    tool.pointerDown(pointer(50, 0));
-    tool.pointerMove(pointer(53, 4));
+    tool.pointerDown(pointer(30, 0));
+    tool.pointerMove(pointer(33, 4));
     assert.deepEqual(lines.items.map(l => [l.x1, l.y1, l.x2, l.y2]), [
         [3, 4, 103, 4], [103, 4, 100, 100]
     ]);
     assert.equal(hasMoveGuide(tool), true);
-    tool.pointerUp(pointer(53, 4));
+    tool.pointerUp(pointer(33, 4));
     assert.equal(hasMoveGuide(tool), false);
     assert.equal(undo(), true);
     tool.dataChanged();
@@ -391,4 +398,86 @@ test("Move cannot start without a selection and is cancelled by cancel, undo ste
         assert.deepEqual(lines.items[0], { id: 1, x1: 0, y1: 0, x2: 100, y2: 0 });
     }
     assert.equal(tool.undoStep(), false);
+});
+
+const handlesDrawn = tool => draw(tool).calls.filter(([method]) => method === "closePath").length;
+const geometry = () => lines.items.map(l => [l.x1, l.y1, l.x2, l.y2]);
+
+test("dragging the midpoint handle of a selected line splits it and moves the new shared node", () => {
+    const { tool, logs, events } = setupWithEvents([
+        { x1: 0, y1: 0, x2: 100, y2: 0 },
+        { x1: 100, y1: 0, x2: 100, y2: 100 }
+    ]);
+    tool.setSelectionMode("lines");
+    assert.equal(handlesDrawn(tool), 0, "no handle without a selection");
+    click(tool, 30, 0);
+    assert.equal(handlesDrawn(tool), 1, "the selected line shows its midpoint handle");
+
+    tool.pointerDown(pointer(51, 1));
+    tool.pointerMove(pointer(52, 1));
+    assert.equal(lines.items.length, 2, "nothing happens until the drag starts");
+    tool.pointerMove(pointer(50, 30));
+
+    assert.deepEqual(geometry(), [
+        [0, 0, 50, 30], [100, 0, 100, 100], [50, 30, 100, 0]
+    ], "two lines meet at the moved node; the far end stays joined to the other line");
+    assert.equal(logs.at(-1).text, "split line");
+    assert.equal(hasMoveGuide(tool), true);
+    tool.pointerUp(pointer(50, 30));
+
+    assert.equal(highlightedPath(tool).length, 4, "both halves stay selected and highlighted");
+    assert.deepEqual(events.at(-1), ["selection", 5], "both new ends join the selection (plus the shared corner)");
+    assert.equal(handlesDrawn(tool), 2, "each half gets its own handle");
+
+    assert.equal(undo(), true);
+    tool.dataChanged();
+    assert.deepEqual(geometry(), [[0, 0, 100, 0], [100, 0, 100, 100]], "one undo restores the original line");
+});
+
+test("split node snaps, clicking the handle changes nothing, and handles only show in Lines mode", () => {
+    const { tool } = setup([
+        { x1: 0, y1: 0, x2: 100, y2: 0 },
+        { x1: 40, y1: 60, x2: 80, y2: 90 }
+    ]);
+    tool.setSelectionMode("lines");
+    click(tool, 30, 0);
+    click(tool, 50, 0);
+    assert.deepEqual(geometry(), [[0, 0, 100, 0], [40, 60, 80, 90]]);
+    assert.equal(highlightedPath(tool).length, 2, "clicking the handle keeps the selection");
+
+    tool.setSelectionMode("nodes");
+    assert.equal(handlesDrawn(tool), 0);
+    tool.setSelectionMode("lines");
+    assert.equal(handlesDrawn(tool), 1);
+
+    // The test snap returns the cursor position; the engine's snap would pull to line ends like (40, 60).
+    tool.pointerDown(pointer(50, 0));
+    tool.pointerMove(pointer(40, 60));
+    tool.pointerUp(pointer(40, 60));
+    assert.deepEqual(geometry(), [[0, 0, 40, 60], [40, 60, 80, 90], [40, 60, 100, 0]]);
+});
+
+test("Shift on the handle selects instead of splitting", () => {
+    const { tool } = setup([{ x1: 0, y1: 0, x2: 100, y2: 0 }]);
+    tool.setSelectionMode("lines");
+    click(tool, 30, 0);
+    tool.pointerDown(pointer(50, 0, { shift: true }));
+    tool.pointerMove(pointer(50, 20, { shift: true }));
+    tool.pointerUp(pointer(50, 20, { shift: true }));
+    assert.equal(lines.items.length, 1);
+    assert.deepEqual(geometry(), [[0, 20, 100, 20]], "Shift-drag moves the selection as before");
+});
+
+test("turning split handles off hides them and lets the middle of a line move the selection", () => {
+    const { tool } = setup([{ x1: 0, y1: 0, x2: 100, y2: 0 }]);
+    tool.setSelectionMode("lines");
+    click(tool, 30, 0);
+    tool.setSplitHandles(false);
+    assert.equal(handlesDrawn(tool), 0);
+    tool.pointerDown(pointer(50, 0));
+    tool.pointerMove(pointer(50, 20));
+    tool.pointerUp(pointer(50, 20));
+    assert.deepEqual(geometry(), [[0, 20, 100, 20]], "no split; the line moves");
+    tool.setSplitHandles(true);
+    assert.equal(handlesDrawn(tool), 1);
 });

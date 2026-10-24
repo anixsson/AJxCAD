@@ -133,6 +133,11 @@ export function setSelectionMode(mode) {
     tools.select.setSelectionMode(mode);
 }
 
+// Midpoint split handles on selected lines (Select tool action menu).
+export function setSplitHandles(on) {
+    tools.select.setSplitHandles(on);
+}
+
 // Guided Move on the current selection (Select tool action menu).
 export const startMove = () => tools.select.startMove();
 export const confirmMoveBase = () => tools.select.confirmMoveBase();

@@ -2,6 +2,8 @@
 //  - Click a corner to select it; Shift+click adds or removes corners; click empty space to clear.
 //  - Dragging a selected corner moves every selected corner together.
 //  - Lines mode selects both corners of a clicked line; lines with both ends selected are highlighted.
+//  - Lines mode: a selected line shows a handle in its middle. Dragging it splits the line in two
+//    and moves the new shared corner.
 //  - Move (action menu): pick a base point, press Next, then pick where the base point should go.
 //  - A corner shared by several lines moves as one, so joined lines stay joined.
 //  - With a single free end selected, only that one line changes.
@@ -15,9 +17,11 @@ const SAME = 1e-6; // mm; points closer than this are the same corner
 export function createSelectTool(env) {
     const selected = new Map(); // ref key -> ref
     let hover = null;
+    let hoverHandle = null;
     let drag = null;
     let marker = null;
     let mode = "nodes";
+    let splitHandles = true; // midpoint handles on selected lines (Actions menu toggle)
     let process = null; // guided Move: { step: "base" | "target", base, point }
     let lastCount = 0;
 
@@ -97,6 +101,36 @@ export function createSelectTool(env) {
     }
 
     const findTarget = (sx, sy) => mode === "lines" ? findLine(sx, sy) : findNode(sx, sy);
+
+    // Lines that can be split by their midpoint handle: Lines mode, both ends selected, geometry supports it.
+    function* splittable() {
+        if (mode !== "lines" || !splitHandles) return;
+        for (const geo of env.geometries) {
+            if (!geo.split) continue;
+            for (const item of bucket(geo.bucket).items) {
+                const points = geo.points(item);
+                if (points.length !== 2 || !points.every(p => selected.has(keyOf(geo, item, p.key)))) continue;
+                const [a, b] = points;
+                if (Math.abs(a.x - b.x) < SAME && Math.abs(a.y - b.y) < SAME) continue;
+                yield { geo, item, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+            }
+        }
+    }
+
+    function findHandle(sx, sy) {
+        let best = null, bestDist = HIT_PX;
+        for (const h of splittable()) {
+            const s = env.toScreen(h.x, h.y);
+            const dist = Math.hypot(s.x - sx, s.y - sy);
+            if (dist <= bestDist) { best = h; bestDist = dist; }
+        }
+        return best;
+    }
+
+    function updateHover(sx, sy) {
+        hoverHandle = findHandle(sx, sy);
+        hover = hoverHandle ? null : findTarget(sx, sy);
+    }
 
     function selectInRect(rect, base, mode) {
         selected.clear();
@@ -199,6 +233,7 @@ export function createSelectTool(env) {
             if (!selected.size) return false;
             drag = null;
             hover = null;
+            hoverHandle = null;
             marker = null;
             setProcess({ step: "base", base: null, point: null });
             env.log("action", "move: pick a base point");
@@ -228,14 +263,22 @@ export function createSelectTool(env) {
             if (value !== "nodes" && value !== "lines") throw new Error(`Unknown selection mode: ${value}`);
             mode = value;
             hover = null;
+            hoverHandle = null;
             drag = null;
             marker = null;
+            env.redraw();
+        },
+
+        setSplitHandles(on) {
+            splitHandles = !!on;
+            hoverHandle = null;
             env.redraw();
         },
 
         deactivate() {
             selected.clear();
             hover = null;
+            hoverHandle = null;
             drag = null;
             marker = null;
             if (process) setProcess(null);
@@ -247,6 +290,7 @@ export function createSelectTool(env) {
             selected.clear();
             drag = null;
             hover = null;
+            hoverHandle = null;
             marker = null;
             if (process) setProcess(null);
             notifySelection();
@@ -265,6 +309,24 @@ export function createSelectTool(env) {
                 moveSelection(dx, dy);
                 env.log("action", `moved ${selected.size} line end${selected.size === 1 ? "" : "s"} by ${env.formatLength(Math.hypot(dx, dy))}`);
                 setProcess(null);
+                return;
+            }
+            const handle = !e.shift && findHandle(e.sx, e.sy);
+            if (handle) {
+                // The split happens once the drag really starts, so a plain click changes nothing.
+                drag = {
+                    kind: "move",
+                    split: handle,
+                    anchor: { x: handle.x, y: handle.y },
+                    sx: e.sx,
+                    sy: e.sy,
+                    origin: new Map(),
+                    moved: false,
+                    toggleOnRelease: null
+                };
+                hover = null;
+                env.capture(e.pointerId);
+                env.redraw();
                 return;
             }
             const node = findTarget(e.sx, e.sy);
@@ -325,7 +387,7 @@ export function createSelectTool(env) {
                 return;
             }
             if (!drag) {
-                hover = findTarget(e.sx, e.sy);
+                updateHover(e.sx, e.sy);
                 env.redraw();
                 return;
             }
@@ -342,10 +404,21 @@ export function createSelectTool(env) {
                 if (Math.hypot(e.sx - drag.sx, e.sy - drag.sy) < DRAG_PX) return;
                 checkpoint();
                 drag.moved = true;
-                env.log("action", `drag ${selected.size} line end${selected.size === 1 ? "" : "s"}`);
+                if (drag.split) {
+                    const { geo, item, x, y } = drag.split;
+                    const { added, joint } = geo.split(item, x, y);
+                    // The new line's far end is the old corner, which was selected.
+                    for (const p of geo.points(added)) selected.set(keyOf(geo, added, p.key), { geo, item: added, key: p.key });
+                    for (const j of joint) drag.origin.set(keyOf(geo, j.item, j.key), { ref: { geo, item: j.item, key: j.key }, x, y });
+                    hoverHandle = null;
+                    notifySelection();
+                    env.log("action", "split line");
+                } else {
+                    env.log("action", `drag ${selected.size} line end${selected.size === 1 ? "" : "s"}`);
+                }
             }
             // Snap to grid or to ends that are not being moved.
-            const p = env.snap(e.sx, e.sy, (geo, item, key) => selected.has(keyOf(geo, item, key)));
+            const p = env.snap(e.sx, e.sy, (geo, item, key) => drag.origin.has(keyOf(geo, item, key)));
             const dx = p.x - drag.anchor.x, dy = p.y - drag.anchor.y;
             for (const o of drag.origin.values()) o.ref.geo.setPoint(o.ref.item, o.ref.key, o.x + dx, o.y + dy);
             marker = p;
@@ -365,7 +438,7 @@ export function createSelectTool(env) {
                     report();
                 }
                 drag = null;
-                hover = findTarget(e.sx, e.sy);
+                updateHover(e.sx, e.sy);
                 env.redraw();
                 return;
             }
@@ -375,7 +448,7 @@ export function createSelectTool(env) {
             }
             drag = null;
             marker = null;
-            hover = findTarget(e.sx, e.sy);
+            updateHover(e.sx, e.sy);
             env.redraw();
         },
 
@@ -387,6 +460,7 @@ export function createSelectTool(env) {
             }
             if (drag) return;
             hover = null;
+            hoverHandle = null;
             env.redraw();
         },
 
@@ -443,6 +517,27 @@ export function createSelectTool(env) {
                     const r = 3 * d;
                     g.strokeStyle = "rgba(255,255,255,0.55)";
                     g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
+                }
+            }
+
+            // Midpoint handles on selected lines: drag one to split the line there.
+            if (!drag && !process) {
+                for (const h of splittable()) {
+                    const s = view.toScreen(h.x, h.y);
+                    if (s.x < -10 || s.x > view.width + 10 || s.y < -10 || s.y > view.height + 10) continue;
+                    const hot = hoverHandle?.item === h.item && hoverHandle?.geo === h.geo;
+                    const r = (hot ? 6 : 4.5) * d;
+                    g.beginPath();
+                    g.moveTo(s.x * d, s.y * d - r);
+                    g.lineTo(s.x * d + r, s.y * d);
+                    g.lineTo(s.x * d, s.y * d + r);
+                    g.lineTo(s.x * d - r, s.y * d);
+                    g.closePath();
+                    g.fillStyle = hot ? "#8fe3ff" : "#1a1538";
+                    g.fill();
+                    g.strokeStyle = "#8fe3ff";
+                    g.lineWidth = 1.5 * d;
+                    g.stroke();
                 }
             }
 

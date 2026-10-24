@@ -108,6 +108,22 @@
                     </div>
                 </aside>
             }
+            @if (_selectionMode == "lines")
+            {
+                <aside class="glass toolmenu" aria-label="Select options">
+                    <span class="toolmenu-label">Options</span>
+                    <div class="unit-row" role="group" aria-label="Select options">
+                        <button type="button" class="chip check-chip @(_splitHandles ? "active" : "")"
+                                role="checkbox"
+                                title="Show the middle handle on selected lines; drag it to split the line"
+                                aria-checked="@(_splitHandles.ToString().ToLowerInvariant())"
+                                @onclick="ToggleSplitHandles">
+                            <span class="check-box" aria-hidden="true">@(_splitHandles ? "✓" : "")</span>
+                            Middle
+                        </button>
+                    </div>
+                </aside>
+            }
         </div>
     </div>
 }
@@ -446,6 +462,17 @@
 
         await _cad.InvokeVoidAsync("setSelectionMode", mode);
         _selectionMode = mode;
+    }
+
+    private bool _splitHandles = true;
+
+    private async Task ToggleSplitHandles()
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setSplitHandles", !_splitHandles);
+        _splitHandles = !_splitHandles;
     }
 
     private int _selectionCount;

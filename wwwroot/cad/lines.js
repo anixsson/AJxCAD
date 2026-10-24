@@ -51,5 +51,14 @@ export const lineGeometry = {
     setPoint(l, key, x, y) {
         if (key === "a") { l.x1 = x; l.y1 = y; }
         else { l.x2 = x; l.y2 = y; }
+    },
+
+    // Splits a line at (x, y): the line now ends there (end "b") and a new line runs on to the old end.
+    // Returns the joint as [{ item, key }, ...] plus the new line.
+    split(l, x, y) {
+        const added = addLine(x, y, l.x2, l.y2);
+        l.x2 = x;
+        l.y2 = y;
+        return { added, joint: [{ item: l, key: "b" }, { item: added, key: "a" }] };
     }
 };
