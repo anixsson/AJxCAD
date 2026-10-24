@@ -92,6 +92,8 @@ const env = {
     log,
     redraw: () => draw(),
     setTool: name => setTool(name),
+    selectionChanged: count => dotnet?.invokeMethodAsync("OnSelectionChanged", count),
+    processChanged: state => dotnet?.invokeMethodAsync("OnProcessChanged", state?.step ?? null, !!state?.hasBase),
     capture: id => el.setPointerCapture(id)
 };
 
@@ -112,6 +114,15 @@ export function setImperial(value) {
     imperial = value;
     draw();
 }
+
+export function setSelectionMode(mode) {
+    tools.select.setSelectionMode(mode);
+}
+
+// Guided Move on the current selection (Select tool action menu).
+export const startMove = () => tools.select.startMove();
+export const confirmMoveBase = () => tools.select.confirmMoveBase();
+export const cancelProcess = () => tools.select.cancelProcess();
 
 export function undo() {
     if (currentTool().undoStep?.()) {
@@ -256,6 +267,13 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
         if (e.key === "Escape") {
             log("action", `Escape handled (tool=${toolId})`);
             dotnet.invokeMethodAsync("OnEscape");
+        } else if (e.key === " " && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            // Space presses the visible default button (marked data-default-action) of a guide or action box.
+            if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return;
+            const next = [...document.querySelectorAll("[data-default-action]")].find(b => !b.disabled && b.offsetParent);
+            if (!next) return;
+            e.preventDefault(); // also stops Space from pressing whichever button has focus
+            if (!e.repeat) next.click();
         } else if ((e.metaKey || e.ctrlKey) && !e.altKey && ["n", "o", "s"].includes(e.key.toLowerCase())) {
             e.preventDefault();
             const k = e.key.toLowerCase();

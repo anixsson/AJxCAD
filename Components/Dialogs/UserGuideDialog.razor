@@ -68,12 +68,16 @@
         new("Select", "S", "Edit the ends of lines. Line ends show as small squares; the one near your cursor is highlighted. Click it to select it, then drag to move it. Drag on empty space to select the line ends inside a rectangle. Lines that meet at a corner stay joined and move together.",
         [
             ("S", "Switch to the Select tool"),
-            ("Click", "Select a line end"),
+            ("Toolmenu", "Use the bottom-center Nodes / Lines toggle to choose what clicking selects; switching modes keeps the selection"),
+            ("Click", "Select a line end in Nodes mode, or both ends of a line in Lines mode; shared corners stay joined"),
+            ("Highlights", "Every line with both ends selected lights up, including lines between selected corners"),
             ("Shift + click", "Add a line end; clicking an already-selected end removes it"),
             ("Shift + Command (Mac) / Shift + Ctrl (Windows) + click", "Remove a line end from the selection"),
-            ("Drag", "Move the selected ends together (or just the one you grab)"),
+            ("Drag", "Move the selected ends together by grabbing a node or line in the chosen mode; a dashed guide shows the offset distance from the start"),
             ("Drag empty space", "Select the line ends inside the rectangle; hold Shift to add, or Shift + Command on Mac / Shift + Ctrl on Windows to remove"),
             ("Click empty space", "Clear the selection"),
+            ("Actions > Move", "With a selection, press Move, click a base point (such as a corner), press Next or Space, then click the destination. A preview and offset show where the selection will go"),
+            ("Esc", "Cancel a running Move; press again to return to the Cross tool"),
             ("Cmd/Ctrl + Z", "Undo the move")
         ]),
         new("Line", "L", "Draw straight lines. Click to set the start, click again to place the end. The next line starts where the last one ended. Points snap to the grid and to existing line ends, and the length is shown while drawing.",
@@ -113,6 +117,7 @@
         [
             ("Cmd/Ctrl + Z", "Undo a drawing edit. In the Line tool, first cancel the current line, then undo placed lines"),
             ("Esc", "Close an open dialog or menu; otherwise return to the Cross tool"),
+            ("Space", "Press the glowing default button in a guide box, such as Next in Move"),
             ("V / S / L", "Choose Cross, Select or Line when working in the workspace"),
             ("Project settings", "Title changes are not part of drawing undo"),
             ("Unavailable commands", "Redo, Cut, Copy and Paste are currently disabled")

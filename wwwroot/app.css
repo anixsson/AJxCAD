@@ -517,6 +517,82 @@ button {
     color: #1a1538;
 }
 
+/* ---------- Toolmenu ---------- */
+
+.toolmenu-dock {
+    position: fixed;
+    z-index: 10;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.toolmenu-row {
+    display: flex;
+    gap: 10px;
+}
+
+.toolmenu {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+}
+
+.process-box {
+    width: 300px;
+    padding: 12px 14px;
+}
+
+.process-step {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.process-title {
+    margin-top: 2px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.process-text {
+    margin: 6px 0 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(230, 230, 255, 0.8);
+}
+
+.process-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.process-actions .chip {
+    flex: 0 0 auto;
+    padding: 4px 14px;
+}
+
+.chip:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.toolmenu-label {
+    font-size: 12px;
+    color: rgba(230, 230, 255, 0.65);
+}
+
+.toolmenu .unit-row {
+    margin: 0;
+}
+
 /* ---------- Scale panel ---------- */
 
 .scale-panel {
@@ -700,12 +776,15 @@ button {
     initial-value: 0deg;
 }
 
-.modal.glow {
+.modal.glow,
+.default-action:not(:disabled) {
     position: relative;
 }
 
 .modal.glow::before,
-.modal.glow::after {
+.modal.glow::after,
+.default-action:not(:disabled)::before,
+.default-action:not(:disabled)::after {
     content: "";
     position: absolute;
     inset: -1px;
@@ -725,6 +804,30 @@ button {
     border-radius: 19px;
     filter: blur(6px);
     opacity: 0.45;
+}
+
+/* The button Space presses: same rotating light, scaled to a small button. */
+.default-action:not(:disabled)::before {
+    animation-duration: 3s;
+}
+
+.default-action:not(:disabled)::after {
+    inset: -4px;
+    padding: 5px;
+    border-radius: 12px;
+    filter: blur(5px);
+    opacity: 0.6;
+    animation-duration: 3s;
+}
+
+.key-hint {
+    margin-left: 6px;
+    padding: 0 5px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    opacity: 0.75;
 }
 
 @keyframes glow-spin {
@@ -1130,8 +1233,16 @@ button {
 }
 
 .perf .modal.glow::before,
-.perf .modal.glow::after {
+.perf .modal.glow::after,
+.perf .default-action::before,
+.perf .default-action::after {
     display: none;
+}
+
+/* Performance mode keeps the default button recognisable with a plain outline instead of the moving light. */
+.perf .default-action:not(:disabled) {
+    outline: 2px solid #ff8fe0;
+    outline-offset: 1px;
 }
 
 #blazor-error-ui {

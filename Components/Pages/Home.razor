@@ -53,6 +53,64 @@
     }
 </div>
 
+@if (_tool == "select")
+{
+    <div class="toolmenu-dock">
+        @if (_moveStep is not null)
+        {
+            <section class="glass process-box" role="dialog" aria-label="Move selection" aria-live="polite">
+                @if (_moveStep == "base")
+                {
+                    <div class="process-step">Move · Step 1 of 2</div>
+                    <div class="process-title">@(_moveHasBase ? "Base point set" : "Pick a base point")</div>
+                    <p class="process-text">
+                        @(_moveHasBase
+                            ? "Click again to choose a different point, or press Next."
+                            : "Click a corner of the selection. Points snap to line ends and the grid.")
+                    </p>
+                    <div class="process-actions">
+                        <button type="button" class="chip" @onclick="CancelProcess">Cancel</button>
+                        <button type="button" class="chip active default-action" data-default-action disabled="@(!_moveHasBase)" @onclick="ConfirmMoveBase">Next<span class="key-hint">Space</span></button>
+                    </div>
+                }
+                else
+                {
+                    <div class="process-step">Move · Step 2 of 2</div>
+                    <div class="process-title">Pick the destination</div>
+                    <p class="process-text">Click where the base point should go. Everything selected moves with it.</p>
+                    <div class="process-actions">
+                        <button type="button" class="chip" @onclick="CancelProcess">Cancel</button>
+                    </div>
+                }
+            </section>
+        }
+        <div class="toolmenu-row">
+            <aside class="glass toolmenu" aria-label="Select toolmenu">
+                <span class="toolmenu-label">Select</span>
+                <div class="unit-row" role="group" aria-label="Selection mode">
+                    @foreach (var mode in new[] { "nodes", "lines" })
+                    {
+                        <button type="button" class="chip @(_selectionMode == mode ? "active" : "")"
+                                aria-pressed="@((_selectionMode == mode).ToString().ToLowerInvariant())"
+                                @onclick="() => SetSelectionMode(mode)">@(mode == "nodes" ? "Nodes" : "Lines")</button>
+                    }
+                </div>
+            </aside>
+            @if (_selectionCount > 0)
+            {
+                <aside class="glass toolmenu" aria-label="Selection actions">
+                    <span class="toolmenu-label">Actions</span>
+                    <div class="unit-row" role="group" aria-label="Selection actions">
+                        <button type="button" class="chip @(_moveStep is not null ? "active" : "")"
+                                title="Move the selection from a base point to a destination"
+                                disabled="@(_moveStep is not null)" @onclick="StartMove">Move</button>
+                    </div>
+                </aside>
+            }
+        </div>
+    </div>
+}
+
 @if (_showDebugMenu && _debug)
 {
     <aside class="glass debug-panel @(_debugOpen ? "open" : "")" aria-label="Debug log">
@@ -310,6 +368,50 @@
         StateHasChanged();
     }
     private string _tool = "cross";
+    private string _selectionMode = "nodes";
+
+    private async Task SetSelectionMode(string mode)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setSelectionMode", mode);
+        _selectionMode = mode;
+    }
+
+    private int _selectionCount;
+    private string? _moveStep; // null, "base" or "target"
+    private bool _moveHasBase;
+
+    [JSInvokable]
+    public void OnSelectionChanged(int count)
+    {
+        _selectionCount = count;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnProcessChanged(string? step, bool hasBase)
+    {
+        _moveStep = step;
+        _moveHasBase = hasBase;
+        StateHasChanged();
+    }
+
+    private async Task StartMove()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("startMove");
+    }
+
+    private async Task ConfirmMoveBase()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("confirmMoveBase");
+    }
+
+    private async Task CancelProcess()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("cancelProcess");
+    }
 
     // "general" tools work on any data; "data" tools each own a bucket of data (see wwwroot/cad/store.js).
     private record ToolDef(string Id, string Title, string Hotkey, string Group, string Icon);
@@ -373,6 +475,7 @@
         Log("action", $"OnEscape in Blazor (dialog={_dialog}, menu={_openMenu}, tool={_tool})");
         if (_dialog is not null) _dialog = null;
         else if (_openMenu is not null) _openMenu = null;
+        else if (_moveStep is not null) _ = CancelProcess();
         else if (_tool != "cross") _ = SetTool("cross");
         else return;
         StateHasChanged();
