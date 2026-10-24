@@ -27,6 +27,10 @@ else
     <p class="data-intro" role="status">@Status</p>
 }
 <div class="settings-actions">
+    @if (ExportedPath is not null)
+    {
+        <button type="button" class="chip" disabled="@Busy" @onclick="OnOpenLocation">Open location</button>
+    }
     <button type="button" class="chip" disabled="@(Busy || _selected is null)" @onclick="() => OnExport.InvokeAsync(_selected!.Value)">Export PDF…</button>
     <button type="button" class="chip active" disabled="@(Busy || _selected is null)" @onclick="() => OnPrint.InvokeAsync(_selected!.Value)">Print…</button>
 </div>
@@ -38,6 +42,9 @@ else
     [Parameter] public string? Status { get; set; }
     [Parameter] public EventCallback<int> OnPrint { get; set; }
     [Parameter] public EventCallback<int> OnExport { get; set; }
+    // The last exported PDF; shows the Open location button.
+    [Parameter] public string? ExportedPath { get; set; }
+    [Parameter] public EventCallback OnOpenLocation { get; set; }
 
     private int? _selected;
 

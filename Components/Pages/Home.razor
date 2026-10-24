@@ -21,7 +21,7 @@
 
 <Modal Open="@(_dialog == "print")" Title="Print / Export" Width="460" OnClose="CloseDialog">
     <PrintDialog Pages="@(_pages?.Pages ?? [])" Busy="_printing" Error="@_printError" Status="@_printStatus"
-                 OnPrint="PrintPage" OnExport="ExportPage" />
+                 OnPrint="PrintPage" OnExport="ExportPage" ExportedPath="@_exportedPath" OnOpenLocation="OpenExportLocation" />
 </Modal>
 
 <Modal Open="@(_dialog == "guide")" Title="AJxCAD User guide" Width="560" OnClose="CloseDialog">
@@ -945,6 +945,7 @@
     private bool _printing;
     private string? _printError;
     private string? _printStatus;
+    private string? _exportedPath;
 
     private async Task OpenPrint()
     {
@@ -953,6 +954,7 @@
         _pages = await _cad.InvokeAsync<PagesState>("getPages");
         _printError = null;
         _printStatus = null;
+        _exportedPath = null;
         await OpenDialog("print");
     }
 
@@ -978,6 +980,7 @@
         _printing = true;
         _printError = null;
         _printStatus = null;
+        _exportedPath = null;
         try
         {
             _printStatus = await action();
@@ -1014,11 +1017,26 @@
         if (result.IsSuccessful)
         {
             Log("action", $"exported {result.FilePath}");
+            _exportedPath = result.FilePath;
             return $"Saved {result.FilePath}";
         }
         if (result.Exception is not null and not OperationCanceledException) throw result.Exception;
         return null;
     });
+
+    private void OpenExportLocation()
+    {
+        if (_exportedPath is null) return;
+        try
+        {
+            PrintService.RevealFile(_exportedPath);
+        }
+        catch (Exception ex)
+        {
+            _printError = ex.Message;
+            Log("error", $"open location failed: {ex.Message}");
+        }
+    }
 
     private async Task SetAppearance(string appearance)
     {
