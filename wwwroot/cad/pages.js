@@ -85,8 +85,9 @@ export function nextPageName() {
 }
 
 // Draws page frames with their name and scale above the top-left corner.
-// `style(page)` returns "normal", "selected" or "ghost".
-export function drawPages(g, pages, view, style = () => "normal") {
+// `style(page)` returns "normal", "selected" or "ghost". Label boxes (CSS px) are pushed to `labels`
+// when given, so clicks on the text can be hit-tested.
+export function drawPages(g, pages, view, style = () => "normal", labels = null) {
     const d = view.dpr;
     const ink = view.paper ? "0,0,0" : "150,255,190";
     g.font = `${11 * d}px system-ui, -apple-system, sans-serif`;
@@ -122,7 +123,9 @@ export function drawPages(g, pages, view, style = () => "normal") {
 
         g.fillStyle = `rgba(${ink},${kind === "normal" ? 0.75 : 1})`;
         const paper = paperOf(page.paper);
-        g.fillText(`${page.name} · ${paper.label}${page.landscape ? " landscape" : ""} · ${scaleLabel(page.scale)}`, x, y - 4 * d);
+        const text = `${page.name} · ${paper.label}${page.landscape ? " landscape" : ""} · ${scaleLabel(page.scale)}`;
+        g.fillText(text, x, y - 4 * d);
+        labels?.push({ id: page.id, x: x / d, y: y / d - 18, w: g.measureText(text).width / d, h: 15 });
     }
     g.textBaseline = "alphabetic";
 }

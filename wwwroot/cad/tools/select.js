@@ -350,6 +350,11 @@ export function createSelectTool(env) {
             return !process && !drag;
         },
 
+        // True when a click at the point would pick a corner, line or split handle.
+        hits(sx, sy) {
+            return !!(findHandle(sx, sy) || findTarget(sx, sy));
+        },
+
         startMove() {
             if (!selected.size) return false;
             drag = null;

@@ -285,3 +285,27 @@ test("print preview follows the selected page's draft and ends when the selectio
     tool.select(id);
     assert.equal(last().preview, false, "a new selection starts without preview");
 });
+
+test("edgeAt finds a page by its border or label, not its inside, and grab selects and drags it", () => {
+    // A4 at 1:1 centred on (200, 300): x 95..305, y 151.5..448.5
+    const { tool, last, items } = setup([{ name: "P", paper: "A4", scale: 1, x: 200, y: 300 }, { name: "Off", x: 900, y: 300, locked: 1 }]);
+    const id = items()[0].id;
+    assert.equal(tool.edgeAt(97, 300), id);
+    assert.equal(tool.edgeAt(200, 447), id);
+    assert.equal(tool.edgeAt(200, 300), null);
+    assert.equal(tool.edgeAt(60, 300), null);
+    assert.equal(tool.edgeAt(900 - 105, 300), null, "No select pages are skipped");
+
+    const g = { set font(v) {}, set textBaseline(v) {}, set fillStyle(v) {}, set strokeStyle(v) {}, set lineWidth(v) {},
+        set shadowColor(v) {}, set shadowBlur(v) {}, setLineDash() {}, fillRect() {}, strokeRect() {}, fillText() {},
+        measureText: t => ({ width: t.length * 6 }) };
+    tool.drawSaved(g, { dpr: 1, paper: false, width: 2000, height: 2000, toScreen: (x, y) => ({ x, y: 600 - y }) });
+    // The label sits above the frame's top-left corner as drawn (screen y = 600 - 448.5).
+    assert.equal(tool.edgeAt(120, 600 - 448.5 - 10), id);
+
+    tool.grab(id, { sx: 97, sy: 300 });
+    assert.equal(last().selectedId, id);
+    tool.pointerMove({ sx: 127, sy: 300 });
+    tool.pointerUp({});
+    assert.equal(items()[0].x, 230);
+});

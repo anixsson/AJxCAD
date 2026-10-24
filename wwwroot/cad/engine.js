@@ -401,8 +401,13 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
             const event = toolEvent(e);
             const measurement = toolId === "select" && !event.shift && tools.select.canOpenMeasurement()
                 ? tools.ruler.hitText(event.sx, event.sy) : null;
+            const page = toolId === "select" && measurement === null && !event.shift && tools.select.canOpenMeasurement()
+                && !tools.select.hits(event.sx, event.sy) ? tools.page.edgeAt(event.sx, event.sy) : null;
             if (measurement !== null) {
                 editMeasurement(measurement);
+            } else if (page !== null) {
+                setTool("page");
+                tools.page.grab(page, event);
             } else {
                 currentTool().pointerDown?.(event);
             }

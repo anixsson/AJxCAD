@@ -3,6 +3,8 @@
 //  - Click a visible frame to select it, drag to move it. Click empty space to clear the selection.
 //  - The selected page's information box edits a draft (name, paper, orientation, scale) that previews
 //    live on the board; Save stores it (undoable), Cancel or Esc goes back to the stored page.
+//  - With the Select tool, clicking a frame's border or label (where no line or corner is) switches here,
+//    selects that page and starts dragging it.
 //  - Print preview (selected page) switches to the Paper look and draws measurement text and label boxes
 //    at the size they will print on that page, following the draft's scale and text size live.
 
@@ -32,6 +34,7 @@ export function createPageTool(env) {
     let template = null; // paper, orientation and scale for the next new page
     let revision = 0; // bumps whenever the draft is reset from the stored page, so inputs know to reload
     let preview = false; // print preview of the selected page
+    let labels = []; // label boxes from the last drawSaved, in CSS px
 
     const items = () => bucket(PAGES).items;
     const find = id => items().find(p => p.id === id) ?? null;
@@ -104,6 +107,31 @@ export function createPageTool(env) {
             if (w.x >= r.left - reach && w.x <= r.right + reach && w.y >= r.bottom - reach && w.y <= r.top + reach) return page;
         }
         return null;
+    }
+
+    // Only the frame's border or its label, so a click inside a page still reaches the drawing (Select tool).
+    function hitEdge(sx, sy) {
+        const list = items();
+        for (let i = list.length - 1; i >= 0; i--) {
+            const page = list[i];
+            if (!isVisible(page) || isLocked(page)) continue;
+            const r = pageRect(shown(page));
+            const a = env.toScreen(r.left, r.top), b = env.toScreen(r.right, r.bottom);
+            const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+            const inX = sx >= x0 - HIT_PX && sx <= x1 + HIT_PX, inY = sy >= y0 - HIT_PX && sy <= y1 + HIT_PX;
+            const nearX = Math.abs(sx - x0) <= HIT_PX || Math.abs(sx - x1) <= HIT_PX;
+            const nearY = Math.abs(sy - y0) <= HIT_PX || Math.abs(sy - y1) <= HIT_PX;
+            if ((nearX && inY) || (nearY && inX)) return page;
+            const l = labels.find(l => l.id === page.id);
+            if (l && sx >= l.x && sx <= l.x + l.w && sy >= l.y && sy <= l.y + l.h) return page;
+        }
+        return null;
+    }
+
+    function grab(page, e) {
+        if (page.id !== selectedId) { select(page.id); changed(); }
+        drag = { page, grab: env.snap(e.sx, e.sy), x: page.x, y: page.y, moved: false };
+        if (e.pointerId !== undefined) env.capture?.(e.pointerId);
     }
 
     // First page: A4 portrait at a 1-2-5 scale that covers about half of the view.
@@ -278,10 +306,19 @@ export function createPageTool(env) {
                 if (selectedId !== null) { select(null); changed(); }
                 return;
             }
-            if (page.id !== selectedId) { select(page.id); changed(); }
-            const grab = env.snap(e.sx, e.sy);
-            drag = { page, grab, x: page.x, y: page.y, moved: false };
-            if (e.pointerId !== undefined) env.capture?.(e.pointerId);
+            grab(page, e);
+        },
+
+        // Select tool: the page whose border or label is at the point (CSS px), or null.
+        edgeAt(sx, sy) {
+            return hitEdge(sx, sy)?.id ?? null;
+        },
+
+        // Selects the page and starts dragging it, as if it had been clicked with this tool.
+        grab(id, e) {
+            const page = find(id);
+            if (!page) throw new Error(`Unknown page: ${id}`);
+            grab(page, e);
         },
 
         pointerMove(e) {
@@ -320,7 +357,8 @@ export function createPageTool(env) {
         // Stored frames, drawn under the drawing with any tool. A hidden page still shows dashed while selected.
         drawSaved(g, view) {
             const list = items().filter(p => isVisible(p) || p.id === selectedId).map(shown);
-            drawPages(g, list, view, p => (p.id !== selectedId ? "normal" : isVisible(p) ? "selected" : "ghost"));
+            labels = [];
+            drawPages(g, list, view, p => (p.id !== selectedId ? "normal" : isVisible(p) ? "selected" : "ghost"), labels);
         },
 
         draw(g, view) {
