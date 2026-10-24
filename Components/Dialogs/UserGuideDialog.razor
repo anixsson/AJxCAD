@@ -47,6 +47,12 @@
             ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
             ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk")
         ]),
+        new("View settings", "", "File > App settings offers saved zoom and grid options. These settings belong to this computer, not the project, and do not change printing or PDF output.",
+        [
+            ("Extended zoom range", "Enable to widen the normal 1:1000–100:1 view limits to 1:10000–1000:1. The current limits are shown below the checkbox. Disabling clamps the current view back within normal limits; drawing sizes and print page scales stay unchanged"),
+            ("Grid color", "Choose a color for minor and major grid lines. Major lines are stronger; origin axes keep their theme colors. The custom color applies in all appearances, including Paper"),
+            ("Use theme default", "Remove the custom grid color and restore the current appearance's default colors. The grid is never printed or exported")
+        ]),
         new("Optimize view", "", "When zoomed far out, the optimizer skips objects smaller than 3 screen pixels to reduce drawing work. It never deletes or changes drawing data. Fixed-size Point markers and page frames stay visible.",
         [
             ("Threshold", "Uses line length, circle diameter, rectangle diagonal, text font height or measurement extent, including offset dimensions"),
@@ -172,6 +178,8 @@
             ("Print preview", "In the page information box, Print preview shows the Paper look with measurement text and label boxes at the size they print on this page. The Text size slider (50–400%) makes them larger or smaller in print and is saved with the page"),
             ("No select", "Check No select in the Pages panel so the frame cannot be clicked or dragged on the board; clicks go through to what is underneath. You can still select the page by its name in the panel to edit it"),
             ("Information box", "Name the page, choose the paper size, Portrait or Landscape, and type a scale factor or pick a preset. The board previews your edits"),
+            ("Page components", "One compass and one scale ruler per page. Add compass: click inside the page for its centre, then click to point north. Add scale ruler: click inside the page. Move repeats placement; Esc cancels placement. Each has a 25-400% size slider including text and a Remove button. Save applies edits; Cancel discards them"),
+            ("Scale ruler", "Shows a real drawing distance in project units and the page print ratio. The bar and labels follow page scale and ruler size. Print at actual size / 100% to preserve the ratio. Components move with their page, hide with it, are deleted with it, and appear in preview, print and PDF"),
             ("Save or Space", "Store the edits. Cancel or Esc goes back to the saved page. Selecting another page discards unsaved edits"),
             ("Zoom to", "Fit the selected page in the view"),
             ("Delete", "Remove the page frame; Cmd/Ctrl + Z restores it"),

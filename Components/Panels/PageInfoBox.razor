@@ -61,6 +61,34 @@
         <dt>Centre</dt><dd>x @Draft.X</dd><dd>y @Draft.Y</dd>
     </dl>
 
+    <div class="measure-caption page-scale-caption">Page components · one of each per page</div>
+    @foreach (var (kind, label, component) in new[] { ("compass", "compass", Draft.Compass), ("ruler", "scale ruler", Draft.Ruler) })
+    {
+        <div class="unit-row" role="group" aria-label="@label">
+            <button type="button" class="chip" disabled="@(!Draft.Visible || Draft.Locked || ComponentPlacement is not null)"
+                    @onclick="() => OnComponent.InvokeAsync(kind)">@(component is null ? $"Add {label}" : $"Move {label}")</button>
+            @if (component is not null)
+            {
+                <input class="page-text-size" type="range" min="25" max="400" step="25" aria-label="@($"{label} size")"
+                       value="@Num(component.Size)" disabled="@(ComponentPlacement is not null)"
+                       @oninput="e => SetComponentSize(kind, component, e)" />
+                <span class="unit-caption">@Num(component.Size)%</span>
+                <button type="button" class="chip danger" disabled="@(ComponentPlacement is not null)"
+                        @onclick="() => Set(kind, null)">Remove</button>
+            }
+        </div>
+    }
+    @if (ComponentPlacement is not null)
+    {
+        <p class="measure-caption" role="status">@PlacementHint</p>
+        <button type="button" class="chip" @onclick="OnCancel">Cancel placement</button>
+    }
+    else
+    {
+        <p class="measure-caption">Compass: click inside the page, then click to point north. Ruler: click inside the page.
+            Sizes include labels. Save keeps the components; Cancel discards edits.</p>
+    }
+
     @if (Error is not null)
     {
         <p class="test-error" role="alert">@Error</p>
@@ -70,9 +98,9 @@
         <button type="button" class="chip danger" title="Delete this page frame (undo restores it)" @onclick="OnDelete">Delete</button>
         <button type="button" class="chip" title="Fit this page in the view" @onclick="OnZoom">Zoom to</button>
         <span class="page-actions-gap"></span>
-        <button type="button" class="chip" disabled="@(!Dirty)" @onclick="OnCancel">Cancel</button>
+        <button type="button" class="chip" disabled="@(!Dirty && ComponentPlacement is null)" @onclick="OnCancel">Cancel</button>
         <button type="button" class="chip active default-action" data-default-action
-                disabled="@(!Dirty || string.IsNullOrWhiteSpace(_nameText))" @onclick="OnSave">Save<span class="key-hint">Space</span></button>
+                disabled="@(!Dirty || ComponentPlacement is not null || string.IsNullOrWhiteSpace(_nameText))" @onclick="OnSave">Save<span class="key-hint">Space</span></button>
     </div>
 </section>
 
@@ -83,9 +111,11 @@
     [Parameter, EditorRequired] public PaperOption[] Papers { get; set; } = [];
     [Parameter] public bool Dirty { get; set; }
     [Parameter] public bool Preview { get; set; }
+    [Parameter] public string? ComponentPlacement { get; set; }
+    [Parameter] public EventCallback<string> OnComponent { get; set; }
     [Parameter] public EventCallback<bool> OnPreview { get; set; }
     [Parameter] public string? Error { get; set; }
-    [Parameter] public EventCallback<Dictionary<string, object>> OnChange { get; set; }
+    [Parameter] public EventCallback<Dictionary<string, object?>> OnChange { get; set; }
     [Parameter] public EventCallback<string> OnInvalid { get; set; }
     [Parameter] public EventCallback OnSave { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
@@ -116,7 +146,20 @@
 
     private const string NameKey = "name", PaperKey = "paper", LandscapeKey = "landscape", ScaleKey = "scale", TextSizeKey = "textSize";
 
-    private Task Set(string key, object value) => OnChange.InvokeAsync(new Dictionary<string, object> { [key] = value });
+    private Task Set(string key, object? value) => OnChange.InvokeAsync(new Dictionary<string, object?> { [key] = value });
+
+    private string PlacementHint => ComponentPlacement switch
+    {
+        "compass-direction" => "Click away from the compass centre to set north. Esc cancels placement.",
+        "compass-position" => "Click inside the selected page to place the compass centre. Esc cancels placement.",
+        _ => "Click inside the selected page to place the scale ruler. Esc cancels placement."
+    };
+
+    private Task SetComponentSize(string kind, PageComponent component, ChangeEventArgs e) =>
+        double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var size)
+            && double.IsFinite(size) && size is >= 25 and <= 400
+            ? Set(kind, component with { Size = size })
+            : OnInvalid.InvokeAsync("Component size must be between 25% and 400%.");
 
     private Task SetName(ChangeEventArgs e)
     {

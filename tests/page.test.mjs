@@ -132,7 +132,7 @@ test("the draft previews changes; Save stores them and Cancel restores the page"
 
     tool.setDraft({ name: "  Plan  ", landscape: true, scale: 20 });
     tool.save();
-    assert.deepEqual({ ...items()[0] }, { id, name: "Plan", paper: "A4", landscape: 1, scale: 20, x: 0, y: 0, visible: 1, locked: 0, textSize: 100 });
+    assert.deepEqual({ ...items()[0] }, { id, name: "Plan", paper: "A4", landscape: 1, scale: 20, x: 0, y: 0, visible: 1, locked: 0, textSize: 100, compass: null, ruler: null });
     assert.equal(last().dirty, false);
     assert.equal(last().pages[0].summary, "A4 landscape · 1:20");
 
@@ -201,11 +201,11 @@ test("pages are saved and loaded with the project", () => {
     const text = serialize();
     const doc = JSON.parse(text);
     const entry = doc.buckets.find(b => b.name === PAGES);
-    assert.deepEqual(entry.fields, ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked", "textSize"]);
+    assert.deepEqual(entry.fields, ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked", "textSize", "compass", "ruler"]);
     bucket(PAGES).items = [];
     deserialize(text);
     const [page] = bucket(PAGES).items;
-    assert.deepEqual({ ...page, id: 0 }, { id: 0, name: "Sheet", paper: "Tabloid", landscape: 1, scale: 25, x: 12.5, y: -40, visible: 0, locked: 1, textSize: 150 });
+    assert.deepEqual({ ...page, id: 0 }, { id: 0, name: "Sheet", paper: "Tabloid", landscape: 1, scale: 25, x: 12.5, y: -40, visible: 0, locked: 1, textSize: 150, compass: null, ruler: null });
 });
 
 test("No select pages cannot be clicked or dragged on the board but stay editable from the panel", () => {

@@ -58,6 +58,12 @@ Click a frame to select it and drag it anywhere on the board. With the Select to
 
 Under **Print**, the **Text size** slider (50–400%) sets how large measurement text, angle arcs, area boxes and points print on that page; it is saved with the page. Drawing text keeps its font size in world millimetres and scales with the drawing when printed or exported; this slider does not affect it. **Print preview** switches to the Paper look and draws measurements on the board at the size they will print on the selected page, following the slider and the page scale as you change them. Preview ends when you deselect the page or leave the Page tool.
 
+The page information box also has **Page components**, with at most one **compass** and one **scale ruler** per page. Choose **Add compass**, click inside the selected frame for its centre, then click again to point north. Choose **Add scale ruler** and click inside the frame to place it. **Move compass** repeats both clicks to move it or change north; **Move scale ruler** repositions the ruler. Esc or **Cancel placement** abandons a placement without changing existing components. Components cannot be placed on hidden or No select pages.
+
+Each component has its own **25–400%** size slider, including its text, and a **Remove** button. **Save** applies component edits with the page; **Cancel** discards them, and saved edits are undoable. They are stored with their page in the project, move with its frame, hide when the page is hidden, and are deleted with it. Components are clipped to their own sheet and included in print preview, printing and PDF export. Their sizes are paper sizes, independent of the measurement text slider.
+
+The ruler shows zero, a real drawing distance in the project's measurement units, and the page's print ratio (for example, **Scale 1:50**). Its bar and labels update when the page scale or ruler size changes; changing the ruler size never changes the drawing scale. A 1 m drawing line printed at 1:50 is 20 mm long on paper, matching 1 m on the ruler. Print at **100% / actual size** to preserve the numeric ratio; fitting the PDF to a different paper size changes that ratio, though the graphic ruler still scales with the drawing.
+
 ## Printing and PDF
 
 Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the PDF in your default PDF app and opens its print dialog (if it only opens the PDF, print from that app), and **Export PDF…** saves a PDF where you choose. After saving, click the file name to open the PDF, or **Open location** to show it in Finder or Explorer. The output is a vector PDF of the drawing lines, shapes, text and saved measurements inside the page frame, on the page's paper size at its scale. Measurements print in the Paper look and follow their own **Lengths**, **Angles** and **Area** settings. The grid, unsaved measurements are not printed.
@@ -87,6 +93,10 @@ An **Optimize view** panel appears when any visible-layer objects fall below the
 Save and reopen drawings as `.ajx` project files. A project keeps its drawing data, title, measurement settings, reference unit, and current view together, so you can pick up where you left off.
 
 ## A workspace that suits you
+
+In **File > App settings**, enable **Extended zoom range** to widen the view from the normal **1:1000–100:1** limits to **1:10000–1000:1**. The current limits are displayed below the checkbox. Turning it off clamps the current view to the normal range. This affects navigation only, not drawing sizes or print page scales. The choice is remembered on this computer.
+
+Use **Grid color** to choose one color for minor and major grid lines; major lines use stronger opacity. **Use theme default** restores the normal colors for the current appearance. A custom color is remembered across launches and appearance changes, including Paper. Origin axes are unchanged, and the grid is never printed or exported.
 
 Under **Debug > Test data**, expand the Line, Circle, Rectangle, Text, Point or Measurement debug accordion to add 1–10,000 items on the active layer. Each section has its own count and spacing controls. Spacing is the approximate distance between successive centres in screen pixels, not a minimum gap. Generated geometry stays inside a 48 px viewport inset. Text varies font families and styles; measurements alternate triangular areas and two-point CAD dimensions. Existing data is kept, and one Undo removes the whole added batch.
 

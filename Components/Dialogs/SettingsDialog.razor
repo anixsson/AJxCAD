@@ -1,5 +1,5 @@
 <div class="settings">
-    <p class="data-intro">These settings belong to the app. Appearance is kept on this computer; developer tools reset at launch. Project settings are in File → Project settings.</p>
+    <p class="data-intro">These settings belong to the app. Appearance, zoom range and grid color are kept on this computer; developer tools reset at launch. Project settings are in File → Project settings.</p>
 
     <h3>Appearance</h3>
     <div class="mode-options">
@@ -16,6 +16,23 @@
             <span>White paper, black ink and monochrome controls. No glows or blur.</span>
         </button>
     </div>
+    <h3>Zoom and scale</h3>
+    <label class="setting-row setting-check">
+        <input type="checkbox" checked="@ExtendedZoom" @onchange="e => ExtendedZoomChanged.InvokeAsync(e.Value is true)" />
+        <span class="setting-checkmark" aria-hidden="true"></span>
+        <span>Extended zoom range</span>
+    </label>
+    <p class="data-intro">Current limits: @(ExtendedZoom ? "1:10000 zoom-out to 1000:1 zoom-in" : "1:1000 zoom-out to 100:1 zoom-in"). Turning this off brings the current view back within the normal limits. Drawing sizes and print page scales are unchanged.</p>
+    <h3>Grid color</h3>
+    <label class="setting-row">
+        <span>Minor and major grid lines</span>
+        <input type="color" aria-label="Grid color" value="@(GridColor ?? (Appearance == "paper" ? "#000000" : "#a98cff"))"
+               @onchange="e => GridColorChanged.InvokeAsync(e.Value?.ToString())" />
+    </label>
+    <div class="settings-actions">
+        <button type="button" class="chip" disabled="@(GridColor is null)" @onclick="() => GridColorChanged.InvokeAsync((string?)null)">Use theme default</button>
+    </div>
+    <p class="data-intro">@(GridColor is null ? "Using the appearance theme's grid colors." : $"Custom grid color: {GridColor}.") Major lines are stronger; origin axes are unchanged. The grid is never printed or exported.</p>
     <h3>Developer tools</h3>
     <label class="setting-row setting-check">
         <input type="checkbox" @bind="ShowDebugMenu" @bind:after="UpdateDebugMenu" />
@@ -28,6 +45,10 @@
 @code {
     [Parameter] public string Appearance { get; set; } = "full";
     [Parameter] public EventCallback<string> AppearanceChanged { get; set; }
+    [Parameter] public bool ExtendedZoom { get; set; }
+    [Parameter] public EventCallback<bool> ExtendedZoomChanged { get; set; }
+    [Parameter] public string? GridColor { get; set; }
+    [Parameter] public EventCallback<string?> GridColorChanged { get; set; }
     [Parameter] public bool ShowDebugMenu { get; set; }
     [Parameter] public EventCallback<bool> ShowDebugMenuChanged { get; set; }
 

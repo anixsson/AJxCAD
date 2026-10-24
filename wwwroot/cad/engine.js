@@ -31,6 +31,8 @@ let effects = true; // false = performance mode: no glows or blurs on the canvas
 let paperTheme = false;
 let optimizerEnabled = true;
 let optimizerReport = "";
+let extendedZoom = false;
+let gridColor = null;
 const handlers = [];
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
@@ -40,6 +42,22 @@ let toolId = "cross";
 
 const toWorld = (sx, sy) => ({ x: (sx - originX) / scale, y: -(sy - originY) / scale });
 const toScreen = (x, y) => ({ x: originX + x * scale, y: originY - y * scale });
+
+const clampScale = value => Math.min(oneToOne * (extendedZoom ? 1000 : 100),
+    Math.max(oneToOne / (extendedZoom ? 10000 : 1000), value));
+
+export function setExtendedZoom(enabled) {
+    if (typeof enabled !== "boolean") throw new Error("Extended zoom must be a checkbox value.");
+    extendedZoom = enabled;
+    zoomAt(1, el.clientWidth / 2, el.clientHeight / 2);
+}
+
+export function setGridColor(color) {
+    if (color !== null && (typeof color !== "string" || !/^#[0-9a-f]{6}$/i.test(color)))
+        throw new Error("Grid color must be a six-digit hexadecimal color or null for the theme default.");
+    gridColor = color;
+    draw();
+}
 
 function screenItems(name) {
     const items = visibleItems(name);
@@ -309,6 +327,7 @@ export function selectPage(id) {
     tools.page.select(id);
 }
 export const setPageDraft = changes => tools.page.setDraft(changes);
+export const startPageComponent = kind => tools.page.startComponent(kind);
 export const savePage = () => tools.page.save();
 export const setPagePreview = on => tools.page.setPreview(on);
 export const setPageVisible = (id, on) => tools.page.setVisible(id, on);
@@ -330,7 +349,7 @@ export function getPagePdf(id) {
 export function zoomToPage(id) {
     const r = tools.page.rectOf(id);
     const fit = Math.min(el.clientWidth / r.w, el.clientHeight / r.h) * 0.8;
-    const target = Math.min(oneToOne * 100, Math.max(oneToOne / 1000, fit));
+    const target = clampScale(fit);
     const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
     animateView(target, el.clientWidth / 2 - cx * target, el.clientHeight / 2 + cy * target);
 }
@@ -372,8 +391,7 @@ function notify() {
 
 function zoomAt(factor, x, y) {
     cancelAnimation();
-    const min = oneToOne / 1000, max = oneToOne * 100;
-    const next = Math.min(max, Math.max(min, scale * factor));
+    const next = clampScale(scale * factor);
     const applied = next / scale;
     originX = x - (x - originX) * applied;
     originY = y - (y - originY) * applied;
@@ -422,7 +440,9 @@ function render() {
         const first = Math.ceil((0 - origin) / stepPx);
         const last = Math.floor((length - origin) / stepPx);
         const width = major ? majorW : minorW;
-        ctx.fillStyle = paperTheme
+        ctx.fillStyle = gridColor
+            ? `${gridColor}${major ? "5c" : "26"}`
+            : paperTheme
             ? (major ? "rgba(0,0,0,0.24)" : "rgba(0,0,0,0.09)")
             : (major ? "rgba(201,182,255,0.36)" : "rgba(169,140,255,0.15)");
         for (let i = first; i <= last; i++) {
@@ -467,6 +487,7 @@ function render() {
     tools.page.drawSaved(ctx, view);
     for (const geo of geometries) geo.draw(ctx, screenItems(geo.bucket).filter(item => !preview || layerPrintable(item)), view);
     tools.measurement.drawSaved(ctx, view);
+    tools.page.drawComponents(ctx, view);
     currentTool().draw?.(ctx, view);
 
     // Only tell Blazor when the "origin is centred" state flips, not on every pan frame.
@@ -487,6 +508,8 @@ function textAt(sx, sy) {
 export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     optimizerEnabled = true;
     optimizerReport = "";
+    extendedZoom = false;
+    gridColor = null;
     normalizeLayers();
     el = workspace;
     canvas = canvasEl;
@@ -659,7 +682,7 @@ function stepZoom(dir) {
     const onGrid = Math.abs(q - r) < 1e-6;
     const tq = onGrid ? r + dir : (dir > 0 ? Math.ceil(q) : Math.floor(q));
     const tp = tq * STEP;
-    const target = Math.min(100, Math.max(0.001, tp >= 0 ? 1 + tp : 1 / (1 - tp)));
+    const target = clampScale((tp >= 0 ? 1 + tp : 1 / (1 - tp)) * oneToOne) / oneToOne;
     if (Math.abs(target - z) > 1e-9) zoomAt(target / z, el.clientWidth / 2, el.clientHeight / 2);
 }
 
@@ -725,6 +748,8 @@ export function center() {
 
 // Zooms to `target` around the middle of the screen.
 export function setScale(target) {
+    if (!Number.isFinite(target) || target <= 0) throw new Error("View scale must be positive and finite.");
+    target = clampScale(target);
     const cx = el.clientWidth / 2, cy = el.clientHeight / 2;
     const k = target / scale;
     animateView(target, cx - (cx - originX) * k, cy - (cy - originY) * k);
@@ -744,7 +769,7 @@ export const getDataText = () => { captureView(); return serialize(); };
 export function restoreView() {
     if (getProject().viewZoom === undefined) return;
     const v = getView();
-    const s = v.zoom * oneToOne;
+    const s = clampScale(v.zoom * oneToOne);
     animateView(s, el.clientWidth / 2 - v.cx * s, el.clientHeight / 2 + v.cy * s, 600);
 }
 

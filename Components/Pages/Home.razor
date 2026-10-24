@@ -8,7 +8,8 @@
 </div>
 
 <Modal Open="@(_dialog == "settings")" Title="App settings" Width="460" OnClose="CloseDialog">
-    <SettingsDialog Appearance="_appearance" AppearanceChanged="SetAppearance" ShowDebugMenu="_showDebugMenu" ShowDebugMenuChanged="SetShowDebugMenu" />
+    <SettingsDialog Appearance="_appearance" AppearanceChanged="SetAppearance" ShowDebugMenu="_showDebugMenu" ShowDebugMenuChanged="SetShowDebugMenu"
+                    ExtendedZoom="_extendedZoom" ExtendedZoomChanged="SetExtendedZoom" GridColor="_gridColor" GridColorChanged="SetGridColor" />
 </Modal>
 
 <Modal Open="@(_dialog == "project")" Title="Project settings" Width="460" OnClose="CloseDialog">
@@ -410,6 +411,7 @@
         else if (pages.Draft is { } draft)
         {
             <PageInfoBox Draft="draft" Papers="pages.Papers" Dirty="pages.Dirty" Error="@_pageError"
+                         ComponentPlacement="@pages.ComponentPlacement" OnComponent="StartPageComponent"
                          Preview="pages.Preview" OnPreview="SetPagePreview"
                          OnChange="SetPageDraft" OnInvalid="ShowPageError" OnSave="SavePage" OnCancel="CancelPage"
                          OnDelete="() => DeletePage(draft.Id)" OnZoom="() => ZoomToPage(draft.Id)" />
@@ -1173,7 +1175,8 @@
     private Task SelectPage(int id) => PageCall("selectPage", id);
     private Task SetPageVisible((int Id, bool Visible) change) => PageCall("setPageVisible", change.Id, change.Visible);
     private Task SetPageLocked((int Id, bool Locked) change) => PageCall("setPageLocked", change.Id, change.Locked);
-    private Task SetPageDraft(Dictionary<string, object> changes) => PageCall("setPageDraft", changes);
+    private Task SetPageDraft(Dictionary<string, object?> changes) => PageCall("setPageDraft", changes);
+    private Task StartPageComponent(string kind) => PageCall("startPageComponent", kind);
     private Task SavePage() => PageCall("savePage");
     private Task SetPagePreview(bool on) => PageCall("setPagePreview", on);
     private Task DeletePage(int id) => PageCall("deletePage", id);
@@ -1377,6 +1380,26 @@
             _printError = ex.Message;
             Log("error", $"{what} failed: {ex.Message}");
         }
+    }
+
+    private bool _extendedZoom = Preferences.Default.Get("extendedZoom", false);
+    private string? _gridColor = Preferences.Default.ContainsKey("gridColor") ? Preferences.Default.Get("gridColor", "") : null;
+
+    private async Task SetExtendedZoom(bool enabled)
+    {
+        if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+        await _cad.InvokeVoidAsync("setExtendedZoom", enabled);
+        _extendedZoom = enabled;
+        Preferences.Default.Set("extendedZoom", enabled);
+    }
+
+    private async Task SetGridColor(string? color)
+    {
+        if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+        await _cad.InvokeVoidAsync("setGridColor", color);
+        _gridColor = color;
+        if (color is null) Preferences.Default.Remove("gridColor");
+        else Preferences.Default.Set("gridColor", color);
     }
 
     private async Task SetAppearance(string appearance)
@@ -1592,6 +1615,8 @@
         _self = DotNetObjectReference.Create(this);
         _cad = await JS.InvokeAsync<IJSObjectReference>("import", "./cad/engine.js");
         await _cad.InvokeVoidAsync("init", _workspace, _canvas, _self, ReferencePx, _unit.Mm);
+        await _cad.InvokeVoidAsync("setExtendedZoom", _extendedZoom);
+        await _cad.InvokeVoidAsync("setGridColor", _gridColor);
         await ApplyAppearance();
         await SyncProject();
         _pages = await _cad.InvokeAsync<PagesState>("getPages");

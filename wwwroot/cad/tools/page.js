@@ -10,13 +10,15 @@
 
 import { bucket, checkpoint } from "../store.js";
 import { PAGES, PAPERS, addPage, drawPages, isLocked, isVisible, nextPageName, pageRect, paperSize, paperOf, scaleLabel, validScale, MIN_SCALE, MAX_SCALE, textSizeOf, validTextSize, MIN_TEXT_SIZE, MAX_TEXT_SIZE } from "../pages.js";
+import { COMPONENTS, componentAt, validComponent, drawPageComponents } from "../page-components.js";
 
 const HIT_PX = 6;
 const MAX_NAME = 60;
 const FIT = 0.5; // a new first page covers about half the view
 
-const DRAFT_FIELDS = ["name", "paper", "landscape", "scale", "textSize"];
-const pick = page => Object.fromEntries(DRAFT_FIELDS.map(f => [f, f === "textSize" ? textSizeOf(page) : page[f]]));
+const DRAFT_FIELDS = ["name", "paper", "landscape", "scale", "textSize", ...COMPONENTS];
+const pick = page => structuredClone(Object.fromEntries(DRAFT_FIELDS.map(f =>
+    [f, f === "textSize" ? textSizeOf(page) : COMPONENTS.includes(f) ? page[f] ?? null : page[f]])));
 
 // Largest 1-2-5 value (x 10^n) that is <= v.
 function niceAtMost(v) {
@@ -35,6 +37,7 @@ export function createPageTool(env) {
     let revision = 0; // bumps whenever the draft is reset from the stored page, so inputs know to reload
     let preview = false; // print preview of the selected page
     let labels = []; // label boxes from the last drawSaved, in CSS px
+    let componentPlacement = null;
 
     const items = () => bucket(PAGES).items;
     const find = id => items().find(p => p.id === id) ?? null;
@@ -45,7 +48,7 @@ export function createPageTool(env) {
         const page = selected();
         if (!page || !draft) return false;
         const stored = pick(page);
-        return DRAFT_FIELDS.some(f => stored[f] !== draft[f]);
+        return DRAFT_FIELDS.some(f => JSON.stringify(stored[f]) !== JSON.stringify(draft[f]));
     };
     const signed = v => (v < 0 ? "−" : "") + env.formatLength(Math.abs(v));
 
@@ -61,7 +64,8 @@ export function createPageTool(env) {
                 textSize: draft.textSize, scaleLabel: scaleLabel(draft.scale),
                 paperSize: `${+paper.w.toFixed(1)} × ${+paper.h.toFixed(1)} mm`,
                 width: env.formatLength(rect.w), height: env.formatLength(rect.h),
-                x: signed(page.x), y: signed(page.y), visible: isVisible(page), locked: isLocked(page)
+                x: signed(page.x), y: signed(page.y), visible: isVisible(page), locked: isLocked(page),
+                compass: draft.compass, ruler: draft.ruler
             };
         }
         return {
@@ -71,6 +75,7 @@ export function createPageTool(env) {
             })),
             selectedId: page ? page.id : null,
             placing,
+            componentPlacement: componentPlacement ? `${componentPlacement.kind}${componentPlacement.anchor ? "-direction" : "-position"}` : null,
             preview: preview && !!page,
             dirty: dirty(),
             draft: info,
@@ -85,6 +90,7 @@ export function createPageTool(env) {
         const page = id === null ? null : find(id);
         if (id !== null && !page) throw new Error(`Unknown page: ${id}`);
         selectedId = page ? page.id : null;
+        componentPlacement = null;
         if (!page) preview = false;
         reset();
     }
@@ -150,6 +156,9 @@ export function createPageTool(env) {
         paperOf(next.paper);
         if (!validScale(next.scale)) throw new Error(`Scale must be a number between ${MIN_SCALE} and ${MAX_SCALE}`);
         if (!validTextSize(next.textSize)) throw new Error(`Text size must be between ${MIN_TEXT_SIZE}% and ${MAX_TEXT_SIZE}%`);
+        for (const kind of COMPONENTS) {
+            if (!validComponent(next[kind])) throw new Error(`${kind} must have finite paper coordinates, an angle and a size between 25% and 400%`);
+        }
     }
 
     return {
@@ -159,6 +168,15 @@ export function createPageTool(env) {
         state,
         refresh: emit,
         selectedId: () => selectedId,
+
+        startComponent(kind) {
+            if (!COMPONENTS.includes(kind)) throw new Error(`Unknown page component: ${kind}`);
+            const page = selected();
+            if (!page || !isVisible(page) || isLocked(page)) throw new Error("Select a visible, selectable page to place components");
+            drag = null;
+            componentPlacement = { kind, anchor: null, hover: null };
+            changed();
+        },
 
         setPreview(on) {
             if (on && !selected()) throw new Error("Select a page to preview it");
@@ -183,6 +201,7 @@ export function createPageTool(env) {
 
         dataChanged() {
             drag = null;
+            componentPlacement = null;
             if (selectedId !== null && !find(selectedId)) select(null);
             else if (selectedId !== null) reset();
             emit();
@@ -197,7 +216,9 @@ export function createPageTool(env) {
         },
 
         cancel() {
-            if (placing) {
+            if (componentPlacement) {
+                componentPlacement = null;
+            } else if (placing) {
                 placing = false;
                 hover = null;
             } else if (dirty()) {
@@ -213,7 +234,7 @@ export function createPageTool(env) {
 
         // First undo drops an unsaved edit or the frame being placed; the next ones undo stored changes.
         undoStep() {
-            if (!placing && !dirty()) return false;
+            if (!placing && !componentPlacement && !dirty()) return false;
             this.cancel();
             return true;
         },
@@ -230,7 +251,7 @@ export function createPageTool(env) {
             const next = { ...draft };
             for (const [key, value] of Object.entries(changes ?? {})) {
                 if (!DRAFT_FIELDS.includes(key)) throw new Error(`Unknown page setting: ${key}`);
-                next[key] = key === "landscape" ? (value ? 1 : 0) : value;
+                next[key] = key === "landscape" ? (value ? 1 : 0) : structuredClone(value);
             }
             checkDraft(next);
             draft = next;
@@ -240,6 +261,7 @@ export function createPageTool(env) {
         save() {
             const page = selected();
             if (!page || !draft) throw new Error("Select a page before saving it");
+            if (componentPlacement) throw new Error("Finish placing the component or cancel placement before saving");
             const name = draft.name.trim();
             if (!name) throw new Error("Give the page a name before saving");
             const next = { ...draft, name };
@@ -258,6 +280,7 @@ export function createPageTool(env) {
             if (isVisible(page) === !!on) return;
             checkpoint();
             page.visible = on ? 1 : 0;
+            if (!on && selectedId === id) componentPlacement = null;
             changed();
         },
 
@@ -268,6 +291,7 @@ export function createPageTool(env) {
             checkpoint();
             page.locked = on ? 1 : 0;
             if (on && drag?.page === page) drag = null;
+            if (on && selectedId === id) componentPlacement = null;
             changed();
         },
 
@@ -289,6 +313,34 @@ export function createPageTool(env) {
         },
 
         pointerDown(e) {
+            if (componentPlacement) {
+                const page = shown(selected());
+                const p = env.snap(e.sx, e.sy);
+                const placement = componentPlacement;
+                if (!placement.anchor) {
+                    const r = pageRect(page);
+                    if (p.x < r.left || p.x > r.right || p.y < r.bottom || p.y > r.top) {
+                        env.log("action", "Place the component inside the selected page");
+                        return;
+                    }
+                    if (placement.kind === "compass") {
+                        placement.anchor = p;
+                        placement.hover = p;
+                        changed();
+                        return;
+                    }
+                }
+                const anchor = placement.anchor ?? p;
+                if (placement.anchor && p.x === anchor.x && p.y === anchor.y) {
+                    env.log("action", "Click away from the compass centre to set north");
+                    return;
+                }
+                const angle = placement.anchor ? Math.atan2(p.y - anchor.y, p.x - anchor.x) - Math.PI / 2 : 0;
+                draft[placement.kind] = componentAt(page, anchor, draft[placement.kind]?.size ?? 100, angle);
+                componentPlacement = null;
+                changed();
+                return;
+            }
             if (placing) {
                 const p = env.snap(e.sx, e.sy);
                 const t = newTemplate();
@@ -323,6 +375,11 @@ export function createPageTool(env) {
         },
 
         pointerMove(e) {
+            if (componentPlacement) {
+                componentPlacement.hover = env.snap(e.sx, e.sy);
+                env.redraw();
+                return;
+            }
             if (placing) {
                 hover = env.snap(e.sx, e.sy);
                 env.redraw();
@@ -350,6 +407,10 @@ export function createPageTool(env) {
         },
 
         pointerLeave() {
+            if (componentPlacement) {
+                componentPlacement.hover = null;
+                env.redraw();
+            }
             if (!placing || !hover) return;
             hover = null;
             env.redraw();
@@ -360,6 +421,20 @@ export function createPageTool(env) {
             const list = items().filter(p => (isVisible(p) || p.id === selectedId)).map(shown);
             labels = [];
             drawPages(g, list, view, p => (p.id !== selectedId ? "normal" : isVisible(p) ? "selected" : "ghost"), labels);
+        },
+
+        drawComponents(g, view) {
+            for (const stored of items()) {
+                let page = shown(stored);
+                const placement = stored.id === selectedId ? componentPlacement : null;
+                if (placement?.hover) {
+                    const anchor = placement.anchor ?? placement.hover;
+                    const angle = placement.anchor
+                        ? Math.atan2(placement.hover.y - anchor.y, placement.hover.x - anchor.x) - Math.PI / 2 : 0;
+                    page = { ...page, [placement.kind]: componentAt(page, anchor, draft[placement.kind]?.size ?? 100, angle) };
+                }
+                drawPageComponents(g, page, view, env.formatLength);
+            }
         },
 
         draw(g, view) {

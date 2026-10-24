@@ -1,10 +1,11 @@
-// Minimal single-page vector PDF of a page frame: drawing lines and saved measurements inside the frame,
+// Minimal single-page vector PDF of a page frame: drawing, saved measurements and page components inside the frame,
 // at the page's scale. Written by hand (PDF 1.4, ASCII only) so no library is needed.
 // Two-point measurements with a dimension print as a CAD dimension (extension lines, arrows, rotated length).
 // Measurements follow their own Lengths / Angles / Area settings and use the Paper look; their text and label
 // boxes use PRINT_SIZES (points) times the page's text size.
 
 import { pageRect, paperSize, textSizeOf } from "./pages.js";
+import { pageComponentGeometry } from "./page-components.js";
 import { layerPrintable } from "./layers.js";
 import { pointSettings, markerVisible } from "./points.js";
 import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, dimensionOf, readableAngle, PRINT_SIZES, scaleSizes } from "./tools/measurement.js";
@@ -216,6 +217,17 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
         circle(marks, p.x, p.y, radius);
         marks.push(`${n(p.x - reach)} ${n(p.y)} m ${n(p.x + reach)} ${n(p.y)} l`,
             `${n(p.x)} ${n(p.y - reach)} m ${n(p.x)} ${n(p.y + reach)} l S Q`);
+    }
+
+    for (const mark of pageComponentGeometry(page, format.length)) {
+        if (mark.text !== undefined) {
+            const p = toPaper(mark.at);
+            marks.push("0 g");
+            text(marks, mark.text, p.x, p.y, mark.size * PT_PER_MM, true);
+        } else {
+            marks.push(`0 G 0 g ${n(mark.width * PT_PER_MM)} w [] 0 d`,
+                polyline(mark.points.map(toPaper)), mark.fill ? "h f" : "S");
+        }
     }
 
     // Clip to the paper; area shading goes under the lines (light grey), lines are stroked once in black,
