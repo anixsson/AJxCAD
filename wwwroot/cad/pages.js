@@ -7,7 +7,7 @@ import { bucket, defineBucket, newId } from "./store.js";
 
 export const PAGES = "pages";
 
-defineBucket(PAGES, { label: "Pages", fields: ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked", "textSize"] });
+defineBucket(PAGES, { label: "Pages", fields: ["id", "name", "paper", "landscape", "scale", "x", "y", "visible", "locked", "textSize"], group: "project" });
 
 // Portrait width × height in mm.
 export const PAPERS = [

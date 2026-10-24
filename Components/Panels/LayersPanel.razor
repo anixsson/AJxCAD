@@ -1,0 +1,61 @@
+<p class="side-empty">New items use the active layer. Hidden layers do not print.</p>
+<div class="layer-columns" aria-hidden="true"><span>Select</span><span>Active</span><span>Show</span><span>Print</span><span>Layer name</span></div>
+<div class="layer-list" role="list" aria-label="Layers">
+    @foreach (var layer in State.Layers)
+    {
+        var l = layer;
+        <div class="layer-row @(l.Id == State.ActiveId ? "active-layer" : "")" role="listitem" @key="l.Id">
+            <button type="button" class="chip layer-select-all" disabled="@(!l.Visible)"
+                    aria-label="Select all lines and measurements in @l.Name"
+                    title="Select all lines and measurements in this layer"
+                    @onclick="() => OnSelectAll.InvokeAsync(l.Id)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5" />
+                    <rect x="7" y="7" width="10" height="10" />
+                </svg>
+            </button>
+            <button type="button" class="chip check-chip @(l.Id == State.ActiveId ? "active" : "")"
+                    aria-pressed="@((l.Id == State.ActiveId).ToString().ToLowerInvariant())"
+                    aria-label="Use @l.Name for new items" title="Use this layer for new items"
+                    @onclick="() => OnActivate.InvokeAsync(l.Id)">
+                <span class="check-box" aria-hidden="true">@(l.Id == State.ActiveId ? "✓" : "")</span>
+            </button>
+            <button type="button" class="chip check-chip @(l.Visible ? "active" : "")"
+                    role="checkbox" aria-checked="@l.Visible.ToString().ToLowerInvariant()"
+                    aria-label="Show @l.Name" title="Show or hide this layer"
+                    @onclick="() => OnVisible.InvokeAsync((l.Id, !l.Visible))">
+                <span class="check-box" aria-hidden="true">@(l.Visible ? "✓" : "")</span>
+            </button>
+            <button type="button" class="chip check-chip @(l.Printable ? "active" : "")"
+                    role="checkbox" aria-checked="@l.Printable.ToString().ToLowerInvariant()"
+                    aria-label="Print @l.Name" title="Include this layer in printing and PDF export when visible"
+                    @onclick="() => OnPrintable.InvokeAsync((l.Id, !l.Printable))">
+                <span class="check-box" aria-hidden="true">@(l.Printable ? "✓" : "")</span>
+            </button>
+            <input class="text-input layer-name" aria-label="Layer name for @l.Name" value="@l.Name"
+                   @onchange="e => OnRename.InvokeAsync((l.Id, e.Value?.ToString() ?? string.Empty))" />
+        </div>
+    }
+</div>
+<div class="side-actions">
+    <button type="button" class="chip" @onclick="OnAdd">+ Add layer</button>
+    <button type="button" class="chip" disabled="@(!CanAssign)" @onclick="() => OnAssign.InvokeAsync(State.ActiveId)"
+            title="Move selected board items to the active layer">Move selection to active</button>
+</div>
+@if (Error is not null)
+{
+    <p class="test-error" role="alert">@Error</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public LayersState State { get; set; } = default!;
+    [Parameter] public bool CanAssign { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnAdd { get; set; }
+    [Parameter] public EventCallback<int> OnActivate { get; set; }
+    [Parameter] public EventCallback<int> OnAssign { get; set; }
+    [Parameter] public EventCallback<int> OnSelectAll { get; set; }
+    [Parameter] public EventCallback<(int Id, string Name)> OnRename { get; set; }
+    [Parameter] public EventCallback<(int Id, bool Value)> OnVisible { get; set; }
+    [Parameter] public EventCallback<(int Id, bool Value)> OnPrintable { get; set; }
+}

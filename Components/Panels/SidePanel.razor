@@ -1,23 +1,85 @@
-@* Top-right panel with tabs. Pages is the first tab; more (such as Layers) can be added later. *@
-<aside class="glass side-panel" aria-label="@Label">
-    <div class="side-tabs" role="tablist" aria-label="@Label">
-        @foreach (var tab in Tabs)
-        {
-            var active = tab == ActiveTab;
-            <button type="button" class="chip side-tab @(active ? "active" : "")" role="tab"
-                    aria-selected="@active.ToString().ToLowerInvariant()"
-                    @onclick="() => ActiveTabChanged.InvokeAsync(tab)">@tab</button>
-        }
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<aside @ref="_panel" class="glass side-panel @(_open ? "" : "collapsed")" aria-label="@Label"
+       style="@($"--panel-width: {_width}px")">
+    <div class="side-panel-head">
+        <button type="button" class="chip panel-toggle" aria-label="@(_open ? "Collapse board panel" : "Open Pages and Layers")"
+                title="@(_open ? "Collapse board panel" : "Pages and Layers")" aria-expanded="@_open.ToString().ToLowerInvariant()"
+                @onclick="() => _open = !_open">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M3 6l9-4 9 4-9 4zM3 12l9 4 9-4M3 18l9 4 9-4" />
+            </svg>
+            @if (_open) { <span>@Label</span> }
+        </button>
     </div>
-    <div class="side-body" role="tabpanel" aria-label="@ActiveTab">
-        @ChildContent
-    </div>
+    @if (_open)
+    {
+        <div class="panel-resize" role="separator" aria-label="Board panel width" aria-orientation="vertical"
+             aria-valuemin="280" aria-valuemax="720" aria-valuenow="@_width" tabindex="0"
+             @onkeydown="ResizeKey"></div>
+        <div class="side-tabs" role="tablist" aria-label="@Label">
+            @foreach (var tab in new[] { "Pages", "Layers" })
+            {
+                <button type="button" class="chip side-tab @(_activeTab == tab ? "active" : "")"
+                        role="tab" aria-selected="@((_activeTab == tab).ToString().ToLowerInvariant())"
+                        @onclick="() => _activeTab = tab">@tab</button>
+            }
+        </div>
+        <div class="side-body" role="tabpanel" aria-label="@_activeTab">
+            @if (_activeTab == "Pages") { @Pages }
+            else { @Layers }
+        </div>
+    }
 </aside>
 
 @code {
-    [Parameter] public string Label { get; set; } = "Side panel";
-    [Parameter, EditorRequired] public string[] Tabs { get; set; } = [];
-    [Parameter, EditorRequired] public string ActiveTab { get; set; } = "";
-    [Parameter] public EventCallback<string> ActiveTabChanged { get; set; }
-    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Label { get; set; } = "Board panel";
+    [Parameter] public RenderFragment? Pages { get; set; }
+    [Parameter] public RenderFragment? Layers { get; set; }
+    private bool _open = true;
+    private string _activeTab = "Layers";
+    private int _width = Math.Clamp(Preferences.Default.Get("boardPanelWidth", 360), 280, 720);
+    private ElementReference _panel;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<SidePanel>? _self;
+
+    public void OpenPages()
+    {
+        _open = true;
+        _activeTab = "Pages";
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void SaveWidth(int width)
+    {
+        _width = Math.Clamp(width, 280, 720);
+        Preferences.Default.Set("boardPanelWidth", _width);
+        StateHasChanged();
+    }
+
+    private void ResizeKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowLeft") SaveWidth(_width + 20);
+        else if (e.Key == "ArrowRight") SaveWidth(_width - 20);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./cad/panel.js");
+        await _module.InvokeVoidAsync("attach", _panel, _self);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("detach", _panel);
+            await _module.DisposeAsync();
+        }
+        _self?.Dispose();
+    }
 }

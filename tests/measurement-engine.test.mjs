@@ -50,13 +50,15 @@ test("only Select opens saved measurement text; blue points select without openi
             invokeMethodAsync: (name, ...args) => { calls.push({ name, args }); return Promise.resolve(); }
         }, 1000, 1000);
         flush();
-        engine.setTool("ruler");
+        document.dispatchEvent(Object.assign(new Event("keydown"), { key: "m" }));
+        assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], "measurement",
+            "M activates the Measurement tool");
         click(200, 200);
         click(500, 200);
-        engine.rulerAddPoints();
+        engine.measurementAddPoints();
         click(500, 500);
-        engine.rulerStop();
-        engine.rulerSave();
+        engine.measurementStop();
+        engine.measurementSave();
         engine.setTool("cross");
         flush();
         const saved = engine.getDataText();
@@ -75,18 +77,18 @@ test("only Select opens saved measurement text; blue points select without openi
         assert.equal(calls.findLast(c => c.name === "OnSelectedMeasurement").args[0].points, 3);
         assert.equal(calls.findLast(c => c.name === "OnSelectionChanged").args[0], 1);
         click(area.x, area.y);
-        assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], "ruler");
+        assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], "measurement");
         const info = calls.findLast(c => c.name === "OnMeasureChanged").args[0];
         assert.equal(info.mode, "done");
         assert.equal(info.saved, true);
         assert.equal(info.nodes.length, 3);
 
-        assert.equal(engine.rulerAddPoints(), true);
+        assert.equal(engine.measurementAddPoints(), true);
         click(200, 500);
         assert.equal(calls.findLast(c => c.name === "OnMeasureChanged").args[0].nodes.length, 4);
         assert.equal(engine.getDataText(), saved, "continued points remain a draft");
-        engine.rulerStop();
-        engine.rulerSave();
+        engine.measurementStop();
+        engine.measurementSave();
         const extended = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures").rows;
         assert.equal(extended.length, 1, "continues the selected area instead of creating another");
         assert.equal(extended[0][1].length, 4);
@@ -95,9 +97,9 @@ test("only Select opens saved measurement text; blue points select without openi
         engine.setTool("select");
         flush();
         click(area.x, area.y);
-        engine.rulerTogglePoint(1);
-        engine.rulerDeletePoint(1);
-        engine.rulerSave();
+        engine.measurementTogglePoint(1);
+        engine.measurementDeletePoint(1);
+        engine.measurementSave();
         const measures = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures");
         assert.equal(measures.rows.length, 1);
         assert.equal(measures.rows[0][1].length, 2);
@@ -105,14 +107,14 @@ test("only Select opens saved measurement text; blue points select without openi
         const restored = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures");
         assert.equal(restored.rows[0][1][1].enabled, true);
         assert.throws(() => engine.deleteSelectedMeasurement(), /Select a saved measurement/);
-        engine.setTool("ruler");
+        engine.setTool("measurement");
         click(600, 300);
         click(800, 300);
-        engine.rulerAddPoints();
+        engine.measurementAddPoints();
         click(800, 600);
-        engine.rulerStop();
+        engine.measurementStop();
         assert.throws(() => engine.deleteSelectedMeasurement(), /Select a saved measurement/, "unsaved draft cannot be deleted");
-        engine.rulerSave();
+        engine.measurementSave();
         const beforeDelete = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures").rows;
         assert.equal(beforeDelete.length, 2);
         engine.setTool("select");
@@ -125,7 +127,7 @@ test("only Select opens saved measurement text; blue points select without openi
             click: () => assert.fail("modal must block the workspace default action")
         }];
         const beforeModalKeys = calls.length;
-        for (const key of ["Escape", " ", "r", "z", "n", "o", "s"]) {
+        for (const key of ["Escape", " ", "m", "z", "n", "o", "s"]) {
             document.dispatchEvent(Object.assign(new Event("keydown"), { key, metaKey: true }));
             document.dispatchEvent(Object.assign(new Event("keydown"), { key }));
         }
@@ -153,6 +155,59 @@ test("only Select opens saved measurement text; blue points select without openi
         assert.equal(calls.findLast(c => c.name === "OnMeasureChanged").args[0], null);
         engine.undo();
         assert.equal(engine.getBuckets().find(b => b.name === "measures").count, 2, "editor deletion is undoable");
+
+        engine.setTool("select");
+        flush();
+        click(200, 200);
+        assert.equal(calls.findLast(c => c.name === "OnSelectionChanged").args[0], 1);
+        const defaultLayer = engine.getLayers().activeId;
+        engine.createLayer();
+        const newLayer = engine.getLayers().activeId;
+        engine.editLayer(newLayer, { name: "Notes" });
+        engine.moveSelectionToLayer(newLayer);
+        const withLayers = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures");
+        assert.equal(withLayers.rows[0][withLayers.fields.indexOf("layerId")], newLayer,
+            "creating and renaming a layer preserves the selection for assignment");
+        assert.equal(withLayers.rows[1][withLayers.fields.indexOf("layerId")], defaultLayer);
+        engine.editLayer(newLayer, { visible: false });
+        flush();
+        click(200, 200);
+        assert.equal(calls.findLast(c => c.name === "OnSelectionChanged").args[0], 0,
+            "hidden measurements cannot be selected");
+        assert.equal(texts.filter(t => t.text.endsWith("²")).length, 1, "hidden area is not rendered");
+        engine.editLayer(newLayer, { visible: true });
+        flush();
+        assert.equal(texts.filter(t => t.text.endsWith("²")).length, 2);
+        engine.setTool("cross");
+        engine.selectLayerItems(newLayer);
+        assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], "select");
+        assert.equal(calls.findLast(c => c.name === "OnSelectionChanged").args[0], 3);
+        assert.equal(engine.getLayers().activeId, newLayer);
+        engine.editLayer(newLayer, { visible: false });
+        assert.throws(() => engine.selectLayerItems(newLayer), /Show the layer/);
+        engine.editLayer(newLayer, { visible: true });
+
+        engine.startPlacePage();
+        click(512, 384);
+        const pageId = engine.getPages().selectedId;
+        engine.editLayer(newLayer, { printable: false });
+        assert.ok(engine.getPagePdf(pageId).pdf.startsWith("%PDF"), "pages do not depend on layer print settings");
+        engine.activateLayer(defaultLayer);
+        assert.throws(() => engine.moveSelectionToLayer(defaultLayer), /Select board items/, "pages cannot be assigned to layers");
+        engine.setPagePreview(true);
+        flush();
+        assert.equal(texts.filter(t => t.text.endsWith("²")).length, 1,
+            "print preview omits visible but non-printing annotations");
+        assert.ok(engine.getPagePdf(pageId).pdf.startsWith("%PDF"));
+        engine.setPagePreview(false);
+        const layeredProject = engine.getDataText();
+        engine.loadDataText(layeredProject);
+        assert.equal(engine.getLayers().layers.find(l => l.id === newLayer).printable, false);
+        engine.newProject();
+        assert.equal(engine.getLayers().layers.length, 1);
+        assert.equal(engine.getLayers().layers[0].name, "Default");
+        engine.undo();
+        assert.equal(engine.getLayers().layers.length, 2, "undo New restores the layer bucket");
     } finally {
         engine.dispose();
         delete globalThis.window;

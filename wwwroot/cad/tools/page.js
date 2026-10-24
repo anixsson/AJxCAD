@@ -157,6 +157,7 @@ export function createPageTool(env) {
         hotkey: "p",
 
         state,
+        refresh: emit,
         selectedId: () => selectedId,
 
         setPreview(on) {
@@ -356,7 +357,7 @@ export function createPageTool(env) {
 
         // Stored frames, drawn under the drawing with any tool. A hidden page still shows dashed while selected.
         drawSaved(g, view) {
-            const list = items().filter(p => isVisible(p) || p.id === selectedId).map(shown);
+            const list = items().filter(p => (isVisible(p) || p.id === selectedId)).map(shown);
             labels = [];
             drawPages(g, list, view, p => (p.id !== selectedId ? "normal" : isVisible(p) ? "selected" : "ghost"), labels);
         },

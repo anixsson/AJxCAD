@@ -40,7 +40,7 @@
         [
             ("Draw", "Press L, then click a start and end point. Keep clicking to create connected lines"),
             ("Edit", "Press S, select a line end and drag it to a new position"),
-            ("Measure", "Press R, then click two points"),
+            ("Measure", "Press M, then click two points"),
             ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
             ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk")
         ]),
@@ -62,6 +62,16 @@
             ("Close without saving", "Unapplied title edits are discarded when you leave Project settings"),
             ("Data buckets", "Open the project data viewer directly from this dialog")
         ]),
+        new("Layers", "", "Use the Pages and Layers buttons to switch tabs in the top-right board panel. Collapse the panel to its small icon or drag its left edge to resize it; the width is saved in app settings. Layers are saved in their own data bucket; older projects start with a visible, printable Default layer.",
+        [
+            ("Add and rename", "Press + Add layer, then edit its name directly"),
+            ("Active", "Choose the layer for newly drawn lines, saved measurements. Splitting a line preserves its original layer"),
+            ("Select layer items", "The icon at the left of each visible layer selects all its lines and measurements, replacing the previous selection. Page frames are not included"),
+            ("Move selection to active", "Select board items, activate the destination layer, then move the selection to active. Whole lines and measurements move even if only one endpoint is selected. Saved measurements open in Measurement can also be assigned"),
+            ("Show", "Hide or show all items on the layer. Hidden items cannot be picked or snapped to and never print"),
+            ("Print", "Uncheck to exclude a visible layer from print preview, printing and PDF export. Pages do not belong to layers and remain available in Print / Export"),
+            ("Undo and save", "Layer creation, names, checkboxes and assignments are undoable. File > Save keeps changes on disk")
+        ]),
         new("Cross", "V", "The default tool. Nothing is drawn or changed; use it to look around the drawing.",
         [
             ("V", "Switch to the Cross tool"),
@@ -69,7 +79,7 @@
         ]),
         new("Toolmenus and options", "", "The bottom-center bars show controls for the active tool. Checkbox buttons show a tick when enabled.",
         [
-            ("Toolmenu", "Select offers Nodes / Lines, Line offers Multi, and Ruler offers snapping options"),
+            ("Toolmenu", "Select offers Nodes / Lines, Line offers Multi, and Measurement offers snapping options"),
             ("Side panel", "The top-right panel holds the Pages tab while the Page tool is active"),
             ("Actions bar", "Appears when something is selected; Move starts a guided move"),
             ("Options bar", "In Select's Lines mode, Middle shows or hides midpoint split handles"),
@@ -97,9 +107,9 @@
             ("Esc", "Cancel a running Move, then close an open Corner box; once neither is open, return to the Cross tool"),
             ("Cmd/Ctrl + Z", "Undo the move")
         ]),
-        new("Ruler", "R", "Measure without changing drawing lines. Click two points to see their distance, x and y difference, and coordinates. Finished multi-point measurements can be saved as annotations in the Measurements bucket.",
+        new("Measurement", "M", "Measure without changing drawing lines. Click two points to see their distance, x and y difference, and coordinates. Finished multi-point measurements can be saved as annotations in the Measurements bucket.",
         [
-            ("R", "Switch to the Ruler tool"),
+            ("M", "Switch to the Measurement tool, below Line in the left toolbar. Pages are managed from the Pages tab in the board panel"),
             ("Click, click", "Pick the two points; a box shows the result"),
             ("Click again", "For a new, unsaved result, hide the box and start another measurement from that point"),
             ("Dimension", "After two points, drag the blue ring in the middle of the line sideways for a CAD dimension: extension lines, a parallel dimension line with arrows and the length along it. Once you drag, Add points goes away and Save to board (Space) keeps it; it prints at the page's text size, and Select can drag its blue dot later"),
@@ -115,8 +125,8 @@
             ("Save to board or Space", "Keep the measurement on the board with any tool. It is stored in the Measurements bucket; use File > Save to save the project to disk"),
             ("Show on board", "Check Lengths, Angles and Area independently to choose which data appears. Area controls its label and shading. The preview updates immediately and Save remembers your choices for this measurement; calculations in the box stay available"),
             ("Blue circles", "Included points stay visible even with all data hidden. Only Select can pick these points; picking a point does not open the editor. With only that measurement selected, click the length text in its information box to edit"),
-            ("Delete measurement", "Select a saved measurement's blue point or open its text in the Ruler editor to show this Actions button. The in-app dialog offers Cancel or Delete measurement; Esc or closing it also cancels. Delete removes only that measurement; other measurements and drawing lines stay. Cmd/Ctrl + Z restores it"),
-            ("Edit a saved measurement", "With Select active, click any of its length, area or angle texts to switch to Ruler and reopen the information box. Toggle point checkboxes, then Save changes (or Space). Cancel or Esc discards edits"),
+            ("Delete measurement", "Select a saved measurement's blue point or open its text in the Measurement editor to show this Actions button. The in-app dialog offers Cancel or Delete measurement; Esc or closing it also cancels. Delete removes only that measurement; other measurements and drawing lines stay. Cmd/Ctrl + Z restores it"),
+            ("Edit a saved measurement", "With Select active, click any of its length, area or angle texts to switch to Measurement and reopen the information box. Toggle point checkboxes, then Save changes (or Space). Cancel or Esc discards edits"),
             ("Saved coordinates", "Measurement points do not automatically follow drawing lines. Use Select to include both line and area points when moving them together. Saving or moving annotations is undoable"),
             ("Cmd/Ctrl + Z", "While adding points, remove the last point"),
             ("Grid + nodes", "Default. Snap to line ends, otherwise to the grid"),
@@ -162,8 +172,8 @@
         ]),
         new("Data buckets", "", "Open File > Data buckets to inspect the data stored in the current project. Expand a bucket to see its text representation. This viewer is read-only.",
         [
-            ("Project", "The project bucket holds the title, measuring system, reference unit and saved view"),
-            ("Tools", "Drawing tools keep their geometry in separate buckets, such as lines"),
+            ("Project", "Project settings, Pages and Layers are grouped here. The project bucket holds the title, measuring system, reference unit and saved view"),
+            ("Tools", "Only the Line and Measurement tool buckets appear here: Lines and Measurements"),
             ("Item count", "Each bucket shows how many items it contains"),
             ("Large buckets", "Text loads only when expanded, in pages of up to 100 rows. Use Previous and Next to inspect every row. Saving still includes all data"),
             ("Project settings", "The Data buckets button opens the same viewer")

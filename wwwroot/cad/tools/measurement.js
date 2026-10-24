@@ -1,4 +1,4 @@
-// Ruler tool: measures without changing drawing lines; saved annotations live in the measures bucket.
+// Measurement tool: measures without changing drawing lines; saved annotations live in the measures bucket.
 //  - Click two points: the box shows the length, the x/y difference and both points.
 //  - "Add points" (Space) continues from there: every click adds a point and the total length grows.
 //    Once a dimension is dragged out, Add points goes away and "Save to board" takes Space.
@@ -12,9 +12,10 @@
 //    `dimension` {x, y}; the offset is its distance from the measured line. Select can drag the dot too.
 
 import { bucket, defineBucket, checkpoint, newId } from "../store.js";
+import { activeLayerId, visibleItems, layerPrintable } from "../layers.js";
 
 export const MEASURES = "measures";
-defineBucket(MEASURES, { label: "Measurements", fields: ["id", "points", "showLengths", "showAngles", "showArea", "dimension"] });
+defineBucket(MEASURES, { label: "Measurements", fields: ["id", "points", "showLengths", "showAngles", "showArea", "dimension", "layerId"] });
 
 export const measurementGeometry = {
     bucket: MEASURES,
@@ -131,7 +132,7 @@ export const formatAngle = deg => `${Number(deg.toFixed(1))}°`;
 const NODE_PX = 30; // how far from a line end a click may be in "nodes" mode
 const HANDLE_PX = 10; // how far from the dimension dot a press grabs it
 
-export function createRulerTool(env) {
+export function createMeasurementTool(env) {
     let snapMode = "grid";
     let points = [];
     let phase = "idle"; // idle | picking (1 point) | measured (2 points) | multi (adding) | done
@@ -190,7 +191,7 @@ export function createRulerTool(env) {
     function nearestNode(sx, sy) {
         let best = null, bestDist = NODE_PX;
         for (const geo of env.geometries) {
-            for (const item of bucket(geo.bucket).items) {
+            for (const item of visibleItems(geo.bucket)) {
                 for (const p of geo.points(item)) {
                     const s = env.toScreen(p.x, p.y);
                     const dist = Math.hypot(s.x - sx, s.y - sy);
@@ -470,11 +471,11 @@ export function createRulerTool(env) {
     }
 
     return {
-        id: "ruler",
-        hotkey: "r",
+        id: "measurement",
+        hotkey: "m",
 
         setSnapMode(value) {
-            if (value !== "grid" && value !== "nodes") throw new Error(`Unknown ruler snap mode: ${value}`);
+            if (value !== "grid" && value !== "nodes") throw new Error(`Unknown measurement snap mode: ${value}`);
             snapMode = value;
             hover = null;
             env.redraw();
@@ -485,7 +486,7 @@ export function createRulerTool(env) {
             if ((phase !== "measured" && phase !== "done") || dimension !== null) return false;
             hover = null;
             setPhase("multi");
-            env.log("action", "ruler: adding points");
+            env.log("action", "measurement: adding points");
             return true;
         },
 
@@ -493,7 +494,7 @@ export function createRulerTool(env) {
             if (phase !== "multi") return false;
             hover = null;
             setPhase("done");
-            env.log("action", `ruler: total ${env.formatLength(pathLength(points))} over ${points.length} points`);
+            env.log("action", `measurement: total ${env.formatLength(pathLength(points))} over ${points.length} points`);
             return true;
         },
 
@@ -525,7 +526,7 @@ export function createRulerTool(env) {
             env.redraw();
         },
 
-        // Saves a finished measurement, or a two-point one straight from the Ruler box.
+        // Saves a finished measurement, or a two-point one straight from the Measurement box.
         save() {
             if ((phase !== "done" && phase !== "measured") || included().length < 2) {
                 throw new Error("A saved measurement needs at least two included points");
@@ -534,7 +535,7 @@ export function createRulerTool(env) {
             const stored = points.map(p => ({ x: p.x, y: p.y, enabled: p.enabled !== false }));
             const dim = dimensionOf(included(), dimension) ? { x: dimension.x, y: dimension.y } : null;
             if (editingId === null) {
-                bucket(MEASURES).items.push({ id: newId(), points: stored, ...display, dimension: dim });
+                bucket(MEASURES).items.push({ id: newId(), points: stored, ...display, dimension: dim, layerId: activeLayerId() });
             } else {
                 const item = bucket(MEASURES).items.find(m => m.id === editingId);
                 if (!item) throw new Error(`Measurement ${editingId} no longer exists`);
@@ -589,7 +590,8 @@ export function createRulerTool(env) {
 
         drawSaved(g, view) {
             textHits = [];
-            for (const item of bucket(MEASURES).items) {
+            for (const item of visibleItems(MEASURES)) {
+                if (view.printPx && !layerPrintable(item)) continue;
                 if (item.id === editingId) continue;
                 renderingId = item.id;
                 const pts = item.points.filter(p => p.enabled !== false);
@@ -607,6 +609,7 @@ export function createRulerTool(env) {
 
         // Undo may move the measured line ends, so the measurement would be stale.
         dataChanged() {
+            textHits = [];
             clear();
         },
 

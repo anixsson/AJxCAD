@@ -788,23 +788,62 @@ button {
     z-index: 10;
     top: 56px;
     right: 16px;
-    width: 260px;
+    width: min(var(--panel-width, 360px), calc(100vw - 32px));
     max-height: calc(100vh - 230px);
     display: flex;
     flex-direction: column;
     padding: 8px;
 }
 
+.side-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.side-panel.collapsed {
+    width: auto;
+    padding: 4px;
+}
+
+.chip.panel-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px;
+}
+
+.side-panel:not(.collapsed) .panel-toggle {
+    width: 100%;
+}
+
 .side-tabs {
     display: flex;
     gap: 4px;
+    margin-top: 8px;
     padding-bottom: 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .chip.side-tab {
-    flex: 0 0 auto;
     padding: 4px 12px;
+}
+
+.panel-resize {
+    position: absolute;
+    left: -5px;
+    top: 0;
+    bottom: 0;
+    width: 10px;
+    cursor: ew-resize;
+    touch-action: none;
+}
+
+.panel-resize:hover,
+.panel-resize:focus-visible {
+    background: rgba(143, 227, 255, 0.25);
+    border-radius: 5px;
 }
 
 .side-body {
@@ -883,6 +922,63 @@ button {
 
 .side-actions {
     display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.layer-list {
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+
+.layer-row,
+.layer-columns {
+    display: grid;
+    grid-template-columns: 32px 36px 36px 36px minmax(0, 1fr);
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.layer-columns {
+    font-size: 10px;
+    text-align: center;
+}
+
+.layer-row .chip {
+    padding: 4px 0;
+}
+
+.layer-select-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.layer-row.active-layer {
+    background: rgba(143, 227, 255, 0.15);
+    outline: 1px solid #8fe3ff;
+    outline-offset: -1px;
+    border-radius: 8px;
+}
+
+.layer-row.active-layer .layer-name {
+    border-color: #8fe3ff;
+}
+
+.paper .layer-row.active-layer {
+    background: rgba(0, 0, 0, 0.08);
+    outline-color: #000;
+}
+
+.paper .layer-row.active-layer .layer-name {
+    border-color: #000;
+}
+
+.text-input.layer-name {
+    min-width: 0;
+    width: 100%;
+    padding: 4px;
 }
 
 /* Page information box (bottom centre) */

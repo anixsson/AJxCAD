@@ -62,7 +62,7 @@
     @foreach (var group in new[] { "general", "data" })
     {
         <aside class="glass tool-group" aria-label="@(group == "general" ? "General tools" : "Drawing tools")">
-            @foreach (var t in _tools.Where(t => t.Group == group))
+            @foreach (var t in _tools.Where(t => t.Group == group && t.Id != "page"))
             {
                 <button type="button" class="tool-btn @(_tool == t.Id ? "active" : "")" aria-label="@t.Title (@t.Hotkey)" @onclick="() => SetTool(t.Id)">
                     <svg viewBox="0 0 24 24" aria-hidden="true">@((MarkupString)t.Icon)</svg>
@@ -194,13 +194,13 @@
     </div>
 }
 
-@if (_tool == "ruler")
+@if (_tool == "measurement")
 {
     <div class="toolmenu-dock">
         @if (_measure is { Mode: "single" } m)
         {
             <section class="glass process-box measure-box" aria-label="Measurement" aria-live="polite">
-                <div class="process-step">Ruler</div>
+                <div class="process-step">Measurement</div>
                 <div class="measure-length">@m.Length</div>
                 <dl class="measure-grid">
                     <dt>Point 1</dt><dd>x @m.Ax</dd><dd>y @m.Ay</dd>
@@ -212,16 +212,16 @@
                     <p class="process-text">Drag the blue dot to move the dimension line. Save it to the board, or click to start a new measurement.</p>
                     <div class="process-actions">
                         <button type="button" class="chip active default-action" data-default-action
-                                title="Keep this measurement and its dimension on the board" @onclick="RulerSave">Save to board<span class="key-hint">Space</span></button>
+                                title="Keep this measurement and its dimension on the board" @onclick="MeasurementSave">Save to board<span class="key-hint">Space</span></button>
                     </div>
                 }
                 else
                 {
                     <p class="process-text">Drag the blue dot in the middle sideways to pull out a dimension line. Click to start a new measurement, or add more points to measure a total length and area.</p>
                     <div class="process-actions">
-                        <button type="button" class="chip" title="Keep this measurement on the board" @onclick="RulerSave">Save to board</button>
+                        <button type="button" class="chip" title="Keep this measurement on the board" @onclick="MeasurementSave">Save to board</button>
                         <button type="button" class="chip active default-action" data-default-action
-                                title="Keep clicking points to add them to the total length" @onclick="RulerAddPoints">Add points<span class="key-hint">Space</span></button>
+                                title="Keep clicking points to add them to the total length" @onclick="MeasurementAddPoints">Add points<span class="key-hint">Space</span></button>
                     </div>
                 }
             </section>
@@ -229,7 +229,7 @@
         else if (_measure is { } t)
         {
             <section class="glass process-box measure-box" aria-label="Measurement" aria-live="polite">
-                <div class="process-step">Ruler · @(t.Mode == "multi" ? "Adding points" : "Result") · @t.Points points</div>
+                <div class="process-step">Measurement · @(t.Mode == "multi" ? "Adding points" : "Result") · @t.Points points</div>
                 <div class="measure-total">
                     <div>
                         <span class="measure-caption">Total length</span>
@@ -245,7 +245,7 @@
                     <p class="process-text">Click to add points. @(t.Area is null ? "The area appears from three points." : "The area closes back to the first point.")</p>
                     <div class="process-actions">
                         <button type="button" class="chip danger" data-default-action
-                                title="Finish and keep the result" @onclick="RulerStop">Stop<span class="key-hint">Space</span></button>
+                                title="Finish and keep the result" @onclick="MeasurementStop">Stop<span class="key-hint">Space</span></button>
                     </div>
                 }
                 else
@@ -261,7 +261,7 @@
                         {
                             <button type="button" class="chip check-chip @(enabled ? "active" : "")"
                                     role="checkbox" aria-checked="@(enabled.ToString().ToLowerInvariant())"
-                                    @onclick="() => RulerToggleDisplay(option)">
+                                    @onclick="() => MeasurementToggleDisplay(option)">
                                 <span class="check-box" aria-hidden="true">@(enabled ? "✓" : "")</span>
                                 @label
                             </button>
@@ -277,13 +277,13 @@
                             <div class="measure-point-row">
                                 <button type="button" class="chip check-chip stack-end @(point.Selected ? "active" : "")"
                                         role="checkbox" aria-checked="@(point.Selected.ToString().ToLowerInvariant())"
-                                        @onclick="() => RulerTogglePoint(index)">
+                                        @onclick="() => MeasurementTogglePoint(index)">
                                     <span class="check-box" aria-hidden="true">@(point.Selected ? "✓" : "")</span>
                                     <span>@point.Label</span>
                                     <span class="stack-meta">x @point.X · y @point.Y</span>
                                 </button>
                                 <button type="button" class="chip danger" aria-label="@($"Delete {point.Label}")"
-                                        title="@($"Delete {point.Label}")" @onclick="() => RulerDeletePoint(index)">Delete</button>
+                                        title="@($"Delete {point.Label}")" @onclick="() => MeasurementDeletePoint(index)">Delete</button>
                             </div>
                         }
                     </div>
@@ -291,13 +291,13 @@
                     {
                         <div class="process-actions">
                             <button type="button" class="chip" title="Continue adding points after the last included point"
-                                    @onclick="RulerAddPoints">Add points</button>
+                                    @onclick="MeasurementAddPoints">Add points</button>
                         </div>
                     }
                     <div class="process-actions">
                         <button type="button" class="chip measure-cancel" @onclick="CancelMeasurement">Cancel</button>
                         <button type="button" class="chip active default-action" data-default-action
-                                disabled="@(t.Points < 2)" @onclick="RulerSave">
+                                disabled="@(t.Points < 2)" @onclick="MeasurementSave">
                             @(t.Saved ? "Save changes" : "Save to board")<span class="key-hint">Space</span>
                         </button>
                     </div>
@@ -309,8 +309,8 @@
             </section>
         }
         <div class="toolmenu-row">
-            <aside class="glass toolmenu" aria-label="Ruler toolmenu">
-                <span class="toolmenu-label">Ruler</span>
+            <aside class="glass toolmenu" aria-label="Measurement toolmenu">
+                <span class="toolmenu-label">Measurement</span>
                 <div class="unit-row" role="group" aria-label="Snap to">
                     @foreach (var (mode, label, title) in new[]
                     {
@@ -318,9 +318,9 @@
                         ("nodes", "Nodes only", "Ignore the grid; only line ends can be picked")
                     })
                     {
-                        <button type="button" class="chip @(_rulerSnap == mode ? "active" : "")" title="@title"
-                                aria-pressed="@((_rulerSnap == mode).ToString().ToLowerInvariant())"
-                                @onclick="() => SetRulerSnap(mode)">@label</button>
+                        <button type="button" class="chip @(_measurementSnap == mode ? "active" : "")" title="@title"
+                                aria-pressed="@((_measurementSnap == mode).ToString().ToLowerInvariant())"
+                                @onclick="() => SetMeasurementSnap(mode)">@label</button>
                     }
                 </div>
             </aside>
@@ -356,15 +356,22 @@
     </div>
 }
 
+@if (_layers is { } layers && _pages is { } panelPages)
+{
+    <SidePanel @ref="_boardPanel" Label="Pages and Layers">
+        <Pages>
+            <PagesPanel State="panelPages" OnAdd="AddPage" OnSelect="SelectPage" OnToggleVisible="SetPageVisible" OnToggleLocked="SetPageLocked" />
+        </Pages>
+        <Layers>
+            <LayersPanel State="layers" CanAssign="@CanAssignLayer" Error="@_layerError" OnAdd="AddLayer"
+                         OnActivate="ActivateLayer" OnAssign="AssignLayer" OnSelectAll="SelectLayerItems" OnRename="RenameLayer"
+                         OnVisible="SetLayerVisible" OnPrintable="SetLayerPrintable" />
+        </Layers>
+    </SidePanel>
+}
+
 @if (_tool == "page" && _pages is { } pages)
 {
-    <SidePanel Label="Board panel" Tabs="SideTabs" @bind-ActiveTab="_sideTab">
-        @if (_sideTab == "Pages")
-        {
-            <PagesPanel State="pages" OnAdd="AddPage" OnSelect="SelectPage" OnToggleVisible="SetPageVisible" OnToggleLocked="SetPageLocked" />
-        }
-    </SidePanel>
-
     <div class="toolmenu-dock">
         @if (pages.Placing)
         {
@@ -754,7 +761,7 @@
         string? Area = null, bool Saved = false, MeasurementPoint[]? Nodes = null,
         bool ShowLengths = true, bool ShowAngles = true, bool ShowArea = true, bool Dimension = false);
 
-    private string _rulerSnap = "grid";
+    private string _measurementSnap = "grid";
     private bool _lineMulti = true;
 
     private async Task ToggleLineMulti()
@@ -767,29 +774,29 @@
     }
     private Measurement? _measure;
 
-    private async Task RulerAddPoints()
+    private async Task MeasurementAddPoints()
     {
-        if (_cad is not null) await _cad.InvokeAsync<bool>("rulerAddPoints");
+        if (_cad is not null) await _cad.InvokeAsync<bool>("measurementAddPoints");
     }
 
-    private async Task RulerStop()
+    private async Task MeasurementStop()
     {
-        if (_cad is not null) await _cad.InvokeAsync<bool>("rulerStop");
+        if (_cad is not null) await _cad.InvokeAsync<bool>("measurementStop");
     }
 
-    private async Task RulerTogglePoint(int index)
+    private async Task MeasurementTogglePoint(int index)
     {
-        if (_cad is not null) await _cad.InvokeVoidAsync("rulerTogglePoint", index);
+        if (_cad is not null) await _cad.InvokeVoidAsync("measurementTogglePoint", index);
     }
 
-    private async Task RulerDeletePoint(int index)
+    private async Task MeasurementDeletePoint(int index)
     {
-        if (_cad is not null) await _cad.InvokeVoidAsync("rulerDeletePoint", index);
+        if (_cad is not null) await _cad.InvokeVoidAsync("measurementDeletePoint", index);
     }
 
-    private async Task RulerToggleDisplay(string option)
+    private async Task MeasurementToggleDisplay(string option)
     {
-        if (_cad is not null) await _cad.InvokeVoidAsync("rulerToggleDisplay", option);
+        if (_cad is not null) await _cad.InvokeVoidAsync("measurementToggleDisplay", option);
     }
 
     private bool _deletingMeasurement;
@@ -825,9 +832,9 @@
         }
     }
 
-    private async Task RulerSave()
+    private async Task MeasurementSave()
     {
-        if (_cad is not null) await _cad.InvokeVoidAsync("rulerSave");
+        if (_cad is not null) await _cad.InvokeVoidAsync("measurementSave");
     }
 
     private async Task CancelMeasurement()
@@ -835,13 +842,13 @@
         if (_cad is not null) await _cad.InvokeAsync<bool>("cancelCurrent");
     }
 
-    private async Task SetRulerSnap(string mode)
+    private async Task SetMeasurementSnap(string mode)
     {
         if (_cad is null)
             throw new InvalidOperationException("The drawing workspace is not ready.");
 
-        await _cad.InvokeVoidAsync("setRulerSnap", mode);
-        _rulerSnap = mode;
+        await _cad.InvokeVoidAsync("setMeasurementSnap", mode);
+        _measurementSnap = mode;
     }
 
     [JSInvokable]
@@ -851,8 +858,45 @@
         StateHasChanged();
     }
 
-    private static readonly string[] SideTabs = ["Pages"];
-    private string _sideTab = "Pages";
+    private SidePanel? _boardPanel;
+    private LayersState? _layers;
+    private string? _layerError;
+    private bool CanAssignLayer => (_tool == "select" && _selectionCount > 0)
+        || (_tool == "measurement" && _measure?.Saved == true);
+
+    [JSInvokable]
+    public void OnLayersChanged(LayersState state)
+    {
+        _layers = state;
+        StateHasChanged();
+    }
+
+    private async Task LayerCall(string identifier, params object?[] args)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+        try
+        {
+            _layerError = null;
+            await _cad.InvokeVoidAsync(identifier, args);
+        }
+        catch (JSException ex)
+        {
+            _layerError = ex.Message;
+            Log("error", $"{identifier}: {ex.Message}");
+        }
+    }
+
+    private Task AddLayer() => LayerCall("createLayer");
+    private Task ActivateLayer(int id) => LayerCall("activateLayer", id);
+    private Task AssignLayer(int id) => LayerCall("moveSelectionToLayer", id);
+    private Task SelectLayerItems(int id) => LayerCall("selectLayerItems", id);
+    private Task RenameLayer((int Id, string Name) change) =>
+        LayerCall("editLayer", change.Id, new { name = change.Name });
+    private Task SetLayerVisible((int Id, bool Value) change) =>
+        LayerCall("editLayer", change.Id, new { visible = change.Value });
+    private Task SetLayerPrintable((int Id, bool Value) change) =>
+        LayerCall("editLayer", change.Id, new { printable = change.Value });
     private PagesState? _pages;
     private string? _pageError;
 
@@ -906,9 +950,9 @@
     [
         new("cross", "Cross", "V", "general", "<path class=\"cross\" d=\"M12 3v7M12 14v7M3 12h7M14 12h7\"/>"),
         new("select", "Select", "S", "general", "<path d=\"M5 3l14 8.5-6.2 1.6 3.7 6.4-2.6 1.5-3.7-6.4L5 18z\"/>"),
-        new("ruler", "Ruler", "R", "general", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>"),
         new("page", "Page", "P", "data", "<path class=\"outline\" d=\"M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6\"/>"),
-        new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>")
+        new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>"),
+        new("measurement", "Measurement", "M", "data", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>")
     ];
 
     private async Task SetTool(string name)
@@ -925,6 +969,7 @@
     public void OnToolChanged(string tool)
     {
         _tool = tool;
+        if (tool == "page") _boardPanel?.OpenPages();
         StateHasChanged();
     }
 
@@ -1302,6 +1347,7 @@
         await ApplyAppearance();
         await SyncProject();
         _pages = await _cad.InvokeAsync<PagesState>("getPages");
+        _layers = await _cad.InvokeAsync<LayersState>("getLayers");
         StateHasChanged();
     }
 

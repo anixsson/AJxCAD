@@ -13,6 +13,7 @@
 //    in Lines mode the lines with both ends selected.
 
 import { bucket, checkpoint } from "../store.js";
+import { visibleItems } from "../layers.js";
 
 const HIT_PX = 10;
 const DRAG_PX = 3;
@@ -38,7 +39,7 @@ export function createSelectTool(env) {
     function allPoints() {
         const out = [];
         for (const geo of geometries) {
-            for (const item of bucket(geo.bucket).items) {
+            for (const item of visibleItems(geo.bucket)) {
                 for (const p of geo.points(item)) out.push({ geo, item, key: p.key, x: p.x, y: p.y });
             }
         }
@@ -52,7 +53,7 @@ export function createSelectTool(env) {
         const reach = Math.abs(env.toWorld(sx + HIT_PX, sy).x - w.x);
         let best = null, bestDist = HIT_PX;
         for (const geo of geometries) {
-            for (const item of bucket(geo.bucket).items) {
+            for (const item of visibleItems(geo.bucket)) {
                 for (const p of geo.points(item)) {
                     if (Math.abs(p.x - w.x) > reach || Math.abs(p.y - w.y) > reach) continue;
                     const s = env.toScreen(p.x, p.y);
@@ -77,7 +78,7 @@ export function createSelectTool(env) {
         let best = null, bestDist = HIT_PX;
         for (const geo of geometries) {
             if (geo.annotation) continue;
-            for (const item of bucket(geo.bucket).items) {
+            for (const item of visibleItems(geo.bucket)) {
                 const points = geo.points(item);
                 if (points.length !== 2) continue;
                 const [a, b] = points.map(p => env.toScreen(p.x, p.y));
@@ -121,7 +122,7 @@ export function createSelectTool(env) {
         if (mode !== "lines" || !splitHandles) return;
         for (const geo of env.geometries) {
             if (!geo.split) continue;
-            for (const item of bucket(geo.bucket).items) {
+            for (const item of visibleItems(geo.bucket)) {
                 const points = geo.points(item);
                 if (points.length !== 2 || !points.every(p => selected.has(keyOf(geo, item, p.key)))) continue;
                 const [a, b] = points;
@@ -274,7 +275,7 @@ export function createSelectTool(env) {
         const out = [];
         if (!selected.size) return out;
         for (const geo of env.geometries) {
-            for (const item of bucket(geo.bucket).items) {
+            for (const item of visibleItems(geo.bucket)) {
                 const points = geo.points(item);
                 const on = p => selected.has(keyOf(geo, item, p.key));
                 if (points.length && (mode === "nodes" ? points.some(on) : points.every(on))) out.push({ geo, item });
@@ -344,7 +345,7 @@ export function createSelectTool(env) {
         const d = view.dpr;
         g.beginPath();
         for (const geo of geometries) {
-            for (const item of bucket(geo.bucket).items) {
+            for (const item of visibleItems(geo.bucket)) {
                 const all = geo.points(item);
                 if (!all.some(p => selected.has(keyOf(geo, item, p.key)))) continue;
                 const points = all.filter(p => !p.handle);
@@ -370,6 +371,16 @@ export function createSelectTool(env) {
         hotkey: "s",
 
         selectedMeasurementId,
+        selectedLayerItems: () => [...new Set([...selected.values()].map(r => r.item))],
+
+        selectLayer(id) {
+            this.deactivate();
+            for (const p of allPoints()) {
+                if (p.item.layerId === id) selected.set(refKey(p), p);
+            }
+            notifySelection();
+            env.redraw();
+        },
 
         // Deletes the lines with both ends selected (one undo step). Returns how many were removed.
         removeLines() {
@@ -695,7 +706,7 @@ export function createSelectTool(env) {
             for (const geo of env.geometries) {
                 g.beginPath();
                 let count = 0;
-                for (const item of bucket(geo.bucket).items) {
+                for (const item of visibleItems(geo.bucket)) {
                     const points = geo.points(item);
                     if (points.length !== 2) continue;
                     if (!points.every(p => selected.has(keyOf(geo, item, p.key)))) continue;

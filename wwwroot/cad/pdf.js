@@ -5,7 +5,8 @@
 // boxes use PRINT_SIZES (points) times the page's text size.
 
 import { pageRect, paperSize, textSizeOf } from "./pages.js";
-import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, dimensionOf, readableAngle, PRINT_SIZES, scaleSizes } from "./tools/ruler.js";
+import { layerPrintable } from "./layers.js";
+import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, dimensionOf, readableAngle, PRINT_SIZES, scaleSizes } from "./tools/measurement.js";
 
 const PT_PER_MM = 72 / 25.4;
 const n = v => `${+v.toFixed(3)}`;
@@ -151,6 +152,7 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
 
     const path = [];
     for (const l of lines) {
+        if (!layerPrintable(l)) continue;
         if (outside(l, r)) continue;
         path.push(`${px(l.x1)} ${py(l.y1)} m ${px(l.x2)} ${py(l.y2)} l`);
     }
@@ -158,6 +160,7 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
     const fills = [], marks = [];
     const sz = scaleSizes(PRINT_SIZES, textSizeOf(page) / 100);
     for (const item of measures) {
+        if (!layerPrintable(item)) continue;
         const world = item.points.filter(p => p.enabled !== false);
         if (world.length < 2) continue;
         const dim = dimensionOf(world, item.dimension);

@@ -3,14 +3,15 @@
 // that provides them, so future shape types plug in the same way.
 
 import { bucket, defineBucket, newId } from "./store.js";
+import { activeLayerId } from "./layers.js";
 
 export const LINES = "lines";
 const GLOW_MAX_LINES = 400;
 
-defineBucket(LINES, { label: "Lines", fields: ["id", "x1", "y1", "x2", "y2"] });
+defineBucket(LINES, { label: "Lines", fields: ["id", "x1", "y1", "x2", "y2", "layerId"] });
 
 export function addLine(x1, y1, x2, y2) {
-    const line = { id: newId(), x1, y1, x2, y2 };
+    const line = { id: newId(), x1, y1, x2, y2, layerId: activeLayerId() };
     bucket(LINES).items.push(line);
     return line;
 }
@@ -57,6 +58,7 @@ export const lineGeometry = {
     // Returns the joint as [{ item, key }, ...] plus the new line.
     split(l, x, y) {
         const added = addLine(x, y, l.x2, l.y2);
+        added.layerId = l.layerId ?? activeLayerId();
         l.x2 = x;
         l.y2 = y;
         return { added, joint: [{ item: l, key: "b" }, { item: added, key: "a" }] };

@@ -8,10 +8,11 @@ import { addLine, lineGeometry, LINES } from "./lines.js";
 import { generateLines } from "./test-data.js";
 import { createLineTool } from "./tools/line.js";
 import { createSelectTool } from "./tools/select.js";
-import { createRulerTool, measurementGeometry, MEASURES } from "./tools/ruler.js";
+import { createMeasurementTool, measurementGeometry, MEASURES } from "./tools/measurement.js";
 import { createPageTool } from "./tools/page.js";
 import { PAGES, textSizeOf } from "./pages.js";
 import { pagePdf } from "./pdf.js";
+import { normalizeLayers, layerState, addLayer, updateLayer, setActiveLayer, assignLayer, visibleItems, layerPrintable, requireLayer } from "./layers.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -44,7 +45,7 @@ function snap(sx, sy, exclude) {
     const wc = toWorld(sx, sy);
     const reach = SNAP_PX / scale;
     for (const geo of geometries) {
-        for (const item of bucket(geo.bucket).items) {
+        for (const item of visibleItems(geo.bucket)) {
             for (const p of geo.points(item)) {
                 if (Math.abs(p.x - wc.x) > reach || Math.abs(p.y - wc.y) > reach) continue;
                 if (exclude?.(geo, item, p.key)) continue;
@@ -118,7 +119,7 @@ const env = {
     pagesChanged: state => dotnet?.invokeMethodAsync("OnPagesChanged", state),
     viewSizeMm: () => ({ w: el.clientWidth / scale, h: el.clientHeight / scale }),
     measurementSelectionChanged: id => dotnet?.invokeMethodAsync("OnSelectedMeasurement",
-        id === null ? null : tools.ruler.inspect(id)),
+        id === null ? null : tools.measurement.inspect(id)),
     capture: id => el.setPointerCapture(id)
 };
 
@@ -180,32 +181,81 @@ export const confirmMoveBase = () => tools.select.confirmMoveBase();
 export const cancelProcess = () => tools.select.cancelProcess();
 export const removeSelectedLines = () => tools.select.removeLines();
 
-export const setRulerSnap = mode => tools.ruler.setSnapMode(mode);
+export const setMeasurementSnap = mode => tools.measurement.setSnapMode(mode);
 export const setLineMulti = on => tools.line.setMulti(on);
-export const rulerAddPoints = () => tools.ruler.addPoints();
-export const rulerStop = () => tools.ruler.stop();
-export const rulerSave = () => tools.ruler.save();
-export const rulerTogglePoint = index => tools.ruler.togglePoint(index);
-export const rulerDeletePoint = index => tools.ruler.deletePoint(index);
-export const rulerToggleDisplay = option => tools.ruler.toggleDisplay(option);
+export const measurementAddPoints = () => tools.measurement.addPoints();
+export const measurementStop = () => tools.measurement.stop();
+export const measurementSave = () => tools.measurement.save();
+export const measurementTogglePoint = index => tools.measurement.togglePoint(index);
+export const measurementDeletePoint = index => tools.measurement.deletePoint(index);
+export const measurementToggleDisplay = option => tools.measurement.toggleDisplay(option);
+export const getLayers = () => layerState();
+
+function layersChanged(resetTools = false) {
+    normalizeLayers();
+    if (resetTools) for (const t of Object.values(tools)) t.dataChanged?.();
+    else tools.page.refresh();
+    dotnet?.invokeMethodAsync("OnLayersChanged", layerState());
+    draw();
+}
+
+export function createLayer() {
+    addLayer();
+    layersChanged();
+}
+
+export function editLayer(id, changes) {
+    updateLayer(id, changes);
+    layersChanged(Object.hasOwn(changes, "visible"));
+}
+
+export function activateLayer(id) {
+    setActiveLayer(id);
+    dotnet?.invokeMethodAsync("OnLayersChanged", layerState());
+}
+
+export function selectLayerItems(id) {
+    const layer = requireLayer(id);
+    if (!layer.visible) throw new Error("Show the layer before selecting its items");
+    setTool("select");
+    tools.select.selectLayer(id);
+    log("action", `selected lines and measurements in layer: ${layer.name}`);
+}
+
+export function moveSelectionToLayer(id) {
+    let items = [];
+    if (toolId === "select") items = tools.select.selectedLayerItems();
+    else if (toolId === "measurement") {
+        const measure = bucket(MEASURES).items.find(m => m.id === tools.measurement.selectedMeasurementId());
+        if (measure) items = [measure];
+    }
+    assignLayer(items, id);
+    layersChanged(true);
+}
 export function editMeasurement(id) {
     if (toolId !== "select") throw new Error("Use Select to edit a saved measurement");
-    setTool("ruler");
-    tools.ruler.open(id);
+    setTool("measurement");
+    tools.measurement.open(id);
 }
 export function deleteSelectedMeasurement() {
     const id = currentTool().selectedMeasurementId?.() ?? null;
     if (id === null || (toolId === "select" && !tools.select.canOpenMeasurement())) {
         throw new Error("Select a saved measurement before deleting it");
     }
-    tools.ruler.deleteMeasurement(id);
+    tools.measurement.deleteMeasurement(id);
     tools.select.dataChanged();
 }
 
 // Page tool and the Pages side panel.
 export const getPages = () => tools.page.state();
-export const startPlacePage = () => tools.page.startPlacing();
-export const selectPage = id => tools.page.select(id);
+export function startPlacePage() {
+    setTool("page");
+    tools.page.startPlacing();
+}
+export function selectPage(id) {
+    setTool("page");
+    tools.page.select(id);
+}
 export const setPageDraft = changes => tools.page.setDraft(changes);
 export const savePage = () => tools.page.save();
 export const setPagePreview = on => tools.page.setPreview(on);
@@ -240,7 +290,9 @@ export function undo() {
         log("action", "undo (cancel current)");
     } else {
         log("action", undoData() ? "undo" : "undo (nothing to undo)");
+        normalizeLayers();
         for (const t of Object.values(tools)) t.dataChanged?.();
+        dotnet?.invokeMethodAsync("OnLayersChanged", layerState());
     }
     draw();
 }
@@ -341,8 +393,8 @@ function render() {
     const printPx = preview ? scale * preview.scale * (25.4 / 72) * textSizeOf(preview) / 100 : 0;
     const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects, paper: paperTheme, printPx };
     tools.page.drawSaved(ctx, view);
-    for (const geo of geometries) geo.draw(ctx, bucket(geo.bucket).items, view);
-    tools.ruler.drawSaved(ctx, view);
+    for (const geo of geometries) geo.draw(ctx, visibleItems(geo.bucket).filter(item => !preview || layerPrintable(item)), view);
+    tools.measurement.drawSaved(ctx, view);
     currentTool().draw?.(ctx, view);
 
     // Only tell Blazor when the "origin is centred" state flips, not on every pan frame.
@@ -354,6 +406,7 @@ function render() {
 }
 
 export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
+    normalizeLayers();
     el = workspace;
     canvas = canvasEl;
     ctx = canvas.getContext("2d");
@@ -368,7 +421,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     tools.cross = { id: "cross", hotkey: "v" };
     tools.select = createSelectTool(env);
     tools.line = createLineTool(env);
-    tools.ruler = createRulerTool(env);
+    tools.measurement = createMeasurementTool(env);
     tools.page = createPageTool(env);
 
     const toolEvent = e => {
@@ -428,7 +481,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
             log("mouse", `click detail=${e.detail}`);
             const event = toolEvent(e);
             const measurement = toolId === "select" && !event.shift && tools.select.canOpenMeasurement()
-                ? tools.ruler.hitText(event.sx, event.sy) : null;
+                ? tools.measurement.hitText(event.sx, event.sy) : null;
             const page = toolId === "select" && measurement === null && !event.shift && tools.select.canOpenMeasurement()
                 && !tools.select.hits(event.sx, event.sy) ? tools.page.edgeAt(event.sx, event.sy) : null;
             if (measurement !== null) {
@@ -636,7 +689,9 @@ export function generateTestLines(count, spacing) {
 
 export function loadDataText(text) {
     const n = deserialize(text);
+    normalizeLayers();
     for (const t of Object.values(tools)) t.dataChanged?.();
+    dotnet?.invokeMethodAsync("OnLayersChanged", layerState());
     log("action", `loaded ${n} bucket${n === 1 ? "" : "s"}`);
     draw();
     return n;
@@ -644,7 +699,9 @@ export function loadDataText(text) {
 
 export function newProject() {
     clearAll();
+    normalizeLayers();
     for (const t of Object.values(tools)) t.dataChanged?.();
+    dotnet?.invokeMethodAsync("OnLayersChanged", layerState());
     log("action", "new project");
     animateView(oneToOne, el.clientWidth / 2, el.clientHeight / 2, 600); // back to the origin at 1:1
     draw();

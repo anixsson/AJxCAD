@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { bucket, undo, newId } from "../wwwroot/cad/store.js";
 import { createSelectTool } from "../wwwroot/cad/tools/select.js";
 import { lineGeometry } from "../wwwroot/cad/lines.js";
-import { MEASURES, measurementGeometry } from "../wwwroot/cad/tools/ruler.js";
+import { MEASURES, measurementGeometry } from "../wwwroot/cad/tools/measurement.js";
 
 const lines = bucket("lines");
 

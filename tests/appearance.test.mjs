@@ -72,14 +72,14 @@ test("Paper renders all canvas tools in monochrome and switching back restores c
         click(200, 200);
         pointer("pointermove", 500, 200);
         click(500, 200);
-        engine.setTool("ruler");
+        engine.setTool("measurement");
         click(200, 200);
         click(500, 200);
-        engine.rulerAddPoints();
+        engine.measurementAddPoints();
         pointer("pointermove", 500, 500);
         click(500, 500);
-        engine.rulerStop();
-        engine.rulerSave();
+        engine.measurementStop();
+        engine.measurementSave();
         engine.setTool("select");
         click(200, 200);
         engine.startMove();

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bucket, serialize, deserialize, undo } from "../wwwroot/cad/store.js";
-import { createRulerTool, MEASURES, dimensionOf, measurementGeometry, readableAngle } from "../wwwroot/cad/tools/ruler.js";
+import { createMeasurementTool, MEASURES, dimensionOf, measurementGeometry, readableAngle } from "../wwwroot/cad/tools/measurement.js";
 
 const lines = bucket("lines");
 
@@ -9,7 +9,7 @@ function setup(items) {
     lines.items = items.map((line, id) => ({ id: id + 1, ...line }));
     bucket(MEASURES).items = [];
     const measures = [];
-    const tool = createRulerTool({
+    const tool = createMeasurementTool({
         geometries: [{
             bucket: "lines",
             points: line => [
@@ -75,7 +75,7 @@ test("Nodes only ignores the grid and picks only line ends", () => {
         ax: "3 mm", ay: "4 mm", bx: "103 mm", by: "4 mm", points: 2, dimension: false
     });
     tool.setSnapMode("grid");
-    assert.throws(() => tool.setSnapMode("other"), /Unknown ruler snap mode/);
+    assert.throws(() => tool.setSnapMode("other"), /Unknown measurement snap mode/);
 });
 
 test("cancel, undo step, tool change and data change clear the measurement", () => {
@@ -390,7 +390,7 @@ test("multiple saved annotations remain visible, and the edit preview replaces o
     tool.open(second);
     assert.equal(savedDrawing(tool).circles.length, 3, "hide the original while its draft is on the board");
     tool.deactivate();
-    assert.equal(savedDrawing(tool).circles.length, 6, "leaving Ruler restores the saved version");
+    assert.equal(savedDrawing(tool).circles.length, 6, "leaving Measurement restores the saved version");
     assert.equal(undo(), true);
     tool.dataChanged();
     assert.equal(bucket(MEASURES).items.length, 1, "undo removes only the last saved annotation");
