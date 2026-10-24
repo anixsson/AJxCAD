@@ -708,6 +708,31 @@ button {
     border-color: #8fe3ff;
 }
 
+.stack-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.stack-end {
+    justify-content: flex-start;
+    padding: 6px 8px;
+}
+
+.stack-label {
+    min-width: 22px;
+    font-weight: 700;
+    color: #ff8fe0;
+}
+
+.stack-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 400;
+    color: rgba(230, 230, 255, 0.75);
+}
+
 .chip:disabled {
     opacity: 0.4;
     cursor: default;

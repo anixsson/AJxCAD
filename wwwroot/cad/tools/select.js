@@ -6,6 +6,8 @@
 //    and moves the new shared corner.
 //  - Move (action menu): pick a base point, press Next, then pick where the base point should go.
 //  - A corner shared by several lines moves as one, so joined lines stay joined.
+//  - Clicking such a stacked corner (Nodes mode) opens the Corner box: each line end gets a label
+//    (L1, L2, ...) on the board and a checkbox, so only the checked ends are selected and move.
 //  - With a single free end selected, only that one line changes.
 
 import { bucket, checkpoint } from "../store.js";
@@ -24,6 +26,7 @@ export function createSelectTool(env) {
     let splitHandles = true; // midpoint handles on selected lines (Actions menu toggle)
     let process = null; // guided Move: { step: "base" | "target", base, point }
     let lastCount = 0;
+    let stack = null; // stacked corner being inspected: { ends: [{ geo, item, key, label }] }
 
     const keyOf = (geo, item, key) => `${geo.bucket}:${item.id}:${key}`;
     const refKey = r => keyOf(r.geo, r.item, r.key);
@@ -146,6 +149,95 @@ export function createSelectTool(env) {
         }
     }
 
+    const pointOf = r => r.geo.points(r.item).find(q => q.key === r.key);
+    const signed = v => (v < 0 ? "−" : "") + env.formatLength(Math.abs(v));
+
+    // The far end of a two-point line, or null for other geometry.
+    function otherEnd(r) {
+        const points = r.geo.points(r.item);
+        return points.length === 2 ? points.find(q => q.key !== r.key) : null;
+    }
+
+    function setStack(node) {
+        const next = node && mode === "nodes" && node.refs.length >= 2
+            ? { ends: node.refs.map((r, i) => ({ geo: r.geo, item: r.item, key: r.key, label: `L${i + 1}` })) }
+            : null;
+        if (!stack && !next) return;
+        stack = next;
+        publishStack();
+    }
+
+    // Tells the UI about the stacked corner; closes it once its ends no longer meet (e.g. some were moved away).
+    function publishStack() {
+        if (stack) {
+            const points = stack.ends.map(pointOf);
+            const [c] = points;
+            if (points.some(p => !p || Math.abs(p.x - c.x) >= SAME || Math.abs(p.y - c.y) >= SAME)) stack = null;
+        }
+        if (!stack) {
+            env.stackChanged?.(null);
+            return;
+        }
+        const c = pointOf(stack.ends[0]);
+        env.stackChanged?.({
+            x: signed(c.x),
+            y: signed(c.y),
+            ends: stack.ends.map(r => {
+                const o = otherEnd(r);
+                return {
+                    label: r.label,
+                    selected: selected.has(refKey(r)),
+                    length: o ? env.formatLength(Math.hypot(o.x - c.x, o.y - c.y)) : null,
+                    to: o ? `${signed(o.x)}, ${signed(o.y)}` : null
+                };
+            })
+        });
+    }
+
+    function drawStackLabels(g, view) {
+        const d = view.dpr;
+        const c = pointOf(stack.ends[0]);
+        const cs = view.toScreen(c.x, c.y);
+        g.font = `600 ${11 * d}px system-ui, -apple-system, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        for (const r of stack.ends) {
+            const o = otherEnd(r);
+            if (!o) continue;
+            const os = view.toScreen(o.x, o.y);
+            const len = Math.hypot(os.x - cs.x, os.y - cs.y);
+            if (len < 1) continue;
+            const ux = (os.x - cs.x) / len, uy = (os.y - cs.y) / len;
+            const reach = Math.min(36, len * 0.6);
+            const on = selected.has(refKey(r));
+            if (on) {
+                g.strokeStyle = "#ff8fe0";
+                g.lineWidth = 3 * d;
+                g.beginPath();
+                g.moveTo(cs.x * d, cs.y * d);
+                g.lineTo((cs.x + ux * reach) * d, (cs.y + uy * reach) * d);
+                g.stroke();
+            }
+            // Sit just above the line (screen up), part-way along it from the corner.
+            let nx = -uy, ny = ux;
+            if (ny > 0 || (ny === 0 && nx > 0)) { nx = -nx; ny = -ny; }
+            const x = (cs.x + ux * reach + nx * 11) * d, y = (cs.y + uy * reach + ny * 11) * d;
+            const w = g.measureText(r.label).width + 10 * d, h = 16 * d;
+            g.fillStyle = on ? "rgba(255,143,224,0.9)" : "rgba(20,16,44,0.85)";
+            g.strokeStyle = on ? "#ff8fe0" : "rgba(255,255,255,0.5)";
+            g.lineWidth = 1 * d;
+            g.beginPath();
+            g.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+            g.fill();
+            g.stroke();
+            g.fillStyle = on ? "#1a1538" : "rgba(255,255,255,0.8)";
+            g.fillText(r.label, x, y);
+        }
+        g.textAlign = "start";
+        g.textBaseline = "alphabetic";
+        g.lineWidth = 1.5 * d;
+    }
+
     function report() {
         env.log("action", `selected ${selected.size} line end${selected.size === 1 ? "" : "s"}`);
         notifySelection();
@@ -254,6 +346,35 @@ export function createSelectTool(env) {
             return true;
         },
 
+        // Esc: cancel a running Move, otherwise close the Corner box (the selection stays).
+        cancel() {
+            if (this.cancelProcess()) return true;
+            if (!stack) return false;
+            setStack(null);
+            env.redraw();
+            return true;
+        },
+
+        closeStack() {
+            if (!stack) return false;
+            setStack(null);
+            env.redraw();
+            return true;
+        },
+
+        toggleStackEnd(index) {
+            const r = stack?.ends[index];
+            if (!r) return false;
+            const k = refKey(r);
+            if (selected.has(k)) selected.delete(k);
+            else selected.set(k, { geo: r.geo, item: r.item, key: r.key });
+            env.log("action", `${r.label} ${selected.has(k) ? "selected" : "deselected"}`);
+            notifySelection();
+            publishStack();
+            env.redraw();
+            return true;
+        },
+
         // Undo first cancels a running Move, the next ones undo drawing edits.
         undoStep() {
             return this.cancelProcess();
@@ -262,6 +383,7 @@ export function createSelectTool(env) {
         setSelectionMode(value) {
             if (value !== "nodes" && value !== "lines") throw new Error(`Unknown selection mode: ${value}`);
             mode = value;
+            setStack(null);
             hover = null;
             hoverHandle = null;
             drag = null;
@@ -277,6 +399,7 @@ export function createSelectTool(env) {
 
         deactivate() {
             selected.clear();
+            setStack(null);
             hover = null;
             hoverHandle = null;
             drag = null;
@@ -288,6 +411,8 @@ export function createSelectTool(env) {
         // Undo replaces the stored items, so any selection would point at stale data.
         dataChanged() {
             selected.clear();
+            stack = null;
+            env.stackChanged?.(null);
             drag = null;
             hover = null;
             hoverHandle = null;
@@ -309,6 +434,7 @@ export function createSelectTool(env) {
                 moveSelection(dx, dy);
                 env.log("action", `moved ${selected.size} line end${selected.size === 1 ? "" : "s"} by ${env.formatLength(Math.hypot(dx, dy))}`);
                 setProcess(null);
+                publishStack();
                 return;
             }
             const handle = !e.shift && findHandle(e.sx, e.sy);
@@ -331,6 +457,7 @@ export function createSelectTool(env) {
             }
             const node = findTarget(e.sx, e.sy);
             if (!node) {
+                setStack(null);
                 const mode = e.shift ? (e.control ? "remove" : "add") : "replace";
                 drag = {
                     kind: "marquee",
@@ -350,15 +477,19 @@ export function createSelectTool(env) {
 
             if (e.shift && e.control) {
                 removeNode(node);
+                setStack(null);
                 report();
                 env.redraw();
                 return;
             }
 
-            const alreadySelected = isSelected(node);
+            // Grabbing the inspected corner keeps the ends picked in the Corner box.
+            const inStack = stack && node.refs.some(r => stack.ends.some(s => refKey(s) === refKey(r)));
+            const alreadySelected = isSelected(node) || (inStack && node.refs.some(r => selected.has(refKey(r))));
             if (!alreadySelected) {
                 if (!e.shift) selected.clear();
                 addNode(node);
+                setStack(e.shift ? null : node);
                 report();
             }
 
@@ -446,6 +577,7 @@ export function createSelectTool(env) {
                 removeNode(drag.toggleOnRelease);
                 report();
             }
+            if (drag.moved || drag.toggleOnRelease) publishStack();
             drag = null;
             marker = null;
             updateHover(e.sx, e.sy);
@@ -540,6 +672,8 @@ export function createSelectTool(env) {
                     g.stroke();
                 }
             }
+
+            if (stack && !drag?.moved && !process) drawStackLabels(g, view);
 
             if (hover && !drag && mode === "nodes") {
                 const s = view.toScreen(hover.x, hover.y);

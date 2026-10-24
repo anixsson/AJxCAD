@@ -72,6 +72,7 @@
             ("Toolmenu", "Use the bottom-center Nodes / Lines toggle to choose what clicking selects; switching modes keeps the selection"),
             ("Click", "Select a line end in Nodes mode, or both ends of a line in Lines mode; shared corners stay joined"),
             ("Highlights", "Every line with both ends selected lights up, including lines between selected corners"),
+            ("Corner box", "Click a corner where several lines meet to list each line end (L1, L2…), labelled on the board. Uncheck lines to leave them in place; only checked ends move. Done or Esc closes the box"),
             ("Split", "In Lines mode, drag the diamond handle in the middle of a selected line to split it into two lines and move the new shared node. One undo restores the line. Turn the handles on or off with the Middle checkbox in the Options bar"),
             ("Shift + click", "Add a line end; clicking an already-selected end removes it"),
             ("Shift + Command (Mac) / Shift + Ctrl (Windows) + click", "Remove a line end from the selection"),
@@ -99,6 +100,8 @@
             ("L", "Switch to the Line tool"),
             ("Click", "Place a point"),
             ("Shift", "Lock the angle to 45° steps"),
+            ("Space", "End the current chain; placed lines stay and the next click starts a new line"),
+            ("Toolmenu: Multi", "Checked (default) keeps drawing connected lines; unchecked draws one line per two clicks"),
             ("Double-click or Esc", "Finish and return to the Cross tool"),
             ("Cmd/Ctrl + Z", "Cancel the current line, then undo placed lines")
         ]),

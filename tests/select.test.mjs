@@ -48,7 +48,7 @@ function draw(tool, { dpr = 1, fx = false, toScreen = (x, y) => ({ x, y }) } = {
     const strokes = [];
     let path = [];
     const g = {};
-    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText", "closePath", "fill"]) {
+    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText", "closePath", "fill", "roundRect"]) {
         g[method] = (...args) => {
             calls.push([method, ...args]);
             if (method === "beginPath") path = [];
@@ -56,6 +56,7 @@ function draw(tool, { dpr = 1, fx = false, toScreen = (x, y) => ({ x, y }) } = {
             if (method === "stroke") strokes.push({ style: g.strokeStyle, path: [...path] });
         };
     }
+    g.measureText = text => ({ width: text.length * 7 });
     tool.draw(g, { dpr, fx, toScreen, width: 1000, height: 1000 });
     return { calls, strokes, g };
 }
@@ -480,4 +481,75 @@ test("turning split handles off hides them and lets the middle of a line move th
     assert.deepEqual(geometry(), [[0, 20, 100, 20]], "no split; the line moves");
     tool.setSplitHandles(true);
     assert.equal(handlesDrawn(tool), 1);
+});
+
+function setupStack() {
+    const stacks = [];
+    const result = setup([
+        { x1: 0, y1: 0, x2: 100, y2: 0 },
+        { x1: 0, y1: 0, x2: 0, y2: 100 },
+        { x1: 0, y1: 0, x2: -50, y2: 0 },
+        { x1: 200, y1: 200, x2: 300, y2: 200 }
+    ], { stackChanged: info => stacks.push(info) });
+    return { ...result, stacks };
+}
+const stackLabels = tool => draw(tool).calls.filter(([m, text]) => m === "fillText" && /^L\d$/.test(text)).map(([, text]) => text);
+
+test("clicking a corner where lines meet lists each line end and labels the lines", () => {
+    const { tool, stacks } = setupStack();
+    click(tool, 1, 1);
+    assert.deepEqual(stacks.at(-1), {
+        x: "0 mm", y: "0 mm",
+        ends: [
+            { label: "L1", selected: true, length: "100 mm", to: "100 mm, 0 mm" },
+            { label: "L2", selected: true, length: "100 mm", to: "0 mm, 100 mm" },
+            { label: "L3", selected: true, length: "50 mm", to: "−50 mm, 0 mm" }
+        ]
+    });
+    assert.deepEqual(stackLabels(tool), ["L1", "L2", "L3"]);
+
+    click(tool, 200, 200);
+    assert.equal(stacks.at(-1), null, "a single line end has no Corner box");
+    assert.deepEqual(stackLabels(tool), []);
+});
+
+test("unchecked line ends stay put when the corner is dragged", () => {
+    const { tool, stacks, logs } = setupStack();
+    click(tool, 0, 0);
+    assert.equal(tool.toggleStackEnd(1), true);
+    assert.equal(logs.at(-1).text, "L2 deselected");
+    assert.deepEqual(stacks.at(-1).ends.map(e => e.selected), [true, false, true]);
+
+    // Grabbing the corner again keeps the picked ends instead of reselecting all of them.
+    tool.pointerDown(pointer(0, 0));
+    tool.pointerMove(pointer(10, -20));
+    tool.pointerUp(pointer(10, -20));
+    assert.deepEqual(lines.items.map(l => [l.x1, l.y1, l.x2, l.y2]), [
+        [10, -20, 100, 0], [0, 0, 0, 100], [10, -20, -50, 0], [200, 200, 300, 200]
+    ]);
+    assert.equal(stacks.at(-1), null, "the corner came apart, so the box closes");
+});
+
+test("all ends unchecked then rechecked, Esc and Done close the box, Lines mode has none", () => {
+    const { tool, stacks } = setupStack();
+    click(tool, 0, 0);
+    for (const i of [0, 1, 2]) tool.toggleStackEnd(i);
+    assert.deepEqual(stacks.at(-1).ends.map(e => e.selected), [false, false, false]);
+    tool.toggleStackEnd(2);
+    assert.deepEqual(stacks.at(-1).ends.map(e => e.selected), [false, false, true]);
+
+    assert.equal(tool.cancel(), true);
+    assert.equal(stacks.at(-1), null);
+    assert.equal(tool.cancel(), false);
+
+    click(tool, 0, 0);
+    assert.equal(stacks.at(-1).ends.length, 3, "clicking the corner reopens the box");
+    assert.equal(tool.closeStack(), true);
+    assert.equal(stacks.at(-1), null);
+
+    click(tool, 0, 0);
+    tool.setSelectionMode("lines");
+    assert.equal(stacks.at(-1), null);
+    click(tool, 50, 0);
+    assert.equal(stacks.at(-1), null);
 });

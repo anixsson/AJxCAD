@@ -1,4 +1,6 @@
 // Line tool: click to place a start point, click again to place the end; it keeps chaining until the tool ends.
+// Space ends the current chain (placed lines stay) so the next click starts a new line.
+// With Multi off (toolmenu), every line ends after its second click.
 
 import { checkpoint } from "../store.js";
 import { addLine } from "../lines.js";
@@ -6,6 +8,7 @@ import { addLine } from "../lines.js";
 export function createLineTool(env) {
     let start = null;
     let hover = null;
+    let multi = true;
 
     // Snaps to endpoints and the grid; Shift locks the angle to 45 degree steps from the start point.
     function resolve(e) {
@@ -38,7 +41,7 @@ export function createLineTool(env) {
                 checkpoint();
                 addLine(start.x, start.y, p.x, p.y);
                 env.log("action", `line placed, length ${env.formatLength(Math.hypot(p.x - start.x, p.y - start.y))}`);
-                start = p;
+                start = multi ? p : null;
             }
             hover = p;
             env.redraw();
@@ -52,6 +55,20 @@ export function createLineTool(env) {
         pointerLeave() {
             hover = null;
             env.redraw();
+        },
+
+        setMulti(on) {
+            multi = !!on;
+            start = null;
+            env.redraw();
+        },
+
+        space() {
+            if (!start) return false;
+            start = null;
+            env.log("action", "line chain ended");
+            env.redraw();
+            return true;
         },
 
         // First undo drops the line being drawn, the next ones remove placed lines.

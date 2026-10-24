@@ -85,6 +85,31 @@
                 }
             </section>
         }
+        else if (_stack is { } st)
+        {
+            <section class="glass process-box" role="dialog" aria-label="Corner line ends" aria-live="polite">
+                <div class="process-step">Corner · @st.Ends.Length line ends</div>
+                <div class="process-title">x @st.X · y @st.Y</div>
+                <p class="process-text">Several lines meet here. Uncheck the lines that should stay put; only checked line ends are selected and move.</p>
+                <div class="stack-list" role="group" aria-label="Line ends at this corner">
+                    @for (var i = 0; i < st.Ends.Length; i++)
+                    {
+                        var index = i;
+                        var end = st.Ends[i];
+                        <button type="button" class="chip check-chip stack-end @(end.Selected ? "active" : "")"
+                                role="checkbox" aria-checked="@(end.Selected.ToString().ToLowerInvariant())"
+                                @onclick="() => ToggleStackEnd(index)">
+                            <span class="check-box" aria-hidden="true">@(end.Selected ? "✓" : "")</span>
+                            <span class="stack-label">@end.Label</span>
+                            <span class="stack-meta">@(end.Length is null ? "line end" : $"{end.Length} → {end.To}")</span>
+                        </button>
+                    }
+                </div>
+                <div class="process-actions">
+                    <button type="button" class="chip active default-action" data-default-action @onclick="CloseStack">Done<span class="key-hint">Space</span></button>
+                </div>
+            </section>
+        }
         <div class="toolmenu-row">
             <aside class="glass toolmenu" aria-label="Select toolmenu">
                 <span class="toolmenu-label">Select</span>
@@ -190,6 +215,27 @@
                                 aria-pressed="@((_rulerSnap == mode).ToString().ToLowerInvariant())"
                                 @onclick="() => SetRulerSnap(mode)">@label</button>
                     }
+                </div>
+            </aside>
+        </div>
+    </div>
+}
+
+@if (_tool == "line")
+{
+    <div class="toolmenu-dock">
+        <div class="toolmenu-row">
+            <aside class="glass toolmenu" aria-label="Line toolmenu">
+                <span class="toolmenu-label">Line</span>
+                <div class="unit-row" role="group" aria-label="Line options">
+                    <button type="button" class="chip check-chip @(_lineMulti ? "active" : "")"
+                            role="checkbox"
+                            title="Keep drawing connected lines; uncheck to draw one line at a time"
+                            aria-checked="@(_lineMulti.ToString().ToLowerInvariant())"
+                            @onclick="ToggleLineMulti">
+                        <span class="check-box" aria-hidden="true">@(_lineMulti ? "✓" : "")</span>
+                        Multi
+                    </button>
                 </div>
             </aside>
         </div>
@@ -509,11 +555,43 @@
         if (_cad is not null) await _cad.InvokeAsync<bool>("cancelProcess");
     }
 
+    public sealed record StackEnd(string Label, bool Selected, string? Length, string? To);
+    public sealed record StackInfo(string X, string Y, StackEnd[] Ends);
+
+    private StackInfo? _stack;
+
+    [JSInvokable]
+    public void OnStackChanged(StackInfo? stack)
+    {
+        _stack = stack;
+        StateHasChanged();
+    }
+
+    private async Task ToggleStackEnd(int index)
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("toggleStackEnd", index);
+    }
+
+    private async Task CloseStack()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("closeStack");
+    }
+
     public sealed record Measurement(string Mode, string Length, int Points,
         string? Dx = null, string? Dy = null, string? Ax = null, string? Ay = null, string? Bx = null, string? By = null,
         string? Area = null);
 
     private string _rulerSnap = "grid";
+    private bool _lineMulti = true;
+
+    private async Task ToggleLineMulti()
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setLineMulti", !_lineMulti);
+        _lineMulti = !_lineMulti;
+    }
     private Measurement? _measure;
 
     private async Task RulerAddPoints()
