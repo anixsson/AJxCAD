@@ -85,3 +85,14 @@ test("the page's text size scales measurement text and label boxes", () => {
     const big = size(pagePdf({ ...page, textSize: 200 }, [], [square()], format));
     assert.equal(big, normal * 2);
 });
+
+test("a dimensioned two-point measurement prints as a CAD dimension with rotated length text", () => {
+    const pdf = pagePdf(page, [], [
+        { id: 1, points: [{ x: 0, y: 0 }, { x: 0, y: 100 }], dimension: { x: -50, y: 30 } }
+    ], { length: mm => `${mm} mm`, area: mm2 => `${mm2} mm2` });
+    const stream = pdf.slice(pdf.indexOf("stream\n") + 7, pdf.indexOf("\nendstream"));
+    assert.ok(!stream.includes("[4 3] 0 d"), "the measured line is not drawn");
+    assert.equal(stream.match(/^h f$/gm).length, 2, "two filled arrows");
+    // A vertical dimension reads bottom to top: rotation 90 degrees.
+    assert.match(stream, /BT \/F1 7 Tf 0 1 -1 0 [\d.]+ [\d.]+ Tm \(100 mm\) Tj ET/);
+});

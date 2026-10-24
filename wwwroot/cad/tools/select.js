@@ -9,6 +9,8 @@
 //  - Clicking such a stacked corner (Nodes mode) opens the Corner box: each line end gets a label
 //    (L1, L2, ...) on the board and a checkbox, so only the checked ends are selected and move.
 //  - With a single free end selected, only that one line changes.
+//  - Delete (Actions, Delete or Backspace) removes lines: in Nodes mode every line touching a selected node,
+//    in Lines mode the lines with both ends selected.
 
 import { bucket, checkpoint } from "../store.js";
 
@@ -26,6 +28,7 @@ export function createSelectTool(env) {
     let splitHandles = true; // midpoint handles on selected lines (Actions menu toggle)
     let process = null; // guided Move: { step: "base" | "target", base, point }
     let lastCount = 0;
+    let lastLines = 0;
     let stack = null; // stacked corner being inspected: { ends: [{ geo, item, key, label }] }
     const geometries = env.selectionGeometries ?? env.geometries;
 
@@ -171,7 +174,7 @@ export function createSelectTool(env) {
         const next = node && (mode === "nodes" || node.refs.some(r => r.geo.annotation)) && node.refs.length >= 2
             ? { shared, ends: node.refs.map(r => ({
                 geo: r.geo, item: r.item, key: r.key,
-                label: r.geo.annotation ? `Area ${r.item.id} · P${Number(r.key.slice(1)) + 1}` : `L${++line}`
+                label: r.geo.annotation ? `Area ${r.item.id} · ${r.key === "d" ? "Dimension" : `P${Number(r.key.slice(1)) + 1}`}` : `L${++line}`
             })) }
             : null;
         if (!stack && !next) return;
@@ -265,8 +268,28 @@ export function createSelectTool(env) {
             refs.every(r => r.geo === first.geo && r.item === first.item) ? first.item.id : null;
     }
 
+    // Drawing items (not measurements) that Delete removes: touching a selected node (Nodes mode), or with
+    // every point selected (Lines mode).
+    function selectedItems() {
+        const out = [];
+        if (!selected.size) return out;
+        for (const geo of env.geometries) {
+            for (const item of bucket(geo.bucket).items) {
+                const points = geo.points(item);
+                const on = p => selected.has(keyOf(geo, item, p.key));
+                if (points.length && (mode === "nodes" ? points.some(on) : points.every(on))) out.push({ geo, item });
+            }
+        }
+        return out;
+    }
+
     function notifySelection() {
         env.measurementSelectionChanged?.(selectedMeasurementId());
+        const lines = selectedItems().length;
+        if (lines !== lastLines) {
+            lastLines = lines;
+            env.lineSelectionChanged?.(lines);
+        }
         if (selected.size === lastCount) return;
         lastCount = selected.size;
         env.selectionChanged?.(lastCount);
@@ -322,8 +345,10 @@ export function createSelectTool(env) {
         g.beginPath();
         for (const geo of geometries) {
             for (const item of bucket(geo.bucket).items) {
-                const points = geo.points(item);
-                if (points.length < 2 || !points.some(p => selected.has(keyOf(geo, item, p.key)))) continue;
+                const all = geo.points(item);
+                if (!all.some(p => selected.has(keyOf(geo, item, p.key)))) continue;
+                const points = all.filter(p => !p.handle);
+                if (points.length < 2) continue;
                 const screen = points.map(p => {
                     const moved = selected.has(keyOf(geo, item, p.key));
                     return view.toScreen(p.x + (moved ? dx : 0), p.y + (moved ? dy : 0));
@@ -345,6 +370,27 @@ export function createSelectTool(env) {
         hotkey: "s",
 
         selectedMeasurementId,
+
+        // Deletes the lines with both ends selected (one undo step). Returns how many were removed.
+        removeLines() {
+            if (process || drag) return 0;
+            const doomed = selectedItems();
+            if (!doomed.length) return 0;
+            checkpoint();
+            for (const geo of new Set(doomed.map(d => d.geo))) {
+                const gone = new Set(doomed.filter(d => d.geo === geo).map(d => d.item));
+                const b = bucket(geo.bucket);
+                b.items = b.items.filter(item => !gone.has(item));
+            }
+            selected.clear();
+            setStack(null);
+            hover = null;
+            hoverHandle = null;
+            env.log("action", `removed ${doomed.length} line${doomed.length === 1 ? "" : "s"}`);
+            notifySelection();
+            env.redraw();
+            return doomed.length;
+        },
 
         canOpenMeasurement() {
             return !process && !drag;
@@ -422,6 +468,7 @@ export function createSelectTool(env) {
             hoverHandle = null;
             drag = null;
             marker = null;
+            notifySelection();
             env.redraw();
         },
 

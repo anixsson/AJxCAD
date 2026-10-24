@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bucket, serialize, deserialize, undo } from "../wwwroot/cad/store.js";
-import { createRulerTool, MEASURES } from "../wwwroot/cad/tools/ruler.js";
+import { createRulerTool, MEASURES, dimensionOf, measurementGeometry, readableAngle } from "../wwwroot/cad/tools/ruler.js";
 
 const lines = bucket("lines");
 
@@ -46,7 +46,7 @@ test("two clicks measure length, deltas and both points", () => {
     click(tool, 31, -38);
     assert.deepEqual(measures, [{
         mode: "single", length: "50 mm", dx: "30 mm", dy: "−40 mm",
-        ax: "0 mm", ay: "0 mm", bx: "30 mm", by: "−40 mm", points: 2
+        ax: "0 mm", ay: "0 mm", bx: "30 mm", by: "−40 mm", points: 2, dimension: false
     }]);
 });
 
@@ -72,7 +72,7 @@ test("Nodes only ignores the grid and picks only line ends", () => {
     click(tool, 90, 20);
     assert.deepEqual(measures.at(-1), {
         mode: "single", length: "100 mm", dx: "100 mm", dy: "0 mm",
-        ax: "3 mm", ay: "4 mm", bx: "103 mm", by: "4 mm", points: 2
+        ax: "3 mm", ay: "4 mm", bx: "103 mm", by: "4 mm", points: 2, dimension: false
     });
     tool.setSnapMode("grid");
     assert.throws(() => tool.setSnapMode("other"), /Unknown ruler snap mode/);
@@ -395,4 +395,64 @@ test("deletion rejects unknown measurements and preserves an unrelated draft", (
     tool.deleteMeasurement(id);
     assert.deepEqual(measures.at(-1), draft);
     assert.equal(bucket(MEASURES).items.length, 0);
+});
+
+test("dimensionOf offsets a parallel line through the dimension point", () => {
+    const dim = dimensionOf([{ x: 0, y: 0 }, { x: 100, y: 0 }], { x: 20, y: 30 });
+    assert.equal(dim.offset, 30);
+    assert.deepEqual([dim.a2, dim.b2, dim.mid], [{ x: 0, y: 30 }, { x: 100, y: 30 }, { x: 50, y: 30 }]);
+    assert.equal(dim.length, 100);
+    assert.equal(dimensionOf([{ x: 0, y: 0 }, { x: 100, y: 0 }], null), null);
+    assert.equal(dimensionOf([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }], { x: 0, y: 5 }), null, "only two-point measurements");
+    assert.equal(dimensionOf([{ x: 5, y: 5 }, { x: 5, y: 5 }], { x: 0, y: 5 }), null);
+    assert.ok(Math.abs(readableAngle(-1, 0)) < 1e-9, "text never reads upside down");
+    assert.ok(Math.abs(readableAngle(0, -1) - Math.PI / 2) < 1e-9);
+});
+
+test("dragging the middle dot of a two-point measurement places a dimension that Save stores", () => {
+    const { tool, measures } = setup([]);
+    click(tool, 0, 0);
+    click(tool, 100, 0);
+    tool.pointerDown({ sx: 52, sy: 2 }); // on the dot in the middle
+    tool.pointerMove({ sx: 48, sy: 31 });
+    tool.pointerUp({});
+    assert.equal(measures.at(-1).dimension, true, "the box drops Add points once dragging starts");
+    assert.equal(tool.addPoints(), false);
+    tool.save();
+    const [item] = bucket(MEASURES).items;
+    assert.deepEqual(item.dimension, { x: 50, y: 30 });
+    assert.equal(item.points.length, 2);
+    assert.match(serialize(), /"dimension"/);
+
+    // Select sees the dimension dot as a measurement point and can drag it.
+    const pts = measurementGeometry.points(item);
+    assert.deepEqual(pts.at(-1), { key: "d", handle: true, x: 50, y: 30 });
+    measurementGeometry.setPoint(item, "d", 50, -20);
+    assert.equal(dimensionOf(item.points, item.dimension).offset, -20);
+});
+
+test("a two-point measurement saved without dragging has no dimension, and a click elsewhere starts over", () => {
+    const { tool } = setup([]);
+    click(tool, 0, 0);
+    click(tool, 100, 0);
+    tool.pointerDown({ sx: 50, sy: 0 });
+    tool.pointerMove({ sx: 50, sy: 40 });
+    tool.pointerUp({});
+    click(tool, 200, 200); // away from the dot: a new measurement
+    click(tool, 300, 200);
+    tool.save();
+    assert.equal(bucket(MEASURES).items.length, 1);
+    assert.equal(bucket(MEASURES).items[0].dimension, null);
+    assert.equal(measurementGeometry.points(bucket(MEASURES).items[0]).length, 2);
+});
+
+test("an opened dimension can be dragged in the editor and saved again", () => {
+    const { tool } = setup([]);
+    bucket(MEASURES).items = [{ id: 7, points: [{ x: 0, y: 0, enabled: true }, { x: 0, y: 100, enabled: true }], dimension: { x: -20, y: 50 } }];
+    tool.open(7);
+    tool.pointerDown({ sx: -20, sy: 50 });
+    tool.pointerMove({ sx: -40, sy: 50 });
+    tool.pointerUp({});
+    tool.save();
+    assert.deepEqual(bucket(MEASURES).items[0].dimension, { x: -40, y: 50 });
 });

@@ -127,9 +127,6 @@
                         </button>
                     }
                 </div>
-                <div class="process-actions">
-                    <button type="button" class="chip active default-action" data-default-action @onclick="CloseStack">Done<span class="key-hint">Space</span></button>
-                </div>
             </section>
         }
         @if (_selectedMeasurement is { } selectedMeasure && _moveStep is null)
@@ -165,6 +162,11 @@
                         <button type="button" class="chip @(_moveStep is not null ? "active" : "")"
                                 title="Move the selection from a base point to a destination"
                                 disabled="@(_moveStep is not null)" @onclick="StartMove">Move</button>
+                        @if (_selectedLines > 0 && _moveStep is null)
+                        {
+                            <button type="button" class="chip danger" title="Delete the lines of the selection (Delete or Backspace)"
+                                    @onclick="RemoveSelectedLines">Delete @_selectedLines line@(_selectedLines == 1 ? "" : "s")</button>
+                        }
                         @if (_selectedMeasurement is not null && _moveStep is null)
                         {
                             <button type="button" class="chip danger" @onclick="DeleteSelectedMeasurement">Delete measurement</button>
@@ -205,11 +207,23 @@
                     <dt>Point 2</dt><dd>x @m.Bx</dd><dd>y @m.By</dd>
                     <dt>Δ</dt><dd>x @m.Dx</dd><dd>y @m.Dy</dd>
                 </dl>
-                <p class="process-text">Click to start a new measurement, or add more points to measure a total length and area.</p>
-                <div class="process-actions">
-                    <button type="button" class="chip active default-action" data-default-action
-                            title="Keep clicking points to add them to the total length" @onclick="RulerAddPoints">Add points<span class="key-hint">Space</span></button>
-                </div>
+                @if (m.Dimension)
+                {
+                    <p class="process-text">Drag the blue dot to move the dimension line. Save it to the board, or click to start a new measurement.</p>
+                    <div class="process-actions">
+                        <button type="button" class="chip active default-action" data-default-action
+                                title="Keep this measurement and its dimension on the board" @onclick="RulerSave">Save to board<span class="key-hint">Space</span></button>
+                    </div>
+                }
+                else
+                {
+                    <p class="process-text">Drag the blue dot in the middle sideways to pull out a dimension line. Click to start a new measurement, or add more points to measure a total length and area.</p>
+                    <div class="process-actions">
+                        <button type="button" class="chip" title="Keep this measurement on the board" @onclick="RulerSave">Save to board</button>
+                        <button type="button" class="chip active default-action" data-default-action
+                                title="Keep clicking points to add them to the total length" @onclick="RulerAddPoints">Add points<span class="key-hint">Space</span></button>
+                    </div>
+                }
             </section>
         }
         else if (_measure is { } t)
@@ -253,7 +267,7 @@
                             </button>
                         }
                     </div>
-                    <p class="process-text">Check the points to include. Blue circles mark included points. Save keeps the measurement on the board; its text reopens this editor.</p>
+                    <p class="process-text">Check the points to include. Blue circles mark included points. With two points, drag the blue ring to place a dimension line. Save keeps the measurement on the board; its text reopens this editor.</p>
                     <div class="stack-list measure-point-list" role="group" aria-label="Measurement points">
                         @{ var nodes = t.Nodes ?? []; }
                         @for (var i = 0; i < nodes.Length; i++)
@@ -654,6 +668,20 @@
         StateHasChanged();
     }
 
+    private int _selectedLines;
+
+    [JSInvokable]
+    public void OnLineSelectionChanged(int count)
+    {
+        _selectedLines = count;
+        StateHasChanged();
+    }
+
+    private async Task RemoveSelectedLines()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<int>("removeSelectedLines");
+    }
+
     [JSInvokable]
     public void OnProcessChanged(string? step, bool hasBase)
     {
@@ -709,16 +737,11 @@
         if (_cad is not null) await _cad.InvokeAsync<bool>("toggleStackEnd", index);
     }
 
-    private async Task CloseStack()
-    {
-        if (_cad is not null) await _cad.InvokeAsync<bool>("closeStack");
-    }
-
     public sealed record MeasurementPoint(string Label, string X, string Y, bool Selected);
     public sealed record Measurement(string Mode, string Length, int Points,
         string? Dx = null, string? Dy = null, string? Ax = null, string? Ay = null, string? Bx = null, string? By = null,
         string? Area = null, bool Saved = false, MeasurementPoint[]? Nodes = null,
-        bool ShowLengths = true, bool ShowAngles = true, bool ShowArea = true);
+        bool ShowLengths = true, bool ShowAngles = true, bool ShowArea = true, bool Dimension = false);
 
     private string _rulerSnap = "grid";
     private bool _lineMulti = true;

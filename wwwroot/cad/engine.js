@@ -113,6 +113,7 @@ const env = {
     selectionChanged: count => dotnet?.invokeMethodAsync("OnSelectionChanged", count),
     processChanged: state => dotnet?.invokeMethodAsync("OnProcessChanged", state?.step ?? null, !!state?.hasBase),
     measureChanged: info => dotnet?.invokeMethodAsync("OnMeasureChanged", info),
+    lineSelectionChanged: count => dotnet?.invokeMethodAsync("OnLineSelectionChanged", count),
     stackChanged: info => dotnet?.invokeMethodAsync("OnStackChanged", info),
     pagesChanged: state => dotnet?.invokeMethodAsync("OnPagesChanged", state),
     viewSizeMm: () => ({ w: el.clientWidth / scale, h: el.clientHeight / scale }),
@@ -122,6 +123,27 @@ const env = {
 };
 
 const currentTool = () => tools[toolId];
+
+// Space presses the box's default button (marked data-default-action). Tab / Shift+Tab move that role to the
+// next / previous button in the same box by marking it "tab-pick" (CSS moves the glow there).
+const usable = b => b && !b.disabled && b.offsetParent;
+const defaultButton = () => [...document.querySelectorAll("[data-default-action]")].find(usable) ?? null;
+const tabPicked = () => [...document.querySelectorAll(".tab-pick")].find(usable) ?? null;
+
+function cycleDefault(step) {
+    const base = defaultButton();
+    if (!base) return false;
+    const group = base.closest(".process-actions") ?? base.parentElement;
+    const buttons = [...group.querySelectorAll("button")].filter(usable);
+    if (buttons.length < 2) return true;
+    const current = tabPicked() ?? base;
+    const i = buttons.indexOf(current);
+    const next = buttons[((i < 0 ? buttons.indexOf(base) : i) + step + buttons.length) % buttons.length];
+    document.querySelectorAll(".tab-pick").forEach(b => b.classList.remove("tab-pick"));
+    if (next !== base) next.classList.add("tab-pick");
+    log("action", `Tab: ${next.textContent.trim()}`);
+    return true;
+}
 
 export function setTool(name) {
     if (!tools[name] || name === toolId) return;
@@ -156,6 +178,7 @@ export const closeStack = () => tools.select.closeStack();
 export const startMove = () => tools.select.startMove();
 export const confirmMoveBase = () => tools.select.confirmMoveBase();
 export const cancelProcess = () => tools.select.cancelProcess();
+export const removeSelectedLines = () => tools.select.removeLines();
 
 export const setRulerSnap = mode => tools.ruler.setSnapMode(mode);
 export const setLineMulti = on => tools.line.setMulti(on);
@@ -361,13 +384,17 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     const typing = e => !!document.querySelector(".modal-backdrop") || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || !!e.target?.isContentEditable;
     on(document, "keydown", e => {
         if (document.querySelector(".modal-backdrop")) return;
-        if (e.key === "Escape") {
+        if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(e) && cycleDefault(e.shiftKey ? -1 : 1)) {
+            e.preventDefault();
+        } else if ((e.key === "Delete" || e.key === "Backspace") && toolId === "select" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(e)) {
+            if (tools.select.removeLines()) e.preventDefault();
+        } else if (e.key === "Escape") {
             log("action", `Escape handled (tool=${toolId})`);
             dotnet.invokeMethodAsync("OnEscape");
         } else if (e.key === " " && !e.metaKey && !e.ctrlKey && !e.altKey) {
             // Space presses the visible default button (marked data-default-action) of a guide or action box.
             if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return;
-            const next = [...document.querySelectorAll("[data-default-action]")].find(b => !b.disabled && b.offsetParent);
+            const next = tabPicked() ?? defaultButton();
             if (next) {
                 e.preventDefault(); // also stops Space from pressing whichever button has focus
                 if (!e.repeat) next.click();

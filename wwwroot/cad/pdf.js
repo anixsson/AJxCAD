@@ -1,10 +1,11 @@
 // Minimal single-page vector PDF of a page frame: drawing lines and saved measurements inside the frame,
 // at the page's scale. Written by hand (PDF 1.4, ASCII only) so no library is needed.
+// Two-point measurements with a dimension print as a CAD dimension (extension lines, arrows, rotated length).
 // Measurements follow their own Lengths / Angles / Area settings and use the Paper look; their text and label
 // boxes use PRINT_SIZES (points) times the page's text size.
 
 import { pageRect, paperSize, textSizeOf } from "./pages.js";
-import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, PRINT_SIZES, scaleSizes } from "./tools/ruler.js";
+import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, dimensionOf, readableAngle, PRINT_SIZES, scaleSizes } from "./tools/ruler.js";
 
 const PT_PER_MM = 72 / 25.4;
 const n = v => `${+v.toFixed(3)}`;
@@ -52,8 +53,41 @@ function pill(out, x, y, w, h) {
 
 const polyline = pts => pts.map((p, i) => `${n(p.x)} ${n(p.y)} ${i ? "l" : "m"}`).join(" ");
 
+// CAD dimension in points: extension lines, the dimension line with filled arrows, and the length above it.
+function dimension(dim, label, sz, marks) {
+    const { a, b, a2, b2 } = dim;
+    marks.push("0 G 0 g 0.5 w");
+    const ex = a2.x - a.x, ey = a2.y - a.y, el = Math.hypot(ex, ey);
+    if (el > sz.extGap) {
+        const ux = ex / el, uy = ey / el;
+        for (const [p, q] of [[a, a2], [b, b2]]) {
+            marks.push(polyline([{ x: p.x + ux * sz.extGap, y: p.y + uy * sz.extGap }, { x: q.x + ux * sz.extOver, y: q.y + uy * sz.extOver }]), "S");
+        }
+    }
+    marks.push(polyline([a2, b2]), "S");
+    const vx = b2.x - a2.x, vy = b2.y - a2.y, vl = Math.hypot(vx, vy);
+    if (vl < 1e-6) return;
+    const ux = vx / vl, uy = vy / vl;
+    for (const [tip, dx, dy] of [[a2, -ux, -uy], [b2, ux, uy]]) {
+        const bx = tip.x - dx * sz.arrow, by = tip.y - dy * sz.arrow;
+        marks.push(polyline([tip, { x: bx - dy * sz.arrowHalf, y: by + dx * sz.arrowHalf }, { x: bx + dy * sz.arrowHalf, y: by - dx * sz.arrowHalf }]), "h f");
+    }
+    if (!label) return;
+    const angle = readableAngle(vx, vy), c = Math.cos(angle), s = Math.sin(angle);
+    const w = textWidth(label, sz.length);
+    // Baseline start: the middle of the line, lifted by the gap and moved back half the text width.
+    const x = (a2.x + b2.x) / 2 - s * sz.dimGap - c * w / 2, y = (a2.y + b2.y) / 2 + c * sz.dimGap - s * w / 2;
+    marks.push(`BT /F1 ${n(sz.length)} Tf ${n(c)} ${n(s)} ${n(-s)} ${n(c)} ${n(x)} ${n(y)} Tm ${pdfString(label)} Tj ET`);
+}
+
 // One saved measurement, already in points. `fills` is drawn under the drawing lines, `marks` on top.
-function measurement(world, pts, options, format, sz, fills, marks) {
+function measurement(world, pts, options, format, sz, fills, marks, dim = null) {
+    if (dim) {
+        dimension(dim, options.showLengths ? format.length(dim.length) : null, sz, marks);
+        for (const p of pts) circle(marks, p.x, p.y, sz.dot);
+        marks.push("f");
+        return;
+    }
     const closed = pts.length >= 3;
     if (closed && options.showArea) fills.push(`${polyline(pts)} h f`);
 
@@ -126,9 +160,12 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
     for (const item of measures) {
         const world = item.points.filter(p => p.enabled !== false);
         if (world.length < 2) continue;
-        const xs = world.map(p => p.x), ys = world.map(p => p.y);
+        const dim = dimensionOf(world, item.dimension);
+        const reach = dim ? [...world, dim.a2, dim.b2] : world;
+        const xs = reach.map(p => p.x), ys = reach.map(p => p.y);
         if (Math.max(...xs) < r.left || Math.min(...xs) > r.right || Math.max(...ys) < r.bottom || Math.min(...ys) > r.top) continue;
-        measurement(world, world.map(toPaper), displayOf(item), format, sz, fills, marks);
+        const paperDim = dim && { length: dim.length, a: toPaper(dim.a), b: toPaper(dim.b), a2: toPaper(dim.a2), b2: toPaper(dim.b2) };
+        measurement(world, world.map(toPaper), displayOf(item), format, sz, fills, marks, paperDim);
     }
 
     // Clip to the paper; area shading goes under the lines (light grey), lines are stroked once in black,

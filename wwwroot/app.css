@@ -1108,12 +1108,14 @@ button {
 }
 
 .modal.glow,
-.default-action:not(:disabled) {
+:is(.default-action, .tab-pick):not(:disabled) {
     position: relative;
 }
 
 .modal.glow::before,
 .modal.glow::after,
+.tab-pick:not(:disabled)::before,
+.tab-pick:not(:disabled)::after,
 .default-action:not(:disabled)::before,
 .default-action:not(:disabled)::after {
     content: "";
@@ -1138,11 +1140,11 @@ button {
 }
 
 /* The button Space presses: same rotating light, scaled to a small button. */
-.default-action:not(:disabled)::before {
+:is(.default-action, .tab-pick):not(:disabled)::before {
     animation-duration: 3s;
 }
 
-.default-action:not(:disabled)::after {
+:is(.default-action, .tab-pick):not(:disabled)::after {
     inset: -4px;
     padding: 5px;
     border-radius: 12px;
@@ -1159,6 +1161,12 @@ button {
     font-size: 10px;
     font-weight: 500;
     opacity: 0.75;
+}
+
+/* Tab moved the default role to another button in the box: only that one glows. */
+:has(> .tab-pick) > .default-action::before,
+:has(> .tab-pick) > .default-action::after {
+    display: none;
 }
 
 @keyframes glow-spin {
@@ -1567,12 +1575,14 @@ button {
 .perf .modal.glow::before,
 .perf .modal.glow::after,
 .perf .default-action::before,
-.perf .default-action::after {
+.perf .default-action::after,
+.perf .tab-pick::before,
+.perf .tab-pick::after {
     display: none;
 }
 
 /* Performance mode keeps the default button recognisable with a plain outline instead of the moving light. */
-.perf .default-action:not(:disabled) {
+.perf :is(.default-action, .tab-pick):not(:disabled) {
     outline: 2px solid #ff8fe0;
     outline-offset: 1px;
 }
@@ -1693,8 +1703,12 @@ button {
     color: #fff;
 }
 
-.paper .default-action:not(:disabled) {
+.paper :is(.default-action, .tab-pick):not(:disabled) {
     outline-color: #000;
+}
+
+.perf :has(> .tab-pick) > .default-action {
+    outline: none;
 }
 
 .paper :is(.tool-tip kbd, .key-hint, .modal-head, .about-keys, .debug-lines,

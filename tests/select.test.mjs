@@ -661,3 +661,42 @@ test("Lines mode includes shared area points but does not mistake measurements f
     tool.pointerUp(pointer(110, 120));
     assert.deepEqual([area.points[2].x, area.points[2].y], [110, 120]);
 });
+
+test("Remove lines deletes only lines with both ends selected, reports the count and undoes in one step", () => {
+    const counts = [];
+    const { tool } = setup([
+        { x1: 0, y1: 0, x2: 100, y2: 0 },
+        { x1: 100, y1: 0, x2: 100, y2: 100 },
+        { x1: 300, y1: 300, x2: 400, y2: 300 }
+    ], { lineSelectionChanged: n => counts.push(n) });
+    assert.equal(tool.removeLines(), 0, "nothing selected");
+
+    tool.setSelectionMode("lines");
+    tool.pointerDown(pointer(50, 0));
+    tool.pointerUp(pointer(50, 0));
+    assert.deepEqual(counts, [1]);
+    // The shared corner (100, 0) is selected, but the second line's other end is not.
+    assert.equal(tool.removeLines(), 1);
+    assert.deepEqual(lines.items.map(l => l.id), [2, 3]);
+    assert.deepEqual(counts, [1, 0]);
+
+    assert.equal(undo(), true);
+    assert.deepEqual(lines.items.map(l => l.id), [1, 2, 3]);
+});
+
+test("in Nodes mode Delete removes every line touching a selected node", () => {
+    const counts = [];
+    const { tool } = setup([
+        { x1: 0, y1: 0, x2: 100, y2: 0 },
+        { x1: 100, y1: 0, x2: 100, y2: 100 },
+        { x1: 300, y1: 300, x2: 400, y2: 300 }
+    ], { lineSelectionChanged: n => counts.push(n) });
+    tool.pointerDown(pointer(100, 0)); // shared corner of lines 1 and 2
+    tool.pointerUp(pointer(100, 0));
+    assert.deepEqual(counts, [2]);
+    tool.setSelectionMode("lines");
+    assert.deepEqual(counts, [2, 0], "no line has both ends selected");
+    tool.setSelectionMode("nodes");
+    assert.equal(tool.removeLines(), 2);
+    assert.deepEqual(lines.items.map(l => l.id), [3]);
+});

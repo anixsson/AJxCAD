@@ -1,23 +1,36 @@
 // Ruler tool: measures without changing drawing lines; saved annotations live in the measures bucket.
 //  - Click two points: the box shows the length, the x/y difference and both points.
 //  - "Add points" (Space) continues from there: every click adds a point and the total length grows.
+//    Once a dimension is dragged out, Add points goes away and "Save to board" takes Space.
 //    From three points the enclosed area is shaded, measured and labelled at its centre.
 //    Every corner where two measured lines meet shows the angle between them (0–180°). "Stop" (Space) ends it and keeps the result.
 //  - After a finished measurement, the next click clears it and starts a new one.
 //  - Snap "grid": points snap to line ends, otherwise to the grid. Snap "nodes": only line ends can be picked.
 //  - Stop opens a point-checkbox editor; Save stores the annotation, and clicking its text reopens it.
+//  - Two-point measurements have a blue dot in the middle: drag it sideways for a CAD dimension (extension
+//    lines, a parallel dimension line with arrows and the length on it). The dot's position is stored as
+//    `dimension` {x, y}; the offset is its distance from the measured line. Select can drag the dot too.
 
 import { bucket, defineBucket, checkpoint, newId } from "../store.js";
 
 export const MEASURES = "measures";
-defineBucket(MEASURES, { label: "Measurements", fields: ["id", "points", "showLengths", "showAngles", "showArea"] });
+defineBucket(MEASURES, { label: "Measurements", fields: ["id", "points", "showLengths", "showAngles", "showArea", "dimension"] });
 
 export const measurementGeometry = {
     bucket: MEASURES,
     annotation: true,
-    points: item => item.points.flatMap((p, i) =>
-        p.enabled === false ? [] : [{ key: `p${i}`, x: p.x, y: p.y }]),
+    // Included points, plus the dimension handle ("d", handle: true) of a dimensioned two-point measurement.
+    points(item) {
+        const out = item.points.flatMap((p, i) => p.enabled === false ? [] : [{ key: `p${i}`, x: p.x, y: p.y }]);
+        const dim = dimensionOf(out, item.dimension);
+        if (dim) out.push({ key: "d", handle: true, x: dim.mid.x, y: dim.mid.y });
+        return out;
+    },
     setPoint(item, key, x, y) {
+        if (key === "d") {
+            item.dimension = { x, y };
+            return;
+        }
         const point = item.points[Number(key.slice(1))];
         if (!point) throw new Error(`Unknown measurement point: ${key}`);
         point.x = x;
@@ -58,6 +71,27 @@ export function polygonCentroid(pts) {
     return { x: cx / (3 * a2), y: cy / (3 * a2) };
 }
 
+// CAD dimension of a two-point measurement: the dimension line runs parallel to a→b through `dim`.
+// Null without a dimension point, with other than two points, or for a zero-length line.
+export function dimensionOf(pts, dim) {
+    if (!dim || pts.length !== 2) return null;
+    const [a, b] = pts;
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < 1e-9) return null;
+    const nx = -(b.y - a.y) / length, ny = (b.x - a.x) / length;
+    const offset = (dim.x - a.x) * nx + (dim.y - a.y) * ny;
+    const a2 = { x: a.x + nx * offset, y: a.y + ny * offset }, b2 = { x: b.x + nx * offset, y: b.y + ny * offset };
+    return { a, b, a2, b2, length, offset, mid: { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 } };
+}
+
+// Text angle along a→b (radians, y down on screen or up in PDF) turned so it never reads upside down.
+export function readableAngle(dx, dy) {
+    let angle = Math.atan2(dy, dx);
+    if (angle > Math.PI / 2 + 1e-9) angle -= Math.PI;
+    else if (angle <= -Math.PI / 2 + 1e-9) angle += Math.PI;
+    return angle;
+}
+
 // Angle at v between the lines v→a and v→b, in degrees (0–180); null if either line has no length.
 function angleAt(a, v, b) {
     const ux = a.x - v.x, uy = a.y - v.y, wx = b.x - v.x, wy = b.y - v.y;
@@ -85,13 +119,17 @@ export function corners(points) {
 
 // Label sizes: CSS px on screen, points in print. The board's print preview draws the print sizes,
 // converted to screen px for the previewed page (see pdf.js, which uses the same table).
-const SCREEN_SIZES = { length: 12, lengthOffset: 8, angle: 11, arcRadius: 18, arcMin: 4, angleGap: 14, area: 13, pillPad: 14, pillHeight: 22, dot: 3.5 };
-export const PRINT_SIZES = { length: 7, lengthOffset: 4, angle: 6.5, arcRadius: 9, arcMin: 2, angleGap: 7, area: 8, pillPad: 7, pillHeight: 11, dot: 1.5 };
+// Dimensions: arrow length and half width, extension line gap (from the point) and overshoot, text gap.
+const SCREEN_SIZES = { length: 12, lengthOffset: 8, angle: 11, arcRadius: 18, arcMin: 4, angleGap: 14, area: 13, pillPad: 14, pillHeight: 22, dot: 3.5,
+    arrow: 10, arrowHalf: 3.5, extGap: 3, extOver: 6, dimGap: 7 };
+export const PRINT_SIZES = { length: 7, lengthOffset: 4, angle: 6.5, arcRadius: 9, arcMin: 2, angleGap: 7, area: 8, pillPad: 7, pillHeight: 11, dot: 1.5,
+    arrow: 5, arrowHalf: 1.75, extGap: 1.5, extOver: 3, dimGap: 2 };
 export const scaleSizes = (sizes, k) => Object.fromEntries(Object.entries(sizes).map(([key, v]) => [key, v * k]));
 
 export const formatAngle = deg => `${Number(deg.toFixed(1))}°`;
 
 const NODE_PX = 30; // how far from a line end a click may be in "nodes" mode
+const HANDLE_PX = 10; // how far from the dimension dot a press grabs it
 
 export function createRulerTool(env) {
     let snapMode = "grid";
@@ -102,11 +140,40 @@ export function createRulerTool(env) {
     let textHits = [];
     let renderingId = null;
     let display = defaultDisplay();
+    let dimension = null; // {x, y} the dimension line passes through, or null
+    let dimDrag = false;
 
     const included = () => points.filter(p => p.enabled !== false);
     const pointRows = () => points.map((p, i) => ({
         label: `P${i + 1}`, x: signed(p.x), y: signed(p.y), selected: p.enabled !== false
     }));
+
+    // Where the dimension dot is (world): on the dimension line, or the middle of the measured line before
+    // one is pulled out. Null unless the measurement being edited has exactly two included points.
+    function handlePoint() {
+        if (phase !== "measured" && phase !== "done") return null;
+        const pts = included();
+        if (pts.length !== 2) return null;
+        const dim = dimensionOf(pts, dimension);
+        if (dim) return dim.mid;
+        return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    }
+
+    function onHandle(sx, sy) {
+        const h = handlePoint();
+        if (!h) return false;
+        const s = env.toScreen(h.x, h.y);
+        return Math.hypot(s.x - sx, s.y - sy) <= HANDLE_PX;
+    }
+
+    // Text drawn rotated by `angle` around its centre (cx, cy); the clickable box covers it.
+    function recordRotated(g, view, text, cx, cy, size, angle) {
+        if (renderingId === null) return;
+        const hw = g.measureText(text).width / view.dpr / 2 + 5, hh = size * 0.75;
+        const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
+        const w = hw * c + hh * s, h = hw * s + hh * c;
+        textHits.push({ id: renderingId, left: cx - w, right: cx + w, top: cy - h, bottom: cy + h });
+    }
 
     // `size` is the font size in CSS px; the clickable box grows with it.
     function recordText(g, view, text, x, y, size, centered = false) {
@@ -152,7 +219,8 @@ export function createRulerTool(env) {
                 dx: signed(b.x - a.x), dy: signed(b.y - a.y),
                 ax: signed(a.x), ay: signed(a.y),
                 bx: signed(b.x), by: signed(b.y),
-                points: 2
+                points: 2,
+                dimension: dimension !== null
             });
         } else if (phase === "multi" || phase === "done") {
             const active = included();
@@ -183,6 +251,8 @@ export function createRulerTool(env) {
         points = [];
         editingId = null;
         display = defaultDisplay();
+        dimension = null;
+        dimDrag = false;
         hover = null;
         setPhase("idle");
         return true;
@@ -255,6 +325,79 @@ export function createRulerTool(env) {
         g.textBaseline = "alphabetic";
     }
 
+    function arrowhead(g, d, tip, ux, uy, sz) {
+        const bx = tip.x - ux * sz.arrow, by = tip.y - uy * sz.arrow;
+        g.beginPath();
+        g.moveTo(tip.x * d, tip.y * d);
+        g.lineTo((bx - uy * sz.arrowHalf) * d, (by + ux * sz.arrowHalf) * d);
+        g.lineTo((bx + uy * sz.arrowHalf) * d, (by - ux * sz.arrowHalf) * d);
+        g.closePath();
+        g.fill();
+    }
+
+    // Extension lines from both points, the dimension line with arrows, and the length above it.
+    function drawDimension(g, view, dim, text, sz) {
+        const d = view.dpr;
+        const [A, B, A2, B2] = [dim.a, dim.b, dim.a2, dim.b2].map(p => view.toScreen(p.x, p.y));
+        const color = view.paper ? "#000" : "#8fe3ff";
+        g.strokeStyle = color;
+        g.fillStyle = color;
+        g.lineWidth = 1 * d;
+        g.beginPath();
+        const ex = A2.x - A.x, ey = A2.y - A.y, el = Math.hypot(ex, ey);
+        if (el > sz.extGap) {
+            const ux = ex / el, uy = ey / el;
+            for (const [P, Q] of [[A, A2], [B, B2]]) {
+                g.moveTo((P.x + ux * sz.extGap) * d, (P.y + uy * sz.extGap) * d);
+                g.lineTo((Q.x + ux * sz.extOver) * d, (Q.y + uy * sz.extOver) * d);
+            }
+        }
+        g.moveTo(A2.x * d, A2.y * d);
+        g.lineTo(B2.x * d, B2.y * d);
+        g.stroke();
+
+        const vx = B2.x - A2.x, vy = B2.y - A2.y, vl = Math.hypot(vx, vy);
+        if (vl < 1e-6) return;
+        const ux = vx / vl, uy = vy / vl;
+        arrowhead(g, d, A2, -ux, -uy, sz);
+        arrowhead(g, d, B2, ux, uy, sz);
+
+        if (!text) return;
+        const angle = readableAngle(vx, vy);
+        const mx = (A2.x + B2.x) / 2, my = (A2.y + B2.y) / 2;
+        g.save();
+        g.translate(mx * d, my * d);
+        g.rotate(angle);
+        g.font = `${sz.length * d}px system-ui, -apple-system, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "bottom";
+        g.fillStyle = view.paper ? "#000" : "#fff";
+        g.shadowColor = view.paper ? "transparent" : "rgba(0,0,0,0.8)";
+        g.shadowBlur = view.fx ? 4 * d : 0;
+        g.fillText(text, 0, -sz.dimGap * d);
+        g.restore();
+        const up = sz.dimGap + sz.length / 2; // text centre, perpendicular above the line
+        recordRotated(g, view, text, mx + Math.sin(angle) * up, my - Math.cos(angle) * up, sz.length, angle);
+    }
+
+    // The dimension dot: a ring while editing, a small dot on saved dimensions (not printed).
+    function drawHandle(g, view, p, editing) {
+        const d = view.dpr;
+        const s = view.toScreen(p.x, p.y);
+        g.beginPath();
+        g.arc(s.x * d, s.y * d, (editing ? 5 : 3) * d, 0, Math.PI * 2);
+        g.lineWidth = 1.5 * d;
+        if (editing) {
+            g.fillStyle = view.paper ? "#fff" : "rgba(20,16,44,0.9)";
+            g.fill();
+            g.strokeStyle = view.paper ? "#000" : "#8fe3ff";
+            g.stroke();
+        } else {
+            g.fillStyle = view.paper ? "#666" : "#167aab";
+            g.fill();
+        }
+    }
+
     function label(g, view, text, a, b, sz) {
         const d = view.dpr, o = sz.lengthOffset;
         g.font = `${sz.length * d}px system-ui, -apple-system, sans-serif`;
@@ -266,9 +409,15 @@ export function createRulerTool(env) {
         g.shadowBlur = 0;
     }
 
-    function drawMeasurement(g, view, pts, state, cursor, options) {
+    function drawMeasurement(g, view, pts, state, cursor, options, dimensionPoint = null) {
         const d = view.dpr;
         const sz = view.printPx ? scaleSizes(PRINT_SIZES, view.printPx) : SCREEN_SIZES;
+        const dim = (state === "measured" || state === "done") ? dimensionOf(pts, dimensionPoint) : null;
+        if (dim) {
+            drawDimension(g, view, dim, options.showLengths ? env.formatLength(dim.length) : null, sz);
+            for (const p of pts) drawPoint(g, view, p, true, sz.dot);
+            return;
+        }
         const live = (state === "picking" || state === "multi") && cursor;
         const path = live ? [...pts, cursor] : pts;
         const screen = path.map(p => view.toScreen(p.x, p.y));
@@ -332,7 +481,7 @@ export function createRulerTool(env) {
 
         // Continue a two-point measurement: following clicks add points to the total.
         addPoints() {
-            if (phase !== "measured") return false;
+            if (phase !== "measured" || dimension !== null) return false;
             setPhase("multi");
             env.log("action", "ruler: adding points");
             return true;
@@ -364,19 +513,21 @@ export function createRulerTool(env) {
             env.redraw();
         },
 
+        // Saves a finished measurement, or a two-point one straight from the Ruler box.
         save() {
-            if (phase !== "done" || included().length < 2) {
+            if ((phase !== "done" && phase !== "measured") || included().length < 2) {
                 throw new Error("A saved measurement needs at least two included points");
             }
             checkpoint();
             const stored = points.map(p => ({ x: p.x, y: p.y, enabled: p.enabled !== false }));
+            const dim = dimensionOf(included(), dimension) ? { x: dimension.x, y: dimension.y } : null;
             if (editingId === null) {
-                bucket(MEASURES).items.push({ id: newId(), points: stored, ...display });
+                bucket(MEASURES).items.push({ id: newId(), points: stored, ...display, dimension: dim });
             } else {
                 const item = bucket(MEASURES).items.find(m => m.id === editingId);
                 if (!item) throw new Error(`Measurement ${editingId} no longer exists`);
                 item.points = stored;
-                Object.assign(item, display);
+                Object.assign(item, display, { dimension: dim });
             }
             env.log("action", "measurement saved");
             clear();
@@ -403,6 +554,7 @@ export function createRulerTool(env) {
             points = structuredClone(item.points);
             editingId = id;
             display = displayOf(item);
+            dimension = item.dimension ? { ...item.dimension } : null;
             hover = null;
             setPhase("done");
         },
@@ -428,7 +580,10 @@ export function createRulerTool(env) {
             for (const item of bucket(MEASURES).items) {
                 if (item.id === editingId) continue;
                 renderingId = item.id;
-                drawMeasurement(g, view, item.points.filter(p => p.enabled !== false), "done", null, displayOf(item));
+                const pts = item.points.filter(p => p.enabled !== false);
+                drawMeasurement(g, view, pts, "done", null, displayOf(item), item.dimension);
+                const dim = !view.printPx && dimensionOf(pts, item.dimension);
+                if (dim) drawHandle(g, view, dim.mid, false);
             }
             renderingId = null;
         },
@@ -457,6 +612,13 @@ export function createRulerTool(env) {
         },
 
         pointerDown(e) {
+            if (onHandle(e.sx, e.sy)) {
+                dimDrag = true;
+                hover = null;
+                if (e.pointerId !== undefined) env.capture?.(e.pointerId);
+                env.redraw();
+                return;
+            }
             if (editingId !== null) return;
             const p = resolve(e.sx, e.sy);
             if (!p) return;
@@ -469,6 +631,7 @@ export function createRulerTool(env) {
                 env.log("action", `measured ${env.formatLength(pathLength(points))}`);
             } else {
                 points = [p];
+                dimension = null;
                 setPhase("picking");
             }
             hover = p;
@@ -476,8 +639,23 @@ export function createRulerTool(env) {
         },
 
         pointerMove(e) {
+            if (dimDrag) {
+                const p = env.snap(e.sx, e.sy);
+                const first = dimension === null;
+                dimension = { x: p.x, y: p.y };
+                if (first && phase === "measured") publish();
+                env.redraw();
+                return;
+            }
             hover = resolve(e.sx, e.sy);
             env.redraw();
+        },
+
+        pointerUp() {
+            if (!dimDrag) return;
+            dimDrag = false;
+            const dim = dimensionOf(included(), dimension);
+            if (dim) env.log("action", `dimension offset ${env.formatLength(Math.abs(dim.offset))}`);
         },
 
         pointerLeave() {
@@ -486,7 +664,9 @@ export function createRulerTool(env) {
         },
 
         draw(g, view) {
-            drawMeasurement(g, view, included(), phase, phase === "done" ? null : hover, display);
+            drawMeasurement(g, view, included(), phase, phase === "done" || dimDrag ? null : hover, display, dimension);
+            const h = handlePoint();
+            if (h) drawHandle(g, view, h, true);
         }
     };
 }
