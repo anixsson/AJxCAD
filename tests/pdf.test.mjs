@@ -108,3 +108,22 @@ test("shapes and text export alongside lines and measurements", () => {
     assert.ok(body.includes(" re\n"), "rectangle path is drawn");
     assert.ok(body.includes("(Note) Tj"), "text is printed");
 });
+
+test("drawing text uses world millimetres at the page scale, independent of measurement text size", () => {
+    for (const scale of [1, 10, 50]) {
+        for (const textSize of [50, 100, 400]) {
+            for (const fontSize of [undefined, 1, 20, 1000]) {
+                const body = stream(pagePdf({ ...page, scale, textSize }, [], [], undefined, [], [
+                    { text: "Note", x: 0, y: 0, fontSize, underline: true }
+                ]));
+                const size = (fontSize ?? 4.5) * 72 / 25.4 / scale;
+                assert.equal(Number(body.match(/\/F1 ([\d.]+) Tf/)[1]), +size.toFixed(3));
+                const underline = body.match(/(-?[\d.]+) (-?[\d.]+) m (-?[\d.]+) (-?[\d.]+) l S/);
+                assert.ok(underline, "underlined text keeps its underline");
+                const baseline = 148.5 * 72 / 25.4;
+                assert.equal(Number(underline[2]), +(baseline - size * 0.15).toFixed(3));
+                assert.equal(Number(underline[4]), Number(underline[2]));
+            }
+        }
+    }
+});

@@ -186,7 +186,7 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
     }
     for (const item of texts) {
         if (!layerPrintable(item)) continue;
-        const size = (item.fontSize ?? 4.5) * k * PT_PER_MM;
+        const size = (item.fontSize ?? 4.5) * k;
         const family = item.fontFamily ?? "sans-serif";
         const font = family === "serif"
             ? item.bold ? (item.italic ? "F8" : "F6") : (item.italic ? "F7" : "F5")
@@ -194,7 +194,7 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
                 ? item.bold ? (item.italic ? "F12" : "F10") : (item.italic ? "F11" : "F9")
                 : item.bold ? (item.italic ? "F4" : "F2") : (item.italic ? "F3" : "F1");
         const x = (item.x - r.left) * k, y = (item.y - r.bottom) * k;
-        text(marks, item.text, x, y, size * textSizeOf(page) / 100, false, font);
+        text(marks, item.text, x, y, size, false, font);
         if (item.underline) marks.push(`${n(x)} ${n(y - size * 0.15)} m ${n(x + textWidth(item.text, size))} ${n(y - size * 0.15)} l S`);
     }
 

@@ -146,6 +146,29 @@ test("shape and text geometry draw and hit-test as selectable items", () => {
     assert.equal(textGeometry.hitTest(text, 305, 300, screen), 0);
 });
 
+test("PDF and canvas text retain the same size relative to drawing geometry", () => {
+    reset();
+    const item = addText("Label", 0, 0, { fontSize: 20 });
+    for (const pageScale of [1, 10, 50]) {
+        const pdf = pagePdf({ paper: "A4", scale: pageScale, x: 0, y: 0, textSize: 400 },
+            [], [], undefined, [], [item]);
+        const pdfSize = Number(pdf.match(/\/F1 ([\d.]+) Tf/)[1]);
+        for (const scale of [0.5, 2, 10]) {
+            for (const dpr of [1, 2]) {
+                const context = { fillText() {} };
+                textGeometry.draw(context, [item], {
+                    dpr, scale, paper: true, fx: false, printPx: 8,
+                    toScreen: (x, y) => ({ x: x * scale, y: -y * scale })
+                });
+                const canvasSize = parseFloat(context.font);
+                const worldSize = canvasSize / (scale * dpr);
+                assert.ok(Math.abs(pdfSize * pageScale * 25.4 / 72 - worldSize) < 0.01,
+                    "printed size matches canvas size in world millimetres");
+            }
+        }
+    }
+});
+
 test("circle marquee selection selects both handles and the rectangle exposes four draggable corners", () => {
     reset();
     const circle = { type: "circle", x1: 100, y1: 100, x2: 150, y2: 100 };
