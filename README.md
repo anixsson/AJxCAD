@@ -14,7 +14,7 @@ While anything is selected, an Actions menu appears beside the toolmenu. **Move*
 
 ## Measuring
 
-Press R for the Ruler. Click two points to see a box with the distance, the x and y difference, and both points' coordinates. Press **Add points** (or Space) to keep going: each click adds a point to the total length, and from three points the enclosed area is shaded and measured. Press the red **Stop** (or Space) to finish and keep the result. The next click hides the box and starts a new measurement. In the toolmenu, choose **Grid + nodes** to snap to line ends and the grid, or **Nodes only** to ignore the grid and pick only line ends. The ruler never changes the drawing.
+Press R for the Ruler. Click two points to see a box with the distance, the x and y difference, and both points' coordinates. Press **Add points** (or Space) to keep going: each click adds a point to the total length, and from three points the enclosed area is shaded, with its size shown at the center of the shape. Press the red **Stop** (or Space) to finish and keep the result. The next click hides the box and starts a new measurement. In the toolmenu, choose **Grid + nodes** to snap to line ends and the grid, or **Nodes only** to ignore the grid and pick only line ends. The ruler never changes the drawing.
 
 ## Navigation and scale
 

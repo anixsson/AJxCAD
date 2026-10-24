@@ -1,7 +1,7 @@
 // Ruler tool: measures without changing the drawing.
 //  - Click two points: the box shows the length, the x/y difference and both points.
 //  - "Add points" (Space) continues from there: every click adds a point and the total length grows.
-//    From three points the enclosed area is shaded and measured. "Stop" (Space) ends it and keeps the result.
+//    From three points the enclosed area is shaded, measured and labelled at its centre. "Stop" (Space) ends it and keeps the result.
 //  - After a finished measurement, the next click clears it and starts a new one.
 //  - Snap "grid": points snap to line ends, otherwise to the grid. Snap "nodes": only line ends can be picked.
 
@@ -99,6 +99,42 @@ export function createRulerTool(env) {
             g.strokeStyle = p.kind === "end" ? "#ff8fe0" : "rgba(255,255,255,0.8)";
             g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
         }
+    }
+
+    // Area-weighted centre of the polygon; falls back to the point average when it is (nearly) flat.
+    function polygonCentroid(pts) {
+        let a2 = 0, cx = 0, cy = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i], q = pts[(i + 1) % pts.length];
+            const c = p.x * q.y - q.x * p.y;
+            a2 += c;
+            cx += (p.x + q.x) * c;
+            cy += (p.y + q.y) * c;
+        }
+        if (Math.abs(a2) < 1e-9) {
+            return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+        }
+        return { x: cx / (3 * a2), y: cy / (3 * a2) };
+    }
+
+    function areaLabel(g, view, text, at) {
+        const d = view.dpr;
+        const s = view.toScreen(at.x, at.y);
+        g.font = `600 ${13 * d}px system-ui, -apple-system, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        const w = g.measureText(text).width + 14 * d, h = 22 * d;
+        g.fillStyle = "rgba(20,16,44,0.78)";
+        g.strokeStyle = "rgba(143,227,255,0.7)";
+        g.lineWidth = 1 * d;
+        g.beginPath();
+        g.roundRect(s.x * d - w / 2, s.y * d - h / 2, w, h, h / 2);
+        g.fill();
+        g.stroke();
+        g.fillStyle = "#8fe3ff";
+        g.fillText(text, s.x * d, s.y * d);
+        g.textAlign = "start";
+        g.textBaseline = "alphabetic";
     }
 
     function label(g, view, text, a, b) {
@@ -227,6 +263,11 @@ export function createRulerTool(env) {
                     const len = Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
                     if (len > 0) label(g, view, env.formatLength(len), screen[i - 1], screen[i]);
                 }
+            }
+
+            if ((phase === "multi" || phase === "done") && path.length >= 3) {
+                const area = polygonArea(path);
+                if (area > 0) areaLabel(g, view, env.formatArea(area), polygonCentroid(path));
             }
 
             g.lineWidth = 1.5 * d;

@@ -129,11 +129,15 @@ test("area ignores winding direction and the shaded area is drawn while adding p
 
     const calls = [];
     const g = {};
-    for (const m of ["beginPath", "moveTo", "lineTo", "closePath", "fill", "stroke", "setLineDash", "fillText", "arc", "strokeRect"]) {
+    for (const m of ["beginPath", "moveTo", "lineTo", "closePath", "fill", "stroke", "setLineDash", "fillText", "arc", "strokeRect", "roundRect"]) {
         g[m] = (...args) => calls.push([m, ...args]);
     }
+    g.measureText = text => ({ width: text.length * 7 });
     tool.draw(g, { dpr: 1, fx: false, toScreen: (x, y) => ({ x, y }) });
     assert.ok(calls.some(([m]) => m === "closePath"), "area is filled");
+    const areaText = calls.find(([m, text]) => m === "fillText" && text === "600 mm²");
+    assert.ok(areaText, "area is labelled on the board");
+    assert.ok(Math.abs(areaText[2] - 40 / 3) < 1e-9 && Math.abs(areaText[3] - 20) < 1e-9, "label sits at the triangle's centroid");
 
     tool.cancel();
     assert.equal(measures.at(-1), null);
