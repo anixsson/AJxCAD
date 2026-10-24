@@ -32,6 +32,26 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.companyname.ajxcad.project</string>
+            <key>UTTypeDescription</key>
+            <string>AJxCAD project</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>ajx</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
     <key>XSAppIconAssets</key>
     <string>Assets.xcassets/appicon.appiconset</string>
 </dict>

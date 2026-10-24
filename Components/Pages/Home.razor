@@ -1069,7 +1069,8 @@
 
     private static readonly FilePickerFileType ProjectFileType = new(new Dictionary<DevicePlatform, IEnumerable<string>>
     {
-        [DevicePlatform.MacCatalyst] = ["public.data"],
+        // Declared in Platforms/MacCatalyst/Info.plist (UTExportedTypeDeclarations) for the .ajx extension.
+        [DevicePlatform.MacCatalyst] = ["com.companyname.ajxcad.project"],
         [DevicePlatform.WinUI] = [".ajx"]
     });
 
