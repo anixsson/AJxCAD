@@ -40,6 +40,7 @@
         [
             ("Draw", "Press L, then click a start and end point. Keep clicking to create connected lines"),
             ("Edit", "Press S, select a line end and drag it to a new position"),
+            ("Measure", "Press R, then click two points"),
             ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
             ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk")
         ]),
@@ -79,6 +80,18 @@
             ("Actions > Move", "With a selection, press Move, click a base point (such as a corner), press Next or Space, then click the destination. A preview and offset show where the selection will go"),
             ("Esc", "Cancel a running Move; press again to return to the Cross tool"),
             ("Cmd/Ctrl + Z", "Undo the move")
+        ]),
+        new("Ruler", "R", "Measure without changing the drawing. Click two points to see the distance, the x and y difference, and both points' coordinates in your measuring system.",
+        [
+            ("R", "Switch to the Ruler tool"),
+            ("Click, click", "Pick the two points; a box shows the result"),
+            ("Click again", "Hide the box and start a new measurement from that point"),
+            ("Add points or Space", "After two points, keep clicking to add points to the total length. From three points the enclosed area is shaded and measured"),
+            ("Stop or Space", "Finish adding points and keep the total length and area"),
+            ("Cmd/Ctrl + Z", "While adding points, remove the last point"),
+            ("Grid + nodes", "Default. Snap to line ends, otherwise to the grid"),
+            ("Nodes only", "Ignore the grid; only line ends can be picked"),
+            ("Esc", "Clear the measurement; press again to return to the Cross tool")
         ]),
         new("Line", "L", "Draw straight lines. Click to set the start, click again to place the end. The next line starts where the last one ended. Points snap to the grid and to existing line ends, and the length is shown while drawing.",
         [

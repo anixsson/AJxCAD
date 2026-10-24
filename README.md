@@ -12,6 +12,10 @@ The bottom-center toolmenu shows options for the active tool. In Select, switch 
 
 While anything is selected, an Actions menu appears beside the toolmenu. **Move** opens a guide box: click a base point (such as a corner of the selection), press Next (or Space), then click the destination. The selection moves by that offset, with a live preview and offset distance; Esc or Cancel stops the move.
 
+## Measuring
+
+Press R for the Ruler. Click two points to see a box with the distance, the x and y difference, and both points' coordinates. Press **Add points** (or Space) to keep going: each click adds a point to the total length, and from three points the enclosed area is shaded and measured. Press the red **Stop** (or Space) to finish and keep the result. The next click hides the box and starts a new measurement. In the toolmenu, choose **Grid + nodes** to snap to line ends and the grid, or **Nodes only** to ignore the grid and pick only line ends. The ruler never changes the drawing.
+
 ## Navigation and scale
 
 Pan and zoom the canvas as you work, or center the view on the origin. Grid spacing adapts to the zoom level. Choose metric or imperial measurements, set a 1:1 reference, and use the scale panel to check the current ratio and measured scale bar.

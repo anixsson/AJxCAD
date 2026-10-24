@@ -111,6 +111,74 @@
     </div>
 }
 
+@if (_tool == "ruler")
+{
+    <div class="toolmenu-dock">
+        @if (_measure is { Mode: "single" } m)
+        {
+            <section class="glass process-box measure-box" aria-label="Measurement" aria-live="polite">
+                <div class="process-step">Ruler</div>
+                <div class="measure-length">@m.Length</div>
+                <dl class="measure-grid">
+                    <dt>Point 1</dt><dd>x @m.Ax</dd><dd>y @m.Ay</dd>
+                    <dt>Point 2</dt><dd>x @m.Bx</dd><dd>y @m.By</dd>
+                    <dt>Δ</dt><dd>x @m.Dx</dd><dd>y @m.Dy</dd>
+                </dl>
+                <p class="process-text">Click to start a new measurement, or add more points to measure a total length and area.</p>
+                <div class="process-actions">
+                    <button type="button" class="chip active default-action" data-default-action
+                            title="Keep clicking points to add them to the total length" @onclick="RulerAddPoints">Add points<span class="key-hint">Space</span></button>
+                </div>
+            </section>
+        }
+        else if (_measure is { } t)
+        {
+            <section class="glass process-box measure-box" aria-label="Measurement" aria-live="polite">
+                <div class="process-step">Ruler · @(t.Mode == "multi" ? "Adding points" : "Result") · @t.Points points</div>
+                <div class="measure-total">
+                    <div>
+                        <span class="measure-caption">Total length</span>
+                        <div class="measure-length">@t.Length</div>
+                    </div>
+                    <div>
+                        <span class="measure-caption">Area</span>
+                        <div class="measure-length">@(t.Area ?? "—")</div>
+                    </div>
+                </div>
+                @if (t.Mode == "multi")
+                {
+                    <p class="process-text">Click to add points. @(t.Area is null ? "The area appears from three points." : "The area closes back to the first point.")</p>
+                    <div class="process-actions">
+                        <button type="button" class="chip danger" data-default-action
+                                title="Finish and keep the result" @onclick="RulerStop">Stop<span class="key-hint">Space</span></button>
+                    </div>
+                }
+                else
+                {
+                    <p class="process-text">Click to start a new measurement.</p>
+                }
+            </section>
+        }
+        <div class="toolmenu-row">
+            <aside class="glass toolmenu" aria-label="Ruler toolmenu">
+                <span class="toolmenu-label">Ruler</span>
+                <div class="unit-row" role="group" aria-label="Snap to">
+                    @foreach (var (mode, label, title) in new[]
+                    {
+                        ("grid", "Grid + nodes", "Snap to line ends, otherwise to the grid"),
+                        ("nodes", "Nodes only", "Ignore the grid; only line ends can be picked")
+                    })
+                    {
+                        <button type="button" class="chip @(_rulerSnap == mode ? "active" : "")" title="@title"
+                                aria-pressed="@((_rulerSnap == mode).ToString().ToLowerInvariant())"
+                                @onclick="() => SetRulerSnap(mode)">@label</button>
+                    }
+                </div>
+            </aside>
+        </div>
+    </div>
+}
+
 @if (_showDebugMenu && _debug)
 {
     <aside class="glass debug-panel @(_debugOpen ? "open" : "")" aria-label="Debug log">
@@ -413,6 +481,39 @@
         if (_cad is not null) await _cad.InvokeAsync<bool>("cancelProcess");
     }
 
+    public sealed record Measurement(string Mode, string Length, int Points,
+        string? Dx = null, string? Dy = null, string? Ax = null, string? Ay = null, string? Bx = null, string? By = null,
+        string? Area = null);
+
+    private string _rulerSnap = "grid";
+    private Measurement? _measure;
+
+    private async Task RulerAddPoints()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("rulerAddPoints");
+    }
+
+    private async Task RulerStop()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("rulerStop");
+    }
+
+    private async Task SetRulerSnap(string mode)
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setRulerSnap", mode);
+        _rulerSnap = mode;
+    }
+
+    [JSInvokable]
+    public void OnMeasureChanged(Measurement? measurement)
+    {
+        _measure = measurement;
+        StateHasChanged();
+    }
+
     // "general" tools work on any data; "data" tools each own a bucket of data (see wwwroot/cad/store.js).
     private record ToolDef(string Id, string Title, string Hotkey, string Group, string Icon);
 
@@ -420,6 +521,7 @@
     [
         new("cross", "Cross", "V", "general", "<path class=\"cross\" d=\"M12 3v7M12 14v7M3 12h7M14 12h7\"/>"),
         new("select", "Select", "S", "general", "<path d=\"M5 3l14 8.5-6.2 1.6 3.7 6.4-2.6 1.5-3.7-6.4L5 18z\"/>"),
+        new("ruler", "Ruler", "R", "general", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>"),
         new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>")
     ];
 
@@ -470,13 +572,13 @@
     }
 
     [JSInvokable]
-    public void OnEscape()
+    public async Task OnEscape()
     {
         Log("action", $"OnEscape in Blazor (dialog={_dialog}, menu={_openMenu}, tool={_tool})");
         if (_dialog is not null) _dialog = null;
         else if (_openMenu is not null) _openMenu = null;
-        else if (_moveStep is not null) _ = CancelProcess();
-        else if (_tool != "cross") _ = SetTool("cross");
+        else if (_cad is not null && await _cad.InvokeAsync<bool>("cancelCurrent")) return;
+        else if (_tool != "cross") await SetTool("cross");
         else return;
         StateHasChanged();
     }

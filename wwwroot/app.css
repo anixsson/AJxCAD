@@ -500,7 +500,8 @@ button {
 }
 
 .tool-btn svg path[d^="M5 19"],
-.tool-btn svg path.cross {
+.tool-btn svg path.cross,
+.tool-btn svg path.outline {
     fill: none;
 }
 
@@ -566,6 +567,67 @@ button {
     font-size: 12px;
     line-height: 1.4;
     color: rgba(230, 230, 255, 0.8);
+}
+
+.measure-length {
+    margin: 2px 0 8px;
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.measure-grid {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 3px 12px;
+    margin: 0;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.measure-grid dt {
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.measure-grid dd {
+    margin: 0;
+}
+
+.measure-box .process-text {
+    margin: 10px 0 0;
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.measure-box .process-actions {
+    margin-top: 10px;
+}
+
+.measure-total {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.measure-caption {
+    font-size: 11px;
+    color: rgba(230, 230, 255, 0.55);
+}
+
+.measure-total .measure-length {
+    margin: 0;
+    font-size: 20px;
+}
+
+.chip.danger {
+    border-color: rgba(255, 85, 96, 0.7);
+    background: rgba(255, 85, 96, 0.22);
+    color: #ffd6da;
+    font-weight: 600;
+}
+
+.chip.danger:hover {
+    background: rgba(255, 85, 96, 0.36);
 }
 
 .process-actions {
