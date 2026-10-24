@@ -3,13 +3,17 @@
 
     <h3>Appearance</h3>
     <div class="mode-options">
-        <button type="button" class="mode-card @(!Performance ? "active" : "")" @onclick="() => PerformanceChanged.InvokeAsync(false)">
+        <button type="button" class="mode-card @(Appearance == "full" ? "active" : "")" aria-pressed="@((Appearance == "full").ToString().ToLowerInvariant())" @onclick='() => AppearanceChanged.InvokeAsync("full")'>
             <strong>Full effects</strong>
             <span>Frosted glass, glows and animations.</span>
         </button>
-        <button type="button" class="mode-card @(Performance ? "active" : "")" @onclick="() => PerformanceChanged.InvokeAsync(true)">
+        <button type="button" class="mode-card @(Appearance == "performance" ? "active" : "")" aria-pressed="@((Appearance == "performance").ToString().ToLowerInvariant())" @onclick='() => AppearanceChanged.InvokeAsync("performance")'>
             <strong>Performance</strong>
             <span>No blur, glow or animation. Solid panels, fastest drawing.</span>
+        </button>
+        <button type="button" class="mode-card @(Appearance == "paper" ? "active" : "")" aria-pressed="@((Appearance == "paper").ToString().ToLowerInvariant())" @onclick='() => AppearanceChanged.InvokeAsync("paper")'>
+            <strong>Paper</strong>
+            <span>White paper, black ink and monochrome controls. No glows or blur.</span>
         </button>
     </div>
     <h3>Developer tools</h3>
@@ -22,8 +26,8 @@
 </div>
 
 @code {
-    [Parameter] public bool Performance { get; set; }
-    [Parameter] public EventCallback<bool> PerformanceChanged { get; set; }
+    [Parameter] public string Appearance { get; set; } = "full";
+    [Parameter] public EventCallback<string> AppearanceChanged { get; set; }
     [Parameter] public bool ShowDebugMenu { get; set; }
     [Parameter] public EventCallback<bool> ShowDebugMenuChanged { get; set; }
 

@@ -83,7 +83,7 @@ export function createLineTool(env) {
             if (start && hover) {
                 const a = view.toScreen(start.x, start.y), b = view.toScreen(hover.x, hover.y);
                 g.setLineDash([6 * d, 5 * d]);
-                g.strokeStyle = "rgba(255,255,255,0.85)";
+                g.strokeStyle = (view.paper ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)");
                 g.lineWidth = 1.5 * d;
                 g.beginPath();
                 g.moveTo(a.x * d, a.y * d);
@@ -94,8 +94,8 @@ export function createLineTool(env) {
                 const len = Math.hypot(hover.x - start.x, hover.y - start.y);
                 if (len > 0) {
                     g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
-                    g.fillStyle = "#fff";
-                    g.shadowColor = "rgba(0,0,0,0.8)";
+                    g.fillStyle = (view.paper ? "#000" : "#fff");
+                    g.shadowColor = (view.paper ? "transparent" : "rgba(0,0,0,0.8)");
                     g.shadowBlur = view.fx ? 4 * d : 0;
                     g.fillText(env.formatLength(len), (a.x + b.x) / 2 * d + 8 * d, (a.y + b.y) / 2 * d - 8 * d);
                     g.shadowBlur = 0;
@@ -105,7 +105,7 @@ export function createLineTool(env) {
             g.lineWidth = 1.5 * d;
             if (start) {
                 const p = view.toScreen(start.x, start.y);
-                g.fillStyle = "#ff8fe0";
+                g.fillStyle = (view.paper ? "#000" : "#ff8fe0");
                 g.beginPath();
                 g.arc(p.x * d, p.y * d, 3.5 * d, 0, Math.PI * 2);
                 g.fill();
@@ -113,7 +113,7 @@ export function createLineTool(env) {
             if (hover) {
                 const p = view.toScreen(hover.x, hover.y);
                 const r = (hover.kind === "end" ? 6 : 4) * d;
-                g.strokeStyle = hover.kind === "end" ? "#ff8fe0" : "rgba(255,255,255,0.8)";
+                g.strokeStyle = hover.kind === "end" ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
                 g.strokeRect(p.x * d - r, p.y * d - r, r * 2, r * 2);
             }
         }

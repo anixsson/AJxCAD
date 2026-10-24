@@ -2,13 +2,13 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<div class="app @(_performance ? "perf" : "") @(NativeWindow.IsMac ? "mac" : "win")">
+<div class="app @(_appearance != "full" ? "perf" : "") @(_appearance == "paper" ? "paper" : "") @(NativeWindow.IsMac ? "mac" : "win")">
 <div class="workspace" @ref="_workspace">
     <canvas @ref="_canvas"></canvas>
 </div>
 
 <Modal Open="@(_dialog == "settings")" Title="App settings" Width="460" OnClose="CloseDialog">
-    <SettingsDialog Performance="_performance" PerformanceChanged="SetPerformance" ShowDebugMenu="_showDebugMenu" ShowDebugMenuChanged="SetShowDebugMenu" />
+    <SettingsDialog Appearance="_appearance" AppearanceChanged="SetAppearance" ShowDebugMenu="_showDebugMenu" ShowDebugMenuChanged="SetShowDebugMenu" />
 </Modal>
 
 <Modal Open="@(_dialog == "project")" Title="Project settings" Width="460" OnClose="CloseDialog">
@@ -849,14 +849,18 @@
     private IJSObjectReference? _cad;
 
     // Appearance is an app preference (kept between runs); project data lives in the "project" bucket.
-    private bool _performance = Preferences.Default.Get("performanceMode", false);
+    private string _appearance = Preferences.Default.Get("appearance",
+        Preferences.Default.Get("performanceMode", false) ? "performance" : "full");
     private string _projectName = "Untitled";
 
-    private async Task SetPerformance(bool on)
+    private async Task SetAppearance(string appearance)
     {
-        _performance = on;
-        Preferences.Default.Set("performanceMode", on);
-        if (_cad is not null) await _cad.InvokeVoidAsync("setEffects", !on);
+        if (appearance is not ("full" or "performance" or "paper"))
+            throw new ArgumentOutOfRangeException(nameof(appearance));
+
+        if (_cad is not null) await _cad.InvokeVoidAsync("setAppearance", appearance);
+        _appearance = appearance;
+        Preferences.Default.Set("appearance", appearance);
     }
 
     private async Task SetProjectName(string name)
@@ -1056,7 +1060,7 @@
         _self = DotNetObjectReference.Create(this);
         _cad = await JS.InvokeAsync<IJSObjectReference>("import", "./cad/engine.js");
         await _cad.InvokeVoidAsync("init", _workspace, _canvas, _self, ReferencePx, _unit.Mm);
-        await _cad.InvokeVoidAsync("setEffects", !_performance);
+        await _cad.InvokeVoidAsync("setAppearance", _appearance);
         await SyncProject();
     }
 

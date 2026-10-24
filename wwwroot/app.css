@@ -1441,3 +1441,157 @@ button {
     border-radius: 3px;
     background: rgba(201, 182, 255, 0.3);
 }
+
+/* ---------- Paper: monochrome UI and white drawing surface ---------- */
+
+.paper {
+    color: #000;
+    color-scheme: light;
+}
+
+.paper .workspace {
+    background: #fff;
+}
+
+.paper .glass,
+.paper .float-panel,
+.paper .tool-tip,
+.paper .data-text {
+    background: #fff;
+    border-color: #555;
+    color: #000;
+}
+
+.paper .modal-backdrop {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.paper :is(.titlebar-title, .titlebar-title span, .win-caption button,
+    .flyout-check, .flyout-shortcut, .debug-toggle, .debug-clear, .debug-line,
+    .debug-line.key, .debug-line.action, .debug-line.mouse, .debug-line.focus,
+    .debug-line.system, .tool-btn, .process-step, .process-text, .measure-grid dt,
+    .measure-box .process-text, .measure-caption, .stack-label, .area-option .stack-label,
+    .stack-meta, .toolmenu-label, .unit-caption, .accordion-toggle, .scale-grid-info,
+    .scale-bar-label, .modal-close, .about-version, .about-note, .about-keys dt,
+    .about-keys dd, .howto-head kbd, .howto-content p, .data-intro, .data-empty,
+    .data-group, .data-count, .settings h3, .dev-build, .test-error, .mode-card span) {
+    color: #000;
+}
+
+.paper .float-menu-brand,
+.paper .about-name {
+    background: none;
+    color: #000;
+}
+
+.paper :is(.chip, .mode-card, .howto-item, .text-input, .setting-checkmark) {
+    background: #fff;
+    border-color: #777;
+    color: #000;
+}
+
+.paper :is(.chip, .mode-card, .float-btn, .tool-btn, .accordion-toggle, .modal-close):hover,
+.paper .float-btn.open,
+.paper .win-caption button:hover {
+    background: #eee;
+    color: #000;
+}
+
+.paper :is(.chip.active, .area-option.active, .float-btn.active, .tool-btn.active,
+    .flyout-item:hover:not(:disabled)) {
+    background: #000;
+    border-color: #000;
+    color: #fff;
+}
+
+.paper :is(.chip.active, .flyout-item:hover:not(:disabled)) :is(span, .check-box) {
+    color: #fff;
+    border-color: currentColor;
+}
+
+.paper .check-chip.active .check-box {
+    background: #000;
+}
+
+.paper .mode-card.active {
+    background: #eee;
+    border-color: #000;
+    outline: 1px solid #000;
+}
+
+.paper .chip.danger {
+    background: #fff;
+    border: 2px solid #000;
+    color: #000;
+}
+
+.paper .chip.danger:hover {
+    background: #000;
+    color: #fff;
+}
+
+.paper .default-action:not(:disabled) {
+    outline-color: #000;
+}
+
+.paper :is(.tool-tip kbd, .key-hint, .modal-head, .about-keys, .debug-lines,
+    .howto-head kbd, .check-box, .scale-bar) {
+    border-color: currentColor;
+}
+
+.paper .debug-count,
+.paper .howto-item {
+    background: #f5f5f5;
+}
+
+.paper .flyout-sep {
+    background: #ccc;
+}
+
+.paper .dot {
+    background: #fff;
+    border: 1px solid #000;
+    color: #000;
+    opacity: 1;
+}
+
+.paper .dot:hover {
+    background: #ddd;
+}
+
+.paper .setting-check input:checked + .setting-checkmark {
+    background: #000;
+    border-color: #000;
+}
+
+.paper .setting-checkmark::after {
+    border-color: #fff;
+}
+
+.paper .setting-check:hover .setting-checkmark {
+    border-color: #000;
+}
+
+.paper .setting-check input:focus-visible + .setting-checkmark,
+.paper .text-input:focus,
+.paper :focus-visible {
+    outline: 2px solid #000;
+    outline-offset: 3px;
+    border-color: #000;
+}
+
+.paper input {
+    accent-color: #000;
+}
+
+.paper .check-box {
+    color: #000;
+}
+
+.paper .about-icon img {
+    filter: grayscale(1) !important;
+}
+
+.paper .debug-lines::-webkit-scrollbar-thumb {
+    background: #777;
+}

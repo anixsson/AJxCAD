@@ -38,4 +38,4 @@ Save and reopen drawings as `.ajx` project files. A project keeps its drawing da
 
 ## A workspace that suits you
 
-Choose full visual effects or performance mode for the app's appearance on your computer. The read-only Data Buckets viewer lets you inspect the information stored in the current project.
+Choose **Full effects**, **Performance**, or **Paper** in App settings. Paper uses a white drawing surface with black and gray lines, measurements, selection highlights, and controls throughout the app, without blur or glows. Your appearance choice is remembered on this computer and does not change project data. The read-only Data Buckets viewer lets you inspect the information stored in the current project.

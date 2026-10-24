@@ -225,7 +225,7 @@ export function createSelectTool(env) {
             const reach = Math.min(36, len * 0.6);
             const on = selected.has(refKey(r));
             if (on && !r.geo.annotation) {
-                g.strokeStyle = "#ff8fe0";
+                g.strokeStyle = (view.paper ? "#000" : "#ff8fe0");
                 g.lineWidth = 3 * d;
                 g.beginPath();
                 g.moveTo(cs.x * d, cs.y * d);
@@ -237,15 +237,15 @@ export function createSelectTool(env) {
             if (ny > 0 || (ny === 0 && nx > 0)) { nx = -nx; ny = -ny; }
             const x = (cs.x + ux * reach + nx * 11) * d, y = (cs.y + uy * reach + ny * 11) * d;
             const w = g.measureText(r.label).width + 10 * d, h = 16 * d;
-            const color = r.geo.annotation ? "#8fe3ff" : "#ff8fe0";
-            g.fillStyle = on ? color : "rgba(20,16,44,0.85)";
-            g.strokeStyle = on ? color : "rgba(255,255,255,0.5)";
+            const color = r.geo.annotation ? (view.paper ? "#000" : "#8fe3ff") : (view.paper ? "#000" : "#ff8fe0");
+            g.fillStyle = on ? color : (view.paper ? "rgba(255,255,255,0.95)" : "rgba(20,16,44,0.85)");
+            g.strokeStyle = on ? color : (view.paper ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)");
             g.lineWidth = 1 * d;
             g.beginPath();
             g.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
             g.fill();
             g.stroke();
-            g.fillStyle = on ? "#1a1538" : "rgba(255,255,255,0.8)";
+            g.fillStyle = on ? (view.paper ? "#fff" : "#1a1538") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
             g.fillText(r.label, x, y);
         }
         g.textAlign = "start";
@@ -292,7 +292,7 @@ export function createSelectTool(env) {
         const a = view.toScreen(from.x, from.y);
         const s = view.toScreen(to.x, to.y);
         g.setLineDash([6 * d, 5 * d]);
-        g.strokeStyle = "rgba(255,255,255,0.85)";
+        g.strokeStyle = (view.paper ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)");
         g.beginPath();
         g.moveTo(a.x * d, a.y * d);
         g.lineTo(s.x * d, s.y * d);
@@ -301,8 +301,8 @@ export function createSelectTool(env) {
 
         const offset = Math.hypot(to.x - from.x, to.y - from.y);
         g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
-        g.fillStyle = "#fff";
-        g.shadowColor = "rgba(0,0,0,0.8)";
+        g.fillStyle = (view.paper ? "#000" : "#fff");
+        g.shadowColor = (view.paper ? "transparent" : "rgba(0,0,0,0.8)");
         g.shadowBlur = view.fx ? 4 * d : 0;
         g.fillText(`Offset ${env.formatLength(offset)}`, (a.x + s.x) / 2 * d + 8 * d, (a.y + s.y) / 2 * d - 8 * d);
         g.shadowBlur = 0;
@@ -312,7 +312,7 @@ export function createSelectTool(env) {
         const d = view.dpr;
         const s = view.toScreen(p.x, p.y);
         const r = (p.kind === "end" ? 8 : 6) * d;
-        g.strokeStyle = p.kind === "end" ? "#ff8fe0" : "rgba(255,255,255,0.8)";
+        g.strokeStyle = p.kind === "end" ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
         g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
     }
 
@@ -333,7 +333,7 @@ export function createSelectTool(env) {
             }
         }
         g.setLineDash([4 * d, 4 * d]);
-        g.strokeStyle = "rgba(255,143,224,0.6)";
+        g.strokeStyle = (view.paper ? "rgba(0,0,0,0.6)" : "rgba(255,143,224,0.6)");
         g.lineWidth = 2 * d;
         g.stroke();
         g.setLineDash([]);
@@ -655,8 +655,8 @@ export function createSelectTool(env) {
                     count++;
                 }
                 g.lineWidth = 3 * d;
-                g.strokeStyle = "#ff8fe0";
-                g.shadowColor = "rgba(255,143,224,0.8)";
+                g.strokeStyle = (view.paper ? "#000" : "#ff8fe0");
+                g.shadowColor = (view.paper ? "transparent" : "rgba(255,143,224,0.8)");
                 g.shadowBlur = view.fx && count <= 400 ? 8 * d : 0;
                 g.stroke();
                 g.shadowBlur = 0;
@@ -668,7 +668,7 @@ export function createSelectTool(env) {
                 g.beginPath();
                 g.moveTo(a.x * d, a.y * d);
                 g.lineTo(b.x * d, b.y * d);
-                g.strokeStyle = "#8fe3ff";
+                g.strokeStyle = (view.paper ? "#000" : "#8fe3ff");
                 g.lineWidth = 3 * d;
                 g.stroke();
                 g.lineWidth = 1.5 * d;
@@ -682,22 +682,22 @@ export function createSelectTool(env) {
                     const on = selected.has(refKey(p));
                     g.beginPath();
                     g.arc(s.x * d, s.y * d, (on ? 6 : 3.5) * d, 0, Math.PI * 2);
-                    g.fillStyle = on ? "#8fe3ff" : "#167aab";
+                    g.fillStyle = on ? (view.paper ? "#000" : "#8fe3ff") : (view.paper ? "#666" : "#167aab");
                     g.fill();
-                    g.strokeStyle = "#8fe3ff";
+                    g.strokeStyle = (view.paper ? "#000" : "#8fe3ff");
                     g.stroke();
                     continue;
                 }
                 if (selected.has(refKey(p))) {
                     const r = 4.5 * d;
-                    g.fillStyle = "#ff8fe0";
-                    g.shadowColor = "rgba(255,143,224,0.8)";
+                    g.fillStyle = (view.paper ? "#000" : "#ff8fe0");
+                    g.shadowColor = (view.paper ? "transparent" : "rgba(255,143,224,0.8)");
                     g.shadowBlur = view.fx ? 8 * d : 0;
                     g.fillRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
                     g.shadowBlur = 0;
                 } else {
                     const r = 3 * d;
-                    g.strokeStyle = "rgba(255,255,255,0.55)";
+                    g.strokeStyle = (view.paper ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.55)");
                     g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
                 }
             }
@@ -715,9 +715,9 @@ export function createSelectTool(env) {
                     g.lineTo(s.x * d, s.y * d + r);
                     g.lineTo(s.x * d - r, s.y * d);
                     g.closePath();
-                    g.fillStyle = hot ? "#8fe3ff" : "#1a1538";
+                    g.fillStyle = hot ? (view.paper ? "#000" : "#8fe3ff") : (view.paper ? "#fff" : "#1a1538");
                     g.fill();
-                    g.strokeStyle = "#8fe3ff";
+                    g.strokeStyle = (view.paper ? "#000" : "#8fe3ff");
                     g.lineWidth = 1.5 * d;
                     g.stroke();
                 }
@@ -728,8 +728,8 @@ export function createSelectTool(env) {
             if (hover && !drag && mode === "nodes") {
                 const s = view.toScreen(hover.x, hover.y);
                 const r = 8 * d;
-                g.strokeStyle = "#8fe3ff";
-                g.shadowColor = "rgba(111,208,255,0.9)";
+                g.strokeStyle = (view.paper ? "#000" : "#8fe3ff");
+                g.shadowColor = (view.paper ? "transparent" : "rgba(111,208,255,0.9)");
                 g.shadowBlur = view.fx ? 8 * d : 0;
                 g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
                 g.shadowBlur = 0;
@@ -749,7 +749,7 @@ export function createSelectTool(env) {
                 if (process.base) {
                     const s = view.toScreen(process.base.x, process.base.y);
                     const r = 9 * d;
-                    g.strokeStyle = "#8fe3ff";
+                    g.strokeStyle = (view.paper ? "#000" : "#8fe3ff");
                     g.lineWidth = 2 * d;
                     g.beginPath();
                     g.moveTo(s.x * d - r, s.y * d);
@@ -766,9 +766,9 @@ export function createSelectTool(env) {
                 const top = Math.min(drag.sy, drag.y) * d;
                 const width = Math.abs(drag.x - drag.sx) * d;
                 const height = Math.abs(drag.y - drag.sy) * d;
-                g.fillStyle = "rgba(143,227,255,0.12)";
+                g.fillStyle = (view.paper ? "rgba(0,0,0,0.08)" : "rgba(143,227,255,0.12)");
                 g.fillRect(left, top, width, height);
-                g.strokeStyle = "rgba(143,227,255,0.9)";
+                g.strokeStyle = (view.paper ? "rgba(0,0,0,0.9)" : "rgba(143,227,255,0.9)");
                 g.setLineDash([5 * d, 4 * d]);
                 g.strokeRect(left, top, width, height);
                 g.setLineDash([]);

@@ -33,10 +33,10 @@ export const lineGeometry = {
         }
         g.lineCap = "round";
         g.lineWidth = 2 * d;
-        g.strokeStyle = "#8fe3ff";
+        g.strokeStyle = (view.paper ? "#000" : "#8fe3ff");
         // The blurred glow is the expensive part; only use it while the drawing is light.
         if (view.fx && visible <= GLOW_MAX_LINES) {
-            g.shadowColor = "rgba(111,208,255,0.55)";
+            g.shadowColor = (view.paper ? "transparent" : "rgba(111,208,255,0.55)");
             g.shadowBlur = 6 * d;
         }
         g.stroke();

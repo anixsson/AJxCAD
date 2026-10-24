@@ -20,6 +20,7 @@ let ro;
 let centered = null;
 let imperial = false;
 let effects = true; // false = performance mode: no glows or blurs on the canvas
+let paperTheme = false;
 const handlers = [];
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
@@ -256,7 +257,9 @@ function render() {
         const first = Math.ceil((0 - origin) / stepPx);
         const last = Math.floor((length - origin) / stepPx);
         const width = major ? majorW : minorW;
-        ctx.fillStyle = major ? "rgba(201,182,255,0.36)" : "rgba(169,140,255,0.15)";
+        ctx.fillStyle = paperTheme
+            ? (major ? "rgba(0,0,0,0.24)" : "rgba(0,0,0,0.09)")
+            : (major ? "rgba(201,182,255,0.36)" : "rgba(169,140,255,0.15)");
         for (let i = first; i <= last; i++) {
             if ((i % 10 === 0) !== major) continue;
             const p = Math.round(origin + i * stepPx - width / 2);
@@ -270,14 +273,14 @@ function render() {
 
     // Axes through the world origin
     const aw = Math.max(2, Math.round(dpr * 2));
-    ctx.shadowColor = "rgba(255,143,224,0.7)";
+    ctx.shadowColor = paperTheme ? "transparent" : "rgba(255,143,224,0.7)";
     ctx.shadowBlur = effects ? 8 * dpr : 0;
-    ctx.fillStyle = "#ff8fe0";
+    ctx.fillStyle = paperTheme ? "#555" : "#ff8fe0";
     ctx.fillRect(Math.round(ox - aw / 2), 0, aw, h);
     ctx.fillRect(0, Math.round(oy - aw / 2), w, aw);
     ctx.shadowBlur = 0;
 
-    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects };
+    const view = { dpr, toScreen, toWorld, width: el.clientWidth, height: el.clientHeight, fx: effects, paper: paperTheme };
     for (const geo of geometries) geo.draw(ctx, bucket(geo.bucket).items, view);
     tools.ruler.drawSaved(ctx, view);
     currentTool().draw?.(ctx, view);
@@ -531,6 +534,15 @@ export function setEffects(on) {
     effects = on;
     log("action", `effects: ${on ? "full" : "performance mode"}`);
     draw();
+}
+
+export function setAppearance(appearance) {
+    if (!["full", "performance", "paper"].includes(appearance)) {
+        throw new Error(`Unknown appearance: ${appearance}`);
+    }
+    paperTheme = appearance === "paper";
+    setEffects(appearance === "full");
+    log("action", `appearance: ${appearance}`);
 }
 
 export const getProjectData = () => ({ ...getProject() });

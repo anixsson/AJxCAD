@@ -142,13 +142,13 @@ export function createRulerTool(env) {
         const d = view.dpr;
         const s = view.toScreen(p.x, p.y);
         if (filled) {
-            g.fillStyle = "#8fe3ff";
+            g.fillStyle = (view.paper ? "#000" : "#8fe3ff");
             g.beginPath();
             g.arc(s.x * d, s.y * d, 3.5 * d, 0, Math.PI * 2);
             g.fill();
         } else {
             const r = (p.kind === "end" ? 6 : 4) * d;
-            g.strokeStyle = p.kind === "end" ? "#ff8fe0" : "rgba(255,255,255,0.8)";
+            g.strokeStyle = p.kind === "end" ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
             g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
         }
     }
@@ -206,7 +206,7 @@ export function createRulerTool(env) {
         let delta = Math.atan2(b.y - v.y, b.x - v.x) - a1;
         while (delta > Math.PI) delta -= 2 * Math.PI;
         while (delta <= -Math.PI) delta += 2 * Math.PI;
-        g.strokeStyle = "rgba(255,214,120,0.9)";
+        g.strokeStyle = (view.paper ? "rgba(0,0,0,0.9)" : "rgba(255,214,120,0.9)");
         g.lineWidth = 1.5 * d;
         g.beginPath();
         g.arc(v.x * d, v.y * d, r * d, a1, a1 + delta, delta < 0);
@@ -217,8 +217,8 @@ export function createRulerTool(env) {
         g.font = `600 ${11 * d}px system-ui, -apple-system, sans-serif`;
         g.textAlign = "center";
         g.textBaseline = "middle";
-        g.fillStyle = "#ffd678";
-        g.shadowColor = "rgba(0,0,0,0.8)";
+        g.fillStyle = (view.paper ? "#000" : "#ffd678");
+        g.shadowColor = (view.paper ? "transparent" : "rgba(0,0,0,0.8)");
         g.shadowBlur = view.fx ? 4 * d : 0;
         g.fillText(formatAngle(c.deg), tx * d, ty * d);
         recordText(g, view, formatAngle(c.deg), tx, ty, true);
@@ -234,14 +234,14 @@ export function createRulerTool(env) {
         g.textAlign = "center";
         g.textBaseline = "middle";
         const w = g.measureText(text).width + 14 * d, h = 22 * d;
-        g.fillStyle = "rgba(20,16,44,0.78)";
-        g.strokeStyle = "rgba(143,227,255,0.7)";
+        g.fillStyle = (view.paper ? "rgba(255,255,255,0.95)" : "rgba(20,16,44,0.78)");
+        g.strokeStyle = (view.paper ? "rgba(0,0,0,0.7)" : "rgba(143,227,255,0.7)");
         g.lineWidth = 1 * d;
         g.beginPath();
         g.roundRect(s.x * d - w / 2, s.y * d - h / 2, w, h, h / 2);
         g.fill();
         g.stroke();
-        g.fillStyle = "#8fe3ff";
+        g.fillStyle = (view.paper ? "#000" : "#8fe3ff");
         g.fillText(text, s.x * d, s.y * d);
         recordText(g, view, text, s.x, s.y, true);
         g.textAlign = "start";
@@ -251,8 +251,8 @@ export function createRulerTool(env) {
     function label(g, view, text, a, b) {
         const d = view.dpr;
         g.font = `${12 * d}px system-ui, -apple-system, sans-serif`;
-        g.fillStyle = "#fff";
-        g.shadowColor = "rgba(0,0,0,0.8)";
+        g.fillStyle = (view.paper ? "#000" : "#fff");
+        g.shadowColor = (view.paper ? "transparent" : "rgba(0,0,0,0.8)");
         g.shadowBlur = view.fx ? 4 * d : 0;
         g.fillText(text, (a.x + b.x) / 2 * d + 8 * d, (a.y + b.y) / 2 * d - 8 * d);
         recordText(g, view, text, (a.x + b.x) / 2 + 8, (a.y + b.y) / 2 - 8);
@@ -269,12 +269,12 @@ export function createRulerTool(env) {
             g.beginPath();
             screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
             g.closePath();
-            g.fillStyle = "rgba(143,227,255,0.16)";
+            g.fillStyle = (view.paper ? "rgba(0,0,0,0.06)" : "rgba(143,227,255,0.16)");
             if (options.showArea) g.fill();
 
             const first = screen[0], last = screen.at(-1);
             g.setLineDash([3 * d, 5 * d]);
-            g.strokeStyle = "rgba(143,227,255,0.45)";
+            g.strokeStyle = (view.paper ? "rgba(0,0,0,0.45)" : "rgba(143,227,255,0.45)");
             g.lineWidth = 1 * d;
             g.beginPath();
             g.moveTo(last.x * d, last.y * d);
@@ -285,7 +285,7 @@ export function createRulerTool(env) {
 
         if (screen.length >= 2) {
             g.setLineDash([6 * d, 5 * d]);
-            g.strokeStyle = state === "picking" || live ? "rgba(255,255,255,0.85)" : "#8fe3ff";
+            g.strokeStyle = state === "picking" || live ? (view.paper ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)") : (view.paper ? "#000" : "#8fe3ff");
             g.lineWidth = 1.5 * d;
             g.beginPath();
             screen.forEach((s, i) => i ? g.lineTo(s.x * d, s.y * d) : g.moveTo(s.x * d, s.y * d));
