@@ -30,6 +30,175 @@ const env = extra => ({
 });
 const click = (tool, x, y) => tool.pointerDown({ sx: x, sy: y, detail: 1 });
 
+test("rectangle information follows the cursor and holds edited dimensions through placement", () => {
+    reset();
+    const changes = [];
+    const tool = createRectangleTool(env({ shapeChanged: info => changes.push(info) }));
+    click(tool, 100, 100);
+    assert.deepEqual(changes.at(-1), { type: "rectangle", directionSet: false, width: 0, height: 0, radius: 0,
+        widthFixed: false, heightFixed: false, radiusFixed: false });
+    tool.pointerMove({ sx: 60, sy: 40 });
+    assert.equal(changes.at(-1).width, 40);
+    assert.equal(changes.at(-1).height, 60);
+    tool.pointerLeave();
+    tool.setDimension("width", 12.345);
+    assert.ok(Math.abs(changes.at(-1).width - 12.345) < 1e-10);
+    assert.equal(changes.at(-1).widthFixed, true);
+    tool.pointerMove({ sx: 10, sy: 30 });
+    assert.equal(changes.at(-1).height, 70);
+    tool.setDimension("height", 25.4);
+    click(tool, 20, 10);
+    assert.equal(bucket(SHAPES).items.length, 0, "second click only sets direction");
+    assert.equal(changes.at(-1).directionSet, true);
+    tool.pointerMove({ sx: 200, sy: 200 });
+    click(tool, 200, 200);
+    tool.pointerLeave();
+    tool.setDimension("width", 12.345);
+    assert.equal(tool.save(), true);
+    const shape = bucket(SHAPES).items[0];
+    assert.ok(Math.abs(shape.x2 - 87.655) < 1e-10);
+    assert.equal(shape.y2, 74.6);
+    assert.equal(changes.at(-1), null);
+    assert.equal(undo(), true);
+    assert.equal(bucket(SHAPES).items.length, 0);
+});
+
+test("circle exact radius preserves direction and supports placement from the information box", () => {
+    reset();
+    const changes = [];
+    const tool = createCircleTool(env({ shapeChanged: info => changes.push(info) }));
+    click(tool, 0, 0);
+    tool.pointerMove({ sx: -30, sy: 40 });
+    tool.setDimension("radius", 12.7);
+    assert.equal(changes.at(-1).radiusFixed, true);
+    assert.ok(Math.abs(changes.at(-1).radius - 12.7) < 1e-10);
+    click(tool, -30, 40);
+    tool.pointerMove({ sx: 100, sy: 0 });
+    tool.pointerLeave();
+    assert.equal(tool.save(), true);
+    const circle = bucket(SHAPES).items[0];
+    assert.ok(Math.abs(circle.x2 + 7.62) < 1e-10);
+    assert.ok(Math.abs(circle.y2 - 10.16) < 1e-10);
+    click(tool, 0, 0);
+    tool.setDimension("radius", 4.25);
+    click(tool, 10, 0);
+    const arcs = [];
+    const g = new Proxy({ arc: (...args) => arcs.push(args) },
+        { get: (target, key) => target[key] ?? (() => {}) });
+    tool.draw(g, { dpr: 1, toScreen: (x, y) => ({ x, y }) });
+    assert.equal(arcs[0][2], 4.25, "typed radius previews in the locked direction");
+    assert.equal(tool.save(), true);
+    assert.equal(bucket(SHAPES).items[1].x2, 4.25);
+});
+
+test("shape information releases exact values and resets on cancel, data change and tool switch", () => {
+    for (const create of [createCircleTool, createRectangleTool]) {
+        const changes = [];
+        const tool = create(env({ shapeChanged: info => changes.push(info) }));
+        for (const finish of ["cancel", "dataChanged", "deactivate"]) {
+            click(tool, 0, 0);
+            tool.pointerMove({ sx: 30, sy: 40 });
+            const field = tool.id === "circle" ? "radius" : "width";
+            tool.setDimension(field, 2.5);
+            tool.useCursor();
+            assert.equal(changes.at(-1)[field], tool.id === "circle" ? 50 : 30);
+            assert.equal(changes.at(-1)[`${field}Fixed`], false);
+            tool.setDimension(field, 2.5);
+            tool[finish]();
+            assert.equal(changes.at(-1), null);
+            click(tool, 0, 0);
+            assert.equal(changes.at(-1)[`${field}Fixed`], false);
+            tool.cancel();
+        }
+    }
+});
+
+test("shape dimension validation rejects invalid input and degenerate placement without saving", () => {
+    reset();
+    const errors = [];
+    const tool = createRectangleTool(env({ log: (kind, text) => errors.push({ kind, text }) }));
+    assert.throws(() => tool.setDimension("width", 10), /first shape point/);
+    click(tool, 0, 0);
+    for (const value of [0, -1, NaN, Infinity, "10"]) {
+        assert.throws(() => tool.setDimension("width", value), /positive, finite/);
+    }
+    assert.throws(() => tool.setDimension("radius", 10), /Unknown rectangle dimension/);
+    tool.setDimension("width", 10);
+    assert.equal(tool.save(), false, "placement requires a second click");
+    click(tool, 10, 0);
+    assert.equal(tool.save(), false);
+    assert.equal(errors.at(-1).kind, "error");
+    assert.equal(bucket(SHAPES).items.length, 0);
+    tool.setDimension("height", 20);
+    assert.equal(tool.save(), true);
+    assert.equal(bucket(SHAPES).items.length, 1);
+});
+
+test("Place resets both shape tools for the next object and Reset direction unlocks the preview", () => {
+    for (const create of [createCircleTool, createRectangleTool]) {
+        reset();
+        const changes = [];
+        const tool = create(env({ shapeChanged: info => changes.push(info) }));
+        for (let index = 0; index < 2; index++) {
+            click(tool, 0, 0);
+            assert.equal(changes.at(-1).directionSet, false);
+            click(tool, -30, -40);
+            assert.equal(changes.at(-1).directionSet, true);
+            tool.useCursor();
+            assert.equal(changes.at(-1).directionSet, false);
+            tool.pointerMove({ sx: 30, sy: 40 });
+            click(tool, 30, 40);
+            if (tool.id === "circle") tool.setDimension("radius", 25);
+            else {
+                tool.setDimension("width", 12);
+                tool.setDimension("height", 24);
+            }
+            assert.equal(tool.save(), true);
+            assert.equal(changes.at(-1), null);
+            assert.equal(bucket(SHAPES).items.length, index + 1);
+        }
+    }
+});
+
+test("saved shapes reopen for dimension editing, preserve their anchor and support cancel and undo", () => {
+    for (const [create, type] of [[createCircleTool, "circle"], [createRectangleTool, "rectangle"]]) {
+        reset();
+        const item = addShape(type, { x: 100, y: 200 }, { x: 70, y: 160 });
+        const original = { ...item };
+        const changes = [];
+        const tool = create(env({ shapeChanged: info => changes.push(info) }));
+        tool.inspect(item.id);
+        assert.equal(changes.at(-1).id, item.id);
+        assert.equal(changes.at(-1).directionSet, true);
+        const field = type === "circle" ? "radius" : "width";
+        tool.setDimension(field, 25);
+        tool.inspect(item.id);
+        assert.equal(changes.at(-1)[field], 25, "unchanged selection preserves pending edits");
+        assert.deepEqual(item, original, "editing previews without changing saved geometry");
+        tool.cancel();
+        assert.deepEqual(item, original);
+        tool.inspect(item.id);
+        tool.setDimension(field, 25);
+        assert.equal(tool.save(), true);
+        assert.equal(bucket(SHAPES).items.length, 1, "saving edits does not create another shape");
+        assert.equal(item.x1, 100);
+        assert.equal(item.y1, 200);
+        if (type === "circle") {
+            assert.ok(Math.abs(Math.hypot(item.x2 - item.x1, item.y2 - item.y1) - 25) < 1e-10);
+        } else {
+            assert.equal(item.x2, 75);
+            assert.equal(item.y2, 160);
+        }
+        assert.equal(undo(), true);
+        assert.deepEqual(bucket(SHAPES).items[0], original);
+        tool.inspect(original.id);
+        const restored = bucket(SHAPES).items[0];
+        restored.x2 -= 10;
+        tool.inspect(restored.id);
+        assert.equal(changes.at(-1).width, 40, "handle edits refresh inspected dimensions");
+    }
+});
+
 test("shape placement shows snapped radius or positive width and height in project units", () => {
     reset();
     for (const [create, expected] of [
@@ -63,6 +232,7 @@ test("shape placement shows snapped radius or positive width and height in proje
         assert.deepEqual(labels, [], "leaving the canvas hides feedback");
         tool.pointerMove({ sx: 40, sy: 60 });
         click(tool, 40, 60);
+        tool.save();
         tool.draw(g, view);
         assert.deepEqual(labels, [], "placing the shape clears feedback");
     }
@@ -96,18 +266,21 @@ test("shape feedback updates with units and clears when cancelled or deactivated
     }
 });
 
-test("circle and rectangle tools create their outline geometry from two points and support undo", () => {
+test("circle and rectangle tools confirm two-point outline geometry with Place and support undo", () => {
     reset();
     const circle = createCircleTool(env());
     assert.equal(circle.hotkey, "o");
     click(circle, 13, 17);
     click(circle, 26, 37);
+    assert.equal(bucket(SHAPES).items.length, 0);
+    circle.save();
     const { id: circleId, ...circleShape } = bucket(SHAPES).items[0];
     assert.ok(circleId > 0);
     assert.deepEqual(circleShape, { type: "circle", x1: 10, y1: 20, x2: 30, y2: 40, layerId: activeLayerId() });
     const rectangle = createRectangleTool(env());
     click(rectangle, -5, -2);
     click(rectangle, 20, 25);
+    rectangle.save();
     assert.equal(bucket(SHAPES).items[1].type, "rectangle");
     assert.deepEqual(shapeGeometry.points(bucket(SHAPES).items[1]), [
         { key: "tl", x: 0, y: 30 }, { key: "tr", x: 20, y: 30 },

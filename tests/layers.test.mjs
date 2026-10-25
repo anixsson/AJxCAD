@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { bucket, clearAll, describe, serialize, deserialize, undo } from "../wwwroot/cad/store.js";
-import { LAYERS, normalizeLayers, layerState, activeLayerId, addLayer, setActiveLayer, updateLayer, assignLayer, visibleItems, layerVisible, layerPrintable } from "../wwwroot/cad/layers.js";
+import { LAYERS, normalizeLayers, layerState, activeLayerId, addLayer, removeLayer, setActiveLayer, updateLayer, assignLayer, visibleItems, layerVisible, layerPrintable } from "../wwwroot/cad/layers.js";
 import { addLine, lineGeometry } from "../wwwroot/cad/lines.js";
 import { addShape, shapeGeometry, SHAPES } from "../wwwroot/cad/shapes.js";
 import { addText, textGeometry, TEXTS } from "../wwwroot/cad/text.js";
@@ -85,6 +85,31 @@ test("layer names and checkbox settings validate, persist and undo", () => {
     assert.deepEqual(layerState().layers.find(l => l.id === id), layer);
 });
 
+test("Layer 0 is permanent and removing another layer moves its items to Layer 0 and is undoable", () => {
+    const baseId = reset();
+    addLayer();
+    const removedId = activeLayerId();
+    const line = addLine(0, 0, 100, 0);
+    const shape = addShape("circle", { x: 5, y: 5 }, { x: 10, y: 5 });
+    assert.equal(line.layerId, removedId);
+    assert.equal(shape.layerId, removedId);
+
+    assert.throws(() => removeLayer(baseId), /Layer 0 cannot be removed/);
+    assert.throws(() => updateLayer(baseId, { name: "Other" }), /Layer 0 cannot be renamed/);
+    removeLayer(removedId);
+
+    assert.deepEqual(layerState().layers.map(layer => layer.id), [baseId]);
+    assert.equal(layerState().layers[0].name, "Layer 0");
+    assert.equal(activeLayerId(), baseId);
+    assert.equal(line.layerId, baseId);
+    assert.equal(shape.layerId, baseId);
+
+    assert.equal(undo(), true);
+    assert.deepEqual(layerState().layers.map(layer => layer.id), [baseId, removedId]);
+    assert.equal(bucket("lines").items[0].layerId, removedId);
+    assert.equal(bucket(SHAPES).items[0].layerId, removedId);
+});
+
 test("older files migrate to a visible printable default layer", () => {
     reset();
     deserialize(JSON.stringify({
@@ -96,7 +121,7 @@ test("older files migrate to a visible printable default layer", () => {
     }));
     normalizeLayers();
     const { layers, activeId } = layerState();
-    assert.deepEqual(layers, [{ id: activeId, name: "Default", visible: true, printable: true }]);
+    assert.deepEqual(layers, [{ id: activeId, name: "Layer 0", visible: true, printable: true }]);
     for (const name of ["lines", "measures"]) assert.equal(bucket(name).items[0].layerId, activeId);
     assert.equal(Object.hasOwn(bucket(PAGES).items[0], "layerId"), false, "old page membership is discarded");
     const text = serialize();

@@ -721,6 +721,32 @@ button {
     padding: 4px 14px;
 }
 
+.shape-info-box .process-actions {
+    flex-wrap: wrap;
+}
+
+.shape-dimension-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shape-dimension-input input {
+    min-width: 0;
+    flex: 1;
+}
+
+.shape-dimension-input > strong {
+    min-width: 2em;
+}
+
+.shape-info-box .process-actions .chip {
+    max-width: 100%;
+    padding: 4px 8px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 .check-chip {
     display: inline-flex;
     align-items: center;
@@ -973,7 +999,7 @@ button {
 .layer-row,
 .layer-columns {
     display: grid;
-    grid-template-columns: 32px 36px 36px 36px minmax(0, 1fr);
+    grid-template-columns: 32px 36px 36px 36px minmax(0, 1fr) 30px;
     gap: 4px;
     margin-bottom: 6px;
 }
@@ -985,6 +1011,17 @@ button {
 
 .layer-row .chip {
     padding: 4px 0;
+}
+
+.layer-row .layer-remove {
+    color: #ff9b9b;
+    font-size: calc(18px * var(--text-scale, 1));
+    line-height: 1;
+}
+
+.layer-row .layer-remove:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .layer-select-all {
@@ -1126,6 +1163,13 @@ button {
     border-radius: 11px;
 }
 
+.snap-divider {
+    align-self: stretch;
+    margin: 2px 5px;
+    border-left: 1px solid currentColor;
+    opacity: 0.25;
+}
+
 .snap-caption {
     padding: 0 4px;
     font-size: calc(10px * var(--text-scale, 1));
@@ -1139,6 +1183,11 @@ button {
     padding: 3px 8px;
     border-radius: 7px;
     font-size: calc(11px * var(--text-scale, 1));
+}
+
+.snap-panel .snap-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 .scale-readout {

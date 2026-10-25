@@ -1,0 +1,118 @@
+@using System.Globalization
+
+<section class="glass process-box shape-info-box" aria-label="@($"{Title} information")">
+    <div class="process-step">@Title information</div>
+    @if (Info is { } info)
+    {
+        <p class="process-text">@(info.Id is not null
+            ? "Adjust the selected object's dimensions, then save changes."
+            : info.DirectionSet
+            ? "Direction set. Adjust the dimensions, then click Place."
+            : "Click the board a second time to set the direction.")</p>
+        @foreach (var field in Fields)
+        {
+            var isFixed = field switch
+            {
+                "radius" => info.RadiusFixed,
+                "width" => info.WidthFixed,
+                _ => info.HeightFixed
+            };
+            <label class="measure-caption" for="@($"shape-{field}")">
+                @(char.ToUpperInvariant(field[0]) + field[1..]) (@UnitLabel)@(isFixed ? " - fixed" : "")
+            </label>
+            <div class="shape-dimension-input">
+                <input id="@($"shape-{field}")" class="text-input text-tool-input" type="text" inputmode="decimal"
+                       value="@_values.GetValueOrDefault(field)" aria-invalid="@_invalid.Contains(field).ToString().ToLowerInvariant()"
+                       @onfocus="() => _editing = field" @onblur="() => _editing = null"
+                       @oninput="e => ChangeDimension(field, e.Value?.ToString())" />
+                <strong aria-hidden="true">@UnitLabel</strong>
+            </div>
+        }
+        @if (_invalid.Count > 0)
+        {
+            <p class="process-text">Enter a positive, finite dimension.</p>
+        }
+        @if (Error is not null)
+        {
+            <p class="test-error" role="alert">@Error</p>
+        }
+        <div class="process-actions">
+            @if (info.Id is null)
+            {
+                <button type="button" class="chip" @onclick="UseCursor">Reset direction</button>
+            }
+            <button type="button" class="chip" @onclick="OnCancel">Cancel</button>
+            <button type="button" class="chip active default-action" data-default-action
+                    disabled="@(_invalid.Count > 0 || !CanPlace)" @onclick="OnPlace">
+                @(info.Id is null ? "Place" : "Save changes")<span class="key-hint">Space</span>
+            </button>
+        </div>
+    }
+    else
+    {
+        <p class="process-text">@(Type == "circle" ? "Click the board to set the centre." : "Click the board to set the first corner.")</p>
+    }
+</section>
+
+@code {
+    public sealed record ShapeInfo(string Type, bool DirectionSet, double Width, double Height, double Radius,
+        bool WidthFixed, bool HeightFixed, bool RadiusFixed, int? Id = null);
+    public sealed record DimensionChange(string Field, double Value);
+
+    [Parameter] public string Type { get; set; } = "rectangle";
+    [Parameter] public ShapeInfo? Info { get; set; }
+    [Parameter] public string UnitLabel { get; set; } = "mm";
+    [Parameter] public double UnitMm { get; set; } = 1;
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<DimensionChange> OnDimension { get; set; }
+    [Parameter] public EventCallback OnUseCursor { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnPlace { get; set; }
+
+    private string Title => Type == "circle" ? "Circle" : "Rectangle";
+    private string[] Fields => Type == "circle" ? ["radius"] : ["width", "height"];
+    private bool CanPlace => Info is { DirectionSet: true } info && (Type == "circle"
+        ? info.Radius > 0 : info.Width > 0 && info.Height > 0);
+    private readonly Dictionary<string, string> _values = [];
+    private readonly HashSet<string> _invalid = [];
+    private string? _editing;
+    private double _previousUnitMm;
+
+    protected override void OnParametersSet()
+    {
+        if (Info is null || _previousUnitMm != UnitMm)
+        {
+            _values.Clear();
+            _invalid.Clear();
+            _editing = null;
+        }
+        _previousUnitMm = UnitMm;
+        if (Info is not { } info) return;
+        foreach (var field in Fields)
+        {
+            if (field == _editing || _invalid.Contains(field)) continue;
+            var value = field switch { "radius" => info.Radius, "width" => info.Width, _ => info.Height };
+            _values[field] = (value / UnitMm).ToString("G", CultureInfo.InvariantCulture);
+        }
+    }
+
+    private async Task ChangeDimension(string field, string? text)
+    {
+        _values[field] = text ?? "";
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ||
+            !double.IsFinite(value * UnitMm) || value <= 0)
+        {
+            _invalid.Add(field);
+            return;
+        }
+        _invalid.Remove(field);
+        await OnDimension.InvokeAsync(new(field, value * UnitMm));
+    }
+
+    private async Task UseCursor()
+    {
+        _invalid.Clear();
+        _editing = null;
+        await OnUseCursor.InvokeAsync();
+    }
+}

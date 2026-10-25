@@ -6,8 +6,10 @@ let activeId = null;
 
 export function defaultLayer() {
     const items = bucket(LAYERS).items;
-    if (!items.length) items.push({ id: newId(), name: "Default", visible: true, printable: true });
-    return items[0];
+    if (!items.length) items.push({ id: newId(), name: "Layer 0", visible: true, printable: true });
+    const layer = items[0];
+    layer.name = "Layer 0";
+    return layer;
 }
 
 export function activeLayerId() {
@@ -47,6 +49,8 @@ export function updateLayer(id, changes) {
     for (const key of Object.keys(changes)) {
         if (!["name", "visible", "printable"].includes(key)) throw new Error(`Unknown layer setting: ${key}`);
     }
+    if (layer.id === defaultLayer().id && "name" in changes)
+        throw new Error("Layer 0 cannot be renamed");
     if ("name" in changes && (typeof changes.name !== "string" || !changes.name.trim()))
         throw new Error("Layer name cannot be empty");
     for (const key of ["visible", "printable"]) {
@@ -54,6 +58,24 @@ export function updateLayer(id, changes) {
     }
     checkpoint();
     Object.assign(layer, changes, "name" in changes ? { name: changes.name.trim() } : {});
+}
+
+export function removeLayer(id) {
+    const items = bucket(LAYERS).items;
+    const base = defaultLayer();
+    const layer = requireLayer(id);
+    if (layer.id === base.id) throw new Error("Layer 0 cannot be removed");
+
+    checkpoint();
+    for (const entry of describe()) {
+        const b = bucket(entry.name);
+        if (!b.fields?.includes("layerId")) continue;
+        for (const item of b.items) {
+            if (item.layerId === id) item.layerId = base.id;
+        }
+    }
+    items.splice(items.indexOf(layer), 1);
+    if (activeId === id) activeId = base.id;
 }
 
 export function layerVisible(item) {

@@ -39,8 +39,9 @@
         new("Getting started", "", "Start with an empty workspace or open an existing .ajx project. Pick tools from the floating toolbar or use their keyboard shortcuts; hover a tool to see its name and shortcut.",
         [
             ("Draw", "Press L, then click a start and end point. Keep clicking to create connected lines"),
-            ("Shapes", "Press O for a circle (click its centre, then its radius) or R for a rectangle (click opposite corners); both points snap to the grid"),
+            ("Shapes", "Press O for a circle (click its centre, then its radius direction) or R for a rectangle (click opposite corners); both points snap to the grid. The second click holds the preview for editing; click Place in the information box to create the object"),
             ("Rectangle sides", "Select a whole rectangle to show a bar handle in the middle of each side. Drag a side handle to change only the width or the height"),
+            ("Shape information", "Select a single circle or rectangle to reopen its dimension information box. Edit its radius or width and height, then choose Save changes. The origin and direction stay fixed. Cancel or Esc discards pending changes; saving supports undo"),
             ("Text", "Press T, click a grid-snapped anchor, enter text and choose Place text. Its information box offers font size (1–1000 mm with a live slider or number field; − / + step 10 mm, faster while held), family, bold, italic and underline. Drag the size slider to preview changes, then save or cancel. With Select, click text to open the box and drag it to move the text while the box stays open"),
             ("Point", "Press N and click to place a single point, snapping to existing nodes or the grid. Its fixed-screen-size marker has two opposite red quarters and extended crosshairs. Select one point to open its information box and drag to move it"),
             ("Edit", "Press S, select a line end and drag it to a new position"),
@@ -102,7 +103,7 @@
             ("Close without saving", "Unapplied title edits are discarded when you leave Project settings"),
             ("Data buckets", "Open the project data viewer directly from this dialog")
         ]),
-        new("Layers", "", "Use the Pages and Layers buttons to switch tabs in the top-right board panel. Collapse the panel to its small icon or drag its left edge to resize it; the width is saved in app settings. Layers are saved in their own data bucket; older projects start with a visible, printable Default layer.",
+        new("Layers", "", "Use the Pages and Layers buttons to switch tabs in the top-right board panel. Collapse the panel to its small icon or drag its left edge to resize it; the width is saved in app settings. Layers are saved in their own data bucket; older projects start with a visible, printable Layer 0.",
         [
             ("Add and rename", "Press + Add layer, then edit its name directly"),
             ("Active", "Choose the layer for newly drawn lines, shapes, text, points and saved measurements. Splitting a line preserves its original layer"),
@@ -120,8 +121,10 @@
         new("Toolmenus and options", "", "The bottom-center bars show controls for the active tool. Checkbox buttons show a tick when enabled.",
         [
             ("Toolmenu", "Select offers Nodes / Lines, Line offers Multi, and Measurement offers snapping options. Text asks for its content after you click an anchor"),
-            ("Shape sizes", "After the first click in Circle or Rectangle, a live label by the cursor shows Radius or Width / Height in the current measurement units. These guides disappear after placement and are not saved or printed"),
-            ("Snap box", "The small box left of the scale panel. Grid turns grid snapping off or on for every tool; with it off, points land exactly where you click but still snap to nodes. Mid adds temporary snap nodes (cyan triangles) at the middle of each line and each rectangle side and centre. They are never saved"),
+            ("Shape sizes", "After the first click in Circle or Rectangle, the information box shows live Radius or Width / Height. Click again to lock the direction and preview, then edit the exact dimensions and click Place. Placement resets the tool so you can start another object. The unit beside every input matches the current scale bar: mm, cm, m or km in metric mode; inches, feet or miles in US mode. Zooming converts the displayed values without resizing the object. Reset direction resumes cursor sizing; Cancel or Esc discards the preview. Canvas size guides are not saved or printed"),
+            ("Snap box", "The small Snap box left of the scale panel contains Mid and Ref, with grid controls separated by a divider. Mid adds temporary snap nodes (cyan triangles) at the middle of each line and each rectangle side and centre. They are never saved"),
+            ("Grid snapping", "The Grid button in the Snap box turns grid snapping off or on for every tool; it is highlighted when enabled. With it off, points land exactly where you click but still snap to nodes. The visible grid stays on"),
+            ("Grid size", "Use − and + in the grid section of the Snap box to halve or double the grid spacing, from a quarter to four times the default. The visible grid, snapping and scale-panel readout change together without zooming or resizing the drawing. The grid still adapts as you zoom, and your size setting is kept on this computer, not in the project"),
             ("Reference lines", "With Ref on in the snap box, rest the cursor on a node for about a second to acquire it. Dashed horizontal and vertical guides appear through it, and points snap orthogonally onto them or onto the crossing of two guides. Rest on the node again to release it; changing tool clears all guides"),
             ("Side panel", "The top-right panel holds the Pages tab while the Page tool is active"),
             ("Actions bar", "Appears when something is selected; Move starts a guided move"),

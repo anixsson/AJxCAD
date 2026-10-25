@@ -56,10 +56,32 @@ test("only Select opens saved measurement text; blue points select without openi
                 `${key.toUpperCase()} activates ${tool}`);
             if (tool === "circle") {
                 click(600, 400);
+                assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0].type, "circle");
+                engine.setShapeDimension("radius", 12.7);
+                assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0].radius, 12.7);
+                engine.useShapeCursor();
+                assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0].radiusFixed, false);
                 click(660, 400);
+                assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0].directionSet, true);
+                engine.saveShape();
+                assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0], null);
             } else if (tool === "rectangle") {
                 click(600, 600);
+                engine.setShapeDimension("width", 100);
+                engine.setShapeDimension("height", 100);
+                engine.cancelShape();
+                assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0], null);
+                click(600, 600);
+                engine.setShapeDimension("width", 100);
+                engine.setShapeDimension("height", 100);
                 click(700, 700);
+                engine.saveShape();
+                assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0], null);
+                // Keep the original rectangle's direction for the selection checks below.
+                engine.undo();
+                click(600, 600);
+                click(700, 700);
+                engine.saveShape();
             } else {
                 click(900, 100);
                 const textInfo = calls.findLast(c => c.name === "OnTextChanged").args[0];
@@ -73,6 +95,20 @@ test("only Select opens saved measurement text; blue points select without openi
         assert.equal(drawingBuckets.find(b => b.name === "shapes").count, 2);
         assert.equal(drawingBuckets.find(b => b.name === "texts").count, 1);
         engine.setTool("select");
+        click(600, 600);
+        assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0].type, "rectangle");
+        assert.ok(calls.findLast(c => c.name === "OnShapeChanged").args[0].id > 0);
+        engine.setShapeDimension("width", 125);
+        engine.saveShape();
+        assert.equal(engine.getBuckets().find(b => b.name === "shapes").count, 2);
+        engine.undo();
+        assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0], null);
+        click(600, 400);
+        assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0].type, "circle");
+        engine.setShapeDimension("radius", 25);
+        assert.equal(engine.cancelCurrent(), true);
+        assert.equal(calls.findLast(c => c.name === "OnShapeChanged").args[0], null);
+        click(100, 100);
         const textBefore = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "texts").rows[0];
         const pointer = (type, x, y) => workspace.dispatchEvent(Object.assign(new Event(type), {
             button: 0, clientX: x, clientY: y, detail: 1, pointerId: 1
@@ -251,9 +287,17 @@ test("only Select opens saved measurement text; blue points select without openi
         const layeredProject = engine.getDataText();
         engine.loadDataText(layeredProject);
         assert.equal(engine.getLayers().layers.find(l => l.id === newLayer).printable, false);
+        engine.removeLayer(newLayer);
+        assert.deepEqual(engine.getLayers().layers.map(layer => layer.id), [defaultLayer]);
+        assert.equal(engine.getLayers().layers[0].name, "Layer 0");
+        const measuresAfterLayerRemoval = JSON.parse(engine.getDataText()).buckets.find(b => b.name === "measures");
+        assert.equal(measuresAfterLayerRemoval.rows[0][measuresAfterLayerRemoval.fields.indexOf("layerId")], defaultLayer,
+            "removing a layer moves its measurements to Layer 0");
+        engine.undo();
+        assert.equal(engine.getLayers().layers.length, 2, "undo restores a removed layer");
         engine.newProject();
         assert.equal(engine.getLayers().layers.length, 1);
-        assert.equal(engine.getLayers().layers[0].name, "Default");
+        assert.equal(engine.getLayers().layers[0].name, "Layer 0");
         engine.undo();
         assert.equal(engine.getLayers().layers.length, 2, "undo New restores the layer bucket");
     } finally {

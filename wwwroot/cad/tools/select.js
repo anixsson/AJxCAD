@@ -431,6 +431,9 @@ export function createSelectTool(env) {
             else { syncList(); publishList(); }
         }
         const refs = [...selected.values()];
+        const shape = refs[0]?.geo.bucket === "shapes" &&
+            refs.every(ref => ref.geo === refs[0].geo && ref.item === refs[0].item) ? refs[0].item : null;
+        env.shapeSelectionChanged?.(shape);
         env.pointSelectionChanged?.(refs.length === 1 && refs[0].geo.bucket === "points" ? refs[0].item.id : null);
         env.symbolSelectionChanged?.(refs.length === 1 && refs[0].geo.bucket === "symbols" ? refs[0].item.id : null);
         env.measurementSelectionChanged?.(selectedMeasurementId());

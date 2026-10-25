@@ -16,7 +16,7 @@ import { createMeasurementTool, measurementGeometry, MEASURES } from "./tools/me
 import { createPageTool } from "./tools/page.js";
 import { PAGES, textSizeOf } from "./pages.js";
 import { pagePdf } from "./pdf.js";
-import { activeLayerId, normalizeLayers, layerState, addLayer, updateLayer, setActiveLayer, assignLayer, visibleItems, layerPrintable, requireLayer } from "./layers.js";
+import { activeLayerId, normalizeLayers, layerState, addLayer, removeLayer as removeLayerData, updateLayer, setActiveLayer, assignLayer, visibleItems, layerPrintable, requireLayer } from "./layers.js";
 import { SYMBOLS, symbolGeometry, createSymbolTool, prepareSymbolSource, refreshSymbol, setSymbolScale, clearSymbolSources, symbolSourceState,
     symbolLayerState, setSymbolLayerVisible, useSourceLayers, keepLocalLayers } from "./symbols.js";
 
@@ -35,6 +35,7 @@ let optimizerEnabled = true;
 let optimizerReport = "";
 let extendedZoom = false;
 let gridColor = null;
+let gridSizeStep = 0;
 const handlers = [];
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
@@ -74,7 +75,15 @@ export function setOptimizerEnabled(enabled) {
 }
 
 function minorStepMm() {
-    return niceAtLeast(MIN_MINOR_PX / (scale * unitMm)) * unitMm;
+    return niceAtLeast(MIN_MINOR_PX / (scale * unitMm)) * unitMm * 2 ** gridSizeStep;
+}
+
+export function setGridSizeStep(step) {
+    if (!Number.isInteger(step) || step < -2 || step > 2)
+        throw new Error("Grid size step must be an integer from -2 to 2.");
+    gridSizeStep = step;
+    log("action", `grid size: ${2 ** step}x`);
+    draw();
 }
 
 // Snap options (bottom-right snap box): grid snapping for every tool, and temporary midpoint nodes.
@@ -270,6 +279,13 @@ export function stickToBottom(box) {
     if (stuck.get(box)) box.scrollTop = box.scrollHeight;
 }
 
+let selectedShapeTool = null;
+function closeSelectedShape() {
+    const tool = selectedShapeTool;
+    selectedShapeTool = null;
+    return tool?.cancel() ?? false;
+}
+
 const env = {
     geometries,
     visibleItems: screenItems,
@@ -299,6 +315,14 @@ const env = {
     measurementSelectionChanged: id => dotnet?.invokeMethodAsync("OnSelectedMeasurement",
         id === null ? null : tools.measurement.inspect(id)),
     textChanged: anchor => dotnet?.invokeMethodAsync("OnTextChanged", anchor),
+    shapeChanged: info => dotnet?.invokeMethodAsync("OnShapeChanged", info),
+    shapeSelectionChanged: shape => {
+        if (!shape) { closeSelectedShape(); return; }
+        const tool = tools[shape.type];
+        if (selectedShapeTool !== tool) closeSelectedShape();
+        selectedShapeTool = tool;
+        tool.inspect(shape.id);
+    },
     pointChanged: info => dotnet?.invokeMethodAsync("OnPointChanged", info),
     pointSelectionChanged: id => tools.point.inspect(id),
     symbolSelectionChanged: id => tools.symbol.inspect(id),
@@ -383,6 +407,19 @@ export function removeSelectedItems() {
 export const setMeasurementSnap = mode => tools.measurement.setSnapMode(mode);
 export const setLineMulti = on => tools.line.setMulti(on);
 export const setTextDraft = draft => tools.text.setDraft(draft);
+function shapeTool() {
+    if (toolId === "select" && selectedShapeTool) return selectedShapeTool;
+    if (toolId !== "circle" && toolId !== "rectangle") throw new Error("No shape tool is active.");
+    return currentTool();
+}
+export const setShapeDimension = (field, value) => shapeTool().setDimension(field, value);
+export const useShapeCursor = () => shapeTool().useCursor();
+export const saveShape = () => {
+    const saved = shapeTool().save();
+    if (saved && toolId === "select") selectedShapeTool = null;
+    return saved;
+};
+export const cancelShape = () => toolId === "select" ? closeSelectedShape() : shapeTool().cancel();
 export const saveText = () => tools.text.save();
 export const cancelText = () => tools.text.cancel();
 export async function prepareSymbol(source, text) {
@@ -463,6 +500,11 @@ function layersChanged(resetTools = false) {
 export function createLayer() {
     addLayer();
     layersChanged();
+}
+
+export function removeLayer(id) {
+    removeLayerData(id);
+    layersChanged(true);
 }
 
 export function editLayer(id, changes) {
@@ -552,6 +594,7 @@ export function zoomToPage(id) {
 
 // Esc first cancels what the current tool is doing (a measurement, a Move); returns false if there was nothing.
 export function cancelCurrent() {
+    if (toolId === "select" && closeSelectedShape()) return true;
     if (toolId === "select" && tools.text.cancel()) return true;
     if (toolId === "select" && tools.symbol.cancel()) return true;
     const tool = currentTool();
@@ -674,7 +717,7 @@ function render() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const stepPx = niceAtLeast(MIN_MINOR_PX / (scale * unitMm)) * unitMm * scale * dpr; // device px per minor cell
+    const stepPx = minorStepMm() * scale * dpr; // device px per minor cell
     const ox = originX * dpr, oy = originY * dpr;
     const minorW = Math.max(1, Math.round(dpr));
     const majorW = Math.max(2, Math.round(dpr * 2));
@@ -736,6 +779,7 @@ function render() {
     if (midpointsEnabled && !preview) drawMidpoints(ctx, view);
     if (!preview) drawReferences(ctx, view);
     currentTool().draw?.(ctx, view);
+    if (toolId === "select" && !preview) selectedShapeTool?.draw(ctx, view);
 
     // Only tell Blazor when the "origin is centred" state flips, not on every pan frame.
     const isCentered = Math.abs(originX - el.clientWidth / 2) < 0.5 && Math.abs(originY - el.clientHeight / 2) < 0.5;
@@ -757,6 +801,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     optimizerReport = "";
     extendedZoom = false;
     gridColor = null;
+    gridSizeStep = 0;
     normalizeLayers();
     el = workspace;
     canvas = canvasEl;
@@ -768,6 +813,17 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     scale = oneToOne;
     originX = el.clientWidth / 2;
     originY = el.clientHeight / 2;
+
+    const selectText = e => {
+        const input = e.target;
+        if (input instanceof HTMLTextAreaElement ||
+            (input instanceof HTMLInputElement &&
+                ["email", "password", "search", "tel", "text", "url"].includes(input.type))) {
+            if (!input.readOnly && !input.disabled) input.select();
+        }
+    };
+    on(document, "focusin", selectText);
+    on(document, "click", selectText);
 
     tools.cross = { id: "cross", hotkey: "v" };
     tools.select = createSelectTool(env);

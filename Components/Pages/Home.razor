@@ -63,6 +63,18 @@
     </div>
 </Modal>
 
+<Modal Open="@(_dialog == "remove-layer")" Title="Remove layer?" Width="500" OnClose="CloseLayerRemovalDialog">
+    <p class="data-intro">Remove <strong>@PendingLayerRemovalName</strong>? Its items will be moved to Layer 0. You can undo this action.</p>
+    @if (_layerError is not null)
+    {
+        <p class="test-error" role="alert">@_layerError</p>
+    }
+    <div class="settings-actions">
+        <button type="button" class="chip" @onclick="CloseLayerRemovalDialog">Cancel</button>
+        <button type="button" class="chip danger" @onclick="ConfirmRemoveLayer">Remove layer</button>
+    </div>
+</Modal>
+
 <Modal Open="@(_dialog == "symbol-layers-updated")" Title="Layers updated" Width="500" OnClose="CloseDialog">
     <p class="data-intro">Layers are updated in the source of @(_symbolLayerUpdates.Length == 1 ? "a symbol" : $"{_symbolLayerUpdates.Length} symbols") with local layer choices. Do you want to use the source layers?</p>
     <ul class="data-intro symbol-source">
@@ -186,6 +198,12 @@
         else if (_textInfo is not null)
         {
             @TextInfoBox
+        }
+        else if (_shapeInfo is { Id: not null } selectedShape)
+        {
+            <ShapeInfoBox @key="selectedShape.Id" Type="@selectedShape.Type" Info="selectedShape" UnitLabel="@ShapeInputUnit.Label"
+                          UnitMm="ShapeInputUnit.Mm" Error="@_shapeError"
+                          OnDimension="ChangeShapeDimension" OnCancel="CancelShape" OnPlace="SaveShape" />
         }
         else if (_stack is { } st)
         {
@@ -443,6 +461,16 @@
     </div>
 }
 
+@if (_tool is "circle" or "rectangle")
+{
+    <div class="toolmenu-dock">
+        <ShapeInfoBox @key="_tool" Type="@_tool" Info="_shapeInfo" UnitLabel="@ShapeInputUnit.Label"
+                      UnitMm="ShapeInputUnit.Mm" Error="@_shapeError"
+                      OnDimension="ChangeShapeDimension" OnUseCursor="UseShapeCursor"
+                      OnCancel="CancelShape" OnPlace="SaveShape" />
+    </div>
+}
+
 @if (_tool == "symbol")
 {
     <div class="toolmenu-dock">
@@ -474,7 +502,7 @@
             <PagesPanel State="panelPages" OnAdd="AddPage" OnSelect="SelectPage" OnToggleVisible="SetPageVisible" OnToggleLocked="SetPageLocked" />
         </Pages>
         <Layers>
-            <LayersPanel State="layers" CanAssign="@CanAssignLayer" Error="@_layerError" OnAdd="AddLayer"
+            <LayersPanel State="layers" CanAssign="@CanAssignLayer" Error="@_layerError" OnAdd="AddLayer" OnRemove="RequestLayerRemoval"
                          OnActivate="ActivateLayer" OnAssign="AssignLayer" OnSelectAll="SelectLayerItems" OnRename="RenameLayer"
                          OnVisible="SetLayerVisible" OnPrintable="SetLayerPrintable" />
         </Layers>
@@ -614,10 +642,6 @@
 
 <aside class="float-panel snap-panel" aria-label="Snap options">
     <span class="snap-caption">Snap</span>
-    <button type="button" class="float-btn snap-btn @(_gridSnap ? "active" : "")" role="checkbox"
-            aria-checked="@_gridSnap.ToString().ToLowerInvariant()"
-            title="@(_gridSnap ? "Grid snapping is on for all tools. Click to place and move freely" : "Grid snapping is off for all tools. Click to snap to the grid again")"
-            @onclick="ToggleGridSnap">Grid</button>
     <button type="button" class="float-btn snap-btn @(_midpointSnap ? "active" : "")" role="checkbox"
             aria-checked="@_midpointSnap.ToString().ToLowerInvariant()"
             title="Add temporary snap nodes at the middle of every line and each rectangle side and centre"
@@ -626,6 +650,15 @@
             aria-checked="@_referenceSnap.ToString().ToLowerInvariant()"
             title="Reference lines: rest the cursor on a node for a second to show horizontal and vertical guides through it, then snap along them. Rest on it again to remove them"
             @onclick="ToggleReferenceSnap">Ref</button>
+    <span class="snap-divider" aria-hidden="true"></span>
+    <button type="button" class="float-btn snap-btn @(_gridSnap ? "active" : "")" role="checkbox"
+            aria-checked="@_gridSnap.ToString().ToLowerInvariant()" aria-label="Grid snapping"
+            title="@(_gridSnap ? "Grid snapping is on for all tools. Click to place and move freely" : "Grid snapping is off for all tools. Click to snap to the grid again")"
+            @onclick="ToggleGridSnap">Grid</button>
+    <button type="button" class="float-btn snap-btn" title="Halve the grid spacing" aria-label="Decrease grid size"
+            disabled="@(_gridSizeStep <= -2)" @onclick="() => ChangeGridSize(-1)">−</button>
+    <button type="button" class="float-btn snap-btn" title="Double the grid spacing" aria-label="Increase grid size"
+            disabled="@(_gridSizeStep >= 2)" @onclick="() => ChangeGridSize(1)">+</button>
 </aside>
 
 <aside class="float-panel scale-panel" aria-label="Scale">
@@ -1007,6 +1040,37 @@
     public sealed record TextInfo(string Mode, int? Id, string Text, double X, double Y, double FontSize,
         string FontFamily, bool Bold, bool Italic, bool Underline);
     private TextInfo? _textInfo;
+    private ShapeInfoBox.ShapeInfo? _shapeInfo;
+    private string? _shapeError;
+
+    [JSInvokable]
+    public void OnShapeChanged(ShapeInfoBox.ShapeInfo? info)
+    {
+        _shapeInfo = info;
+        if (info is null) _shapeError = null;
+        StateHasChanged();
+    }
+
+    private Task ChangeShapeDimension(ShapeInfoBox.DimensionChange change) =>
+        ShapeAction("setShapeDimension", change.Field, change.Value);
+    private Task UseShapeCursor() => ShapeAction("useShapeCursor");
+    private Task CancelShape() => ShapeAction("cancelShape");
+    private Task SaveShape() => ShapeAction("saveShape");
+
+    private async Task ShapeAction(string action, params object[] args)
+    {
+        try
+        {
+            if (_cad is null) throw new InvalidOperationException("The drawing engine is not ready.");
+            await _cad.InvokeVoidAsync(action, args);
+            _shapeError = null;
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            _shapeError = ex.Message;
+            Log("error", $"Could not update shape: {ex.Message}");
+        }
+    }
 
     private RenderFragment TextInfoBox => __builder =>
     {
@@ -1278,6 +1342,30 @@
     }
 
     private Task AddLayer() => LayerCall("createLayer");
+    private int? _pendingLayerRemovalId;
+    private string PendingLayerRemovalName =>
+        _layers?.Layers.FirstOrDefault(layer => layer.Id == _pendingLayerRemovalId)?.Name ?? "this layer";
+
+    private Task RequestLayerRemoval(int id)
+    {
+        _pendingLayerRemovalId = id;
+        _layerError = null;
+        return OpenDialog("remove-layer");
+    }
+
+    private async Task ConfirmRemoveLayer()
+    {
+        if (_pendingLayerRemovalId is not { } id) return;
+        await LayerCall("removeLayer", id);
+        if (_layerError is null) CloseLayerRemovalDialog();
+    }
+
+    private void CloseLayerRemovalDialog()
+    {
+        _pendingLayerRemovalId = null;
+        CloseDialog();
+    }
+
     private Task ActivateLayer(int id) => LayerCall("activateLayer", id);
     private Task AssignLayer(int id) => LayerCall("moveSelectionToLayer", id);
     private Task SelectLayerItems(int id) => LayerCall("selectLayerItems", id);
@@ -1544,12 +1632,22 @@
 
     private bool _extendedZoom = Preferences.Default.Get("extendedZoom", false);
     private bool _gridSnap = Preferences.Default.Get("gridSnap", true);
+    private int _gridSizeStep = Math.Clamp(Preferences.Default.Get("gridSizeStep", 0), -2, 2);
     private bool _midpointSnap = Preferences.Default.Get("midpointSnap", false);
     private bool _referenceSnap = Preferences.Default.Get("referenceSnap", false);
 
     private Task ToggleGridSnap() => SetSnapOptions(!_gridSnap, _midpointSnap, _referenceSnap);
     private Task ToggleMidpointSnap() => SetSnapOptions(_gridSnap, !_midpointSnap, _referenceSnap);
     private Task ToggleReferenceSnap() => SetSnapOptions(_gridSnap, _midpointSnap, !_referenceSnap);
+
+    private async Task ChangeGridSize(int direction)
+    {
+        if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+        var step = Math.Clamp(_gridSizeStep + direction, -2, 2);
+        await _cad.InvokeVoidAsync("setGridSizeStep", step);
+        _gridSizeStep = step;
+        Preferences.Default.Set("gridSizeStep", step);
+    }
 
     private async Task SetSnapOptions(bool grid, bool midpoints, bool references)
     {
@@ -2050,6 +2148,7 @@
     private double BarMm => NiceAtMost(MaxBarPx / (_scale * _unit.Mm)) * _unit.Mm;
     private double BarPx => BarMm * _scale;
     private string BarText => FormatLength(BarMm);
+    private UnitDef ShapeInputUnit => LengthUnit(BarMm);
 
     private double MinorMm
     {
@@ -2058,8 +2157,8 @@
             var v = 12 / (_scale * _unit.Mm);
             var pow = Math.Pow(10, Math.Floor(Math.Log10(v)));
             foreach (var m in new[] { 1, 2, 5, 10 })
-                if (m * pow >= v) return m * pow * _unit.Mm;
-            return 10 * pow * _unit.Mm;
+                if (m * pow >= v) return m * pow * _unit.Mm * Math.Pow(2, _gridSizeStep);
+            return 10 * pow * _unit.Mm * Math.Pow(2, _gridSizeStep);
         }
     }
 
@@ -2077,20 +2176,26 @@
         }
     }
 
-    private string FormatLength(double mm)
+    private UnitDef LengthUnit(double mm)
     {
         if (_imperial)
         {
             var inches = mm / 25.4;
-            if (inches < 12) return $"{Num(inches)} in";
-            if (inches < 12 * 5280) return $"{Num(inches / 12)} ft";
-            return $"{Num(inches / (12 * 5280))} mi";
+            if (inches < 12) return new("in", 25.4);
+            if (inches < 12 * 5280) return new("ft", 304.8);
+            return new("mi", 1_609_344);
         }
 
-        if (mm < 10) return $"{Num(mm)} mm";
-        if (mm < 1000) return $"{Num(mm / 10)} cm";
-        if (mm < 1_000_000) return $"{Num(mm / 1000)} m";
-        return $"{Num(mm / 1_000_000)} km";
+        if (mm < 10) return new("mm", 1);
+        if (mm < 1000) return new("cm", 10);
+        if (mm < 1_000_000) return new("m", 1000);
+        return new("km", 1_000_000);
+    }
+
+    private string FormatLength(double mm)
+    {
+        var unit = LengthUnit(mm);
+        return $"{Num(mm / unit.Mm)} {unit.Label}";
     }
 
     private static string Num(double v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
@@ -2109,6 +2214,7 @@
         await _cad.InvokeVoidAsync("init", _workspace, _canvas, _self, ReferencePx, _unit.Mm);
         await _cad.InvokeVoidAsync("setExtendedZoom", _extendedZoom);
         await _cad.InvokeVoidAsync("setGridColor", _gridColor);
+        await _cad.InvokeVoidAsync("setGridSizeStep", _gridSizeStep);
         await _cad.InvokeVoidAsync("setSnapOptions", _gridSnap, _midpointSnap, _referenceSnap);
         await ApplyAppearance();
         await SyncProject();

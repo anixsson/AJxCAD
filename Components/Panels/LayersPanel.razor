@@ -1,9 +1,10 @@
 <p class="side-empty">New items use the active layer. Hidden layers do not print.</p>
-<div class="layer-columns" aria-hidden="true"><span>Select</span><span>Active</span><span>Show</span><span>Print</span><span>Layer name</span></div>
+<div class="layer-columns" aria-hidden="true"><span>Select</span><span>Active</span><span>Show</span><span>Print</span><span>Layer name</span><span></span></div>
 <div class="layer-list" role="list" aria-label="Layers">
     @foreach (var layer in State.Layers)
     {
         var l = layer;
+        var isBaseLayer = l.Id == State.Layers[0].Id;
         <div class="layer-row @(l.Id == State.ActiveId ? "active-layer" : "")" role="listitem" @key="l.Id">
             <button type="button" class="chip layer-select-all" disabled="@(!l.Visible)"
                     aria-label="Select all lines and measurements in @l.Name"
@@ -32,8 +33,11 @@
                     @onclick="() => OnPrintable.InvokeAsync((l.Id, !l.Printable))">
                 <span class="check-box" aria-hidden="true">@(l.Printable ? "✓" : "")</span>
             </button>
-            <input class="text-input layer-name" aria-label="Layer name for @l.Name" value="@l.Name"
+            <input class="text-input layer-name" aria-label="Layer name for @l.Name" value="@l.Name" readonly="@isBaseLayer"
                    @onchange="e => OnRename.InvokeAsync((l.Id, e.Value?.ToString() ?? string.Empty))" />
+            <button type="button" class="chip layer-remove" disabled="@isBaseLayer"
+                    aria-label="Remove @l.Name layer" title="Remove this layer and move its items to Layer 0"
+                    @onclick="() => OnRemove.InvokeAsync(l.Id)">×</button>
         </div>
     }
 </div>
@@ -52,6 +56,7 @@
     [Parameter] public bool CanAssign { get; set; }
     [Parameter] public string? Error { get; set; }
     [Parameter] public EventCallback OnAdd { get; set; }
+    [Parameter] public EventCallback<int> OnRemove { get; set; }
     [Parameter] public EventCallback<int> OnActivate { get; set; }
     [Parameter] public EventCallback<int> OnAssign { get; set; }
     [Parameter] public EventCallback<int> OnSelectAll { get; set; }

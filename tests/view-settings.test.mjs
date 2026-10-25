@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { bucket } from "../wwwroot/cad/store.js";
+import { POINTS } from "../wwwroot/cad/points.js";
 
-test("extended zoom clamps every view entry point and custom grid color leaves axes and PDF unchanged", async () => {
-    const frames = new Map(), calls = [], colors = [];
+test("view settings: zoom limits, grid color and grid size preserve drawing and PDF output", async () => {
+    const frames = new Map(), calls = [], colors = [], gridRects = [];
     let nextFrame = 0;
     globalThis.window = Object.assign(new EventTarget(), { devicePixelRatio: 1 });
     globalThis.document = Object.assign(new EventTarget(), {
@@ -13,7 +15,11 @@ test("extended zoom clamps every view entry point and custom grid color leaves a
     globalThis.requestAnimationFrame = callback => { frames.set(++nextFrame, callback); return nextFrame; };
     globalThis.cancelAnimationFrame = id => frames.delete(id);
     const context = new Proxy({
-        measureText: text => ({ width: text.length * 7 })
+        measureText: text => ({ width: text.length * 7 }),
+        fillRect(...rect) {
+            if (this.fillStyle === "rgba(169,140,255,0.15)" || this.fillStyle === "rgba(201,182,255,0.36)")
+                gridRects.push(rect);
+        }
     }, {
         get: (target, key) => target[key] ?? (() => {}),
         set(target, key, value) {
@@ -24,7 +30,9 @@ test("extended zoom clamps every view entry point and custom grid color leaves a
     });
     const workspace = Object.assign(new EventTarget(), {
         clientWidth: 1024, clientHeight: 768, style: {},
-        classList: { toggle() {}, add() {}, remove() {} }
+        classList: { toggle() {}, add() {}, remove() {} },
+        getBoundingClientRect: () => ({ left: 0, top: 0 }),
+        focus() {}, setPointerCapture() {}
     });
     const flush = () => {
         for (let i = 0; frames.size && i < 10; i++) {
@@ -105,6 +113,60 @@ test("extended zoom clamps every view entry point and custom grid color leaves a
         flush();
         assert.ok(colors.includes("rgba(169,140,255,0.15)"));
         assert.equal(engine.getPagePdf(page.id).pdf, pdf, "view settings do not affect output");
+
+        engine.center();
+        flush();
+        engine.setTool("point");
+        engine.setSnapOptions(true, false, false);
+        const content = engine.getContentText();
+        const click = () => {
+            for (const type of ["pointerdown", "pointerup"])
+                workspace.dispatchEvent(Object.assign(new Event(type), {
+                    button: 0, clientX: 645, clientY: 251, detail: 1, pointerId: 1
+                }));
+            const point = bucket(POINTS).items.pop();
+            assert.ok(point, "the point tool placed a point");
+            return [point.x, point.y];
+        };
+        for (const [step, snapped] of [[0, 140], [1, 120], [2, 160], [-1, 130], [-2, 135], [0, 140]]) {
+            engine.setGridSizeStep(step);
+            gridRects.length = 0;
+            flush();
+            const spacing = 20 * 2 ** step;
+            assert.equal(gridRects.filter(([, y, , h]) => y === 0 && h === 768).length,
+                2 * Math.floor(512 / spacing) + 1, "rendered vertical grid uses the chosen spacing");
+            assert.equal(gridRects.filter(([x, , w]) => x === 0 && w === 1024).length,
+                2 * Math.floor(384 / spacing) + 1, "rendered horizontal grid uses the chosen spacing");
+            assert.deepEqual(click(), [snapped, snapped], "snapping uses the visible grid");
+            assert.equal(scale(), 1, "grid resizing does not zoom");
+            assert.equal(engine.getContentText(), content, "grid resizing does not alter project content");
+            assert.equal(engine.getPagePdf(page.id).pdf, pdf, "grid resizing does not alter PDF output");
+        }
+        engine.setGridSizeStep(1);
+        engine.setSnapOptions(false, false, false);
+        flush();
+        assert.deepEqual(click(), [133, 133], "grid resizing preserves free placement when grid snap is off");
+        engine.setSnapOptions(true, false, false);
+        engine.zoomBy(2);
+        flush();
+        assert.deepEqual(click(), [60, 60], "grid size still adapts to zoom");
+        engine.setScale(1);
+        flush();
+        engine.setReference(25.4);
+        engine.setImperial(true);
+        engine.setScale(1);
+        flush();
+        const imperialPoint = click();
+        assert.ok(imperialPoint.every(v => Math.abs(v - 127) < 1e-9), "imperial snapping uses the resized grid");
+        engine.setReference(1000);
+        engine.setImperial(false);
+        engine.setScale(1);
+        engine.setGridSizeStep(0);
+        engine.setTool("cross");
+        flush();
+        for (const step of [-3, 3, 0.5, NaN, Infinity, "1", null])
+            assert.throws(() => engine.setGridSizeStep(step), /Grid size step/);
+
         for (const color of ["red", "#123", "#zzzzzz", 12])
             assert.throws(() => engine.setGridColor(color), /Grid color/);
         assert.throws(() => engine.setExtendedZoom("true"), /checkbox/);
