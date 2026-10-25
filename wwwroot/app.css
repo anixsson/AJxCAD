@@ -1112,6 +1112,31 @@ button {
     padding: 12px 12px 8px;
 }
 
+.snap-panel {
+    right: calc(26px + 274px * var(--text-scale, 1));
+    bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 5px;
+    border-radius: 11px;
+}
+
+.snap-caption {
+    padding: 0 4px;
+    font-size: calc(10px * var(--text-scale, 1));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.snap-panel .snap-btn {
+    min-width: 0;
+    padding: 3px 8px;
+    border-radius: 7px;
+    font-size: calc(11px * var(--text-scale, 1));
+}
+
 .scale-readout {
     display: flex;
     justify-content: space-between;

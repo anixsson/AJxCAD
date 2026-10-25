@@ -14,13 +14,13 @@ export function createLineTool(env) {
     // Snaps to endpoints and the grid; Shift locks the angle to 45 degree steps from the start point.
     function resolve(e) {
         let p = env.snap(e.sx, e.sy);
-        if (e.shift && start && p.kind !== "end") {
+        if (e.shift && start && p.kind !== "end" && p.kind !== "mid") {
             const w = env.toWorld(e.sx, e.sy);
-            const g = env.minorStepMm();
+            const grid = env.gridSnapEnabled?.() ?? true, g = env.minorStepMm();
             const dx = w.x - start.x, dy = w.y - start.y;
             const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
-            const len = Math.round(Math.hypot(dx, dy) / g) * g;
-            p = { x: start.x + Math.cos(a) * len, y: start.y + Math.sin(a) * len, kind: "grid" };
+            const len = grid ? Math.round(Math.hypot(dx, dy) / g) * g : Math.hypot(dx, dy);
+            p = { x: start.x + Math.cos(a) * len, y: start.y + Math.sin(a) * len, kind: grid ? "grid" : "free" };
         }
         return p;
     }

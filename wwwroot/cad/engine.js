@@ -77,9 +77,140 @@ function minorStepMm() {
     return niceAtLeast(MIN_MINOR_PX / (scale * unitMm)) * unitMm;
 }
 
-// Snaps to an existing endpoint if close, otherwise to the minor grid.
+// Snap options (bottom-right snap box): grid snapping for every tool, and temporary midpoint nodes.
+let gridSnapEnabled = true;
+let midpointsEnabled = false;
+let referencesEnabled = false;
+
+export function setSnapOptions(grid, midpoints, references) {
+    if (typeof grid !== "boolean" || typeof midpoints !== "boolean" || typeof references !== "boolean")
+        throw new Error("Snap options must be checkbox values.");
+    gridSnapEnabled = grid;
+    midpointsEnabled = midpoints;
+    referencesEnabled = references;
+    if (!references) clearReferences();
+    log("action", `snap: grid ${grid ? "on" : "off"}, midpoints ${midpoints ? "on" : "off"}, references ${references ? "on" : "off"}`);
+    draw();
+}
+
+// Reference lines: resting the cursor on a node for REF_HOLD_MS acquires it. Each acquired node offers a
+// horizontal and a vertical guide; points near a guide lock onto it (and onto the crossing of two guides).
+// Resting on an acquired node again releases it. Guides are temporary and never stored.
+const REF_HOLD_MS = 1000, MAX_REFS = 4;
+let references = [], refHover = null, refTimer = 0, refActive = null;
+
+function clearReferences() {
+    clearTimeout(refTimer);
+    references = [];
+    refHover = null;
+    refActive = null;
+}
+
+function nodeAt(sx, sy) {
+    const wc = toWorld(sx, sy), reach = SNAP_PX / scale;
+    let best = null, bestDist = SNAP_PX;
+    const consider = (x, y) => {
+        if (Math.abs(x - wc.x) > reach || Math.abs(y - wc.y) > reach) return;
+        const s = toScreen(x, y), dist = Math.hypot(s.x - sx, s.y - sy);
+        if (dist <= bestDist) { best = { x, y }; bestDist = dist; }
+    };
+    for (const geo of geometries)
+        for (const item of screenItems(geo.bucket))
+            for (const p of geo.points(item)) consider(p.x, p.y);
+    for (const m of midpointNodes(wc, reach)) consider(m.x, m.y);
+    return best;
+}
+
+function acquireReference(node) {
+    const i = references.findIndex(r => r.x === node.x && r.y === node.y);
+    if (i >= 0) references.splice(i, 1);
+    else {
+        references.push(node);
+        if (references.length > MAX_REFS) references.shift();
+    }
+    log("action", `reference ${i >= 0 ? "released" : "acquired"} at ${node.x}, ${node.y}`);
+    draw();
+}
+
+function trackReferenceHover(sx, sy) {
+    const node = referencesEnabled ? nodeAt(sx, sy) : null;
+    if (node && refHover && node.x === refHover.x && node.y === refHover.y) return;
+    clearTimeout(refTimer);
+    refHover = node;
+    if (node) refTimer = setTimeout(() => { refHover = null; acquireReference(node); }, REF_HOLD_MS);
+}
+
+// Locks the cursor onto the nearest horizontal and/or vertical guide; a free coordinate follows `base`.
+function snapReference(sx, sy, base) {
+    if (!references.length) return null;
+    let h = null, v = null, hd = SNAP_PX, vd = SNAP_PX;
+    for (const r of references) {
+        const s = toScreen(r.x, r.y);
+        const dy = Math.abs(s.y - sy), dx = Math.abs(s.x - sx);
+        if (dy <= hd) { h = r; hd = dy; }
+        if (dx <= vd) { v = r; vd = dx; }
+    }
+    if (!h && !v) return null;
+    const b = base();
+    const point = { x: v ? v.x : b.x, y: h ? h.y : b.y, kind: "ref" };
+    refActive = { h, v, x: point.x, y: point.y };
+    return point;
+}
+
+// Temporary midpoint nodes: the middle of every line, each rectangle side and each rectangle's centre.
+// They are never stored; they exist only as snap targets while the option is on.
+function midpointsOf(geo, item) {
+    const pts = geo.points(item);
+    if (geo === lineGeometry && pts.length === 2)
+        return [{ key: "mid", x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }];
+    if (geo === shapeGeometry && item.type === "rectangle" && pts.length === 4) {
+        const out = pts.map((p, i) => {
+            const q = pts[(i + 1) % 4];
+            return { key: `mid:${p.key}`, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+        });
+        out.push({ key: "mid:center", x: (pts[0].x + pts[2].x) / 2, y: (pts[0].y + pts[2].y) / 2 });
+        return out;
+    }
+    return [];
+}
+
+function midpointNodes(near = null, reach = Infinity) {
+    if (!midpointsEnabled) return [];
+    const out = [];
+    for (const geo of [lineGeometry, shapeGeometry]) {
+        for (const item of screenItems(geo.bucket)) {
+            for (const m of midpointsOf(geo, item)) {
+                if (near && (Math.abs(m.x - near.x) > reach || Math.abs(m.y - near.y) > reach)) continue;
+                out.push({ geo, item, ...m });
+            }
+        }
+    }
+    return out;
+}
+
+function gridPoint(sx, sy) {
+    const w = toWorld(sx, sy), zero = value => Object.is(value, -0) ? 0 : value;
+    if (!gridSnapEnabled) return { x: w.x, y: w.y, kind: "free" };
+    const g = minorStepMm();
+    return { x: zero(Math.round(w.x / g) * g), y: zero(Math.round(w.y / g) * g), kind: "grid" };
+}
+
+function snapMidpoint(sx, sy, exclude) {
+    const wc = toWorld(sx, sy);
+    let best = null, bestDist = SNAP_PX;
+    for (const m of midpointNodes(wc, SNAP_PX / scale)) {
+        // A midpoint moves with its item, so skip it while any of that item's points are excluded (being dragged).
+        if (exclude && m.geo.points(m.item).some(p => exclude(m.geo, m.item, p.key))) continue;
+        const s = toScreen(m.x, m.y), dist = Math.hypot(s.x - sx, s.y - sy);
+        if (dist <= bestDist) { best = { x: m.x, y: m.y, kind: "mid" }; bestDist = dist; }
+    }
+    return best;
+}
+
+// Snaps to an existing endpoint if close, then a midpoint node, then a reference guide, otherwise the minor grid.
 // `exclude(geo, item, key)` can skip points (such as the ones being dragged).
 function snap(sx, sy, exclude) {
+    refActive = null;
     const wc = toWorld(sx, sy);
     const reach = SNAP_PX / scale;
     for (const geo of geometries) {
@@ -92,9 +223,11 @@ function snap(sx, sy, exclude) {
             }
         }
     }
-    const w = toWorld(sx, sy);
-    const g = minorStepMm();
-    return { x: Math.round(w.x / g) * g, y: Math.round(w.y / g) * g, kind: "grid" };
+    return snapMidpoint(sx, sy, exclude) ?? snapReference(sx, sy, () => gridPoint(sx, sy)) ?? gridPoint(sx, sy);
+}
+
+function gridSnap(sx, sy) {
+    return snapMidpoint(sx, sy) ?? snapReference(sx, sy, () => gridPoint(sx, sy)) ?? gridPoint(sx, sy);
 }
 
 function formatLength(mm) {
@@ -146,11 +279,9 @@ const env = {
     toScreen,
     scale: () => scale,
     snap,
-    gridSnap(sx, sy) {
-        const w = toWorld(sx, sy), g = minorStepMm();
-        const zero = value => Object.is(value, -0) ? 0 : value;
-        return { x: zero(Math.round(w.x / g) * g), y: zero(Math.round(w.y / g) * g), kind: "grid" };
-    },
+    gridSnap: (sx, sy) => { refActive = null; return gridSnap(sx, sy); },
+    gridSnapEnabled: () => gridSnapEnabled,
+    midpointNodes: () => midpointNodes(),
     minorStepMm,
     formatLength,
     formatArea,
@@ -207,6 +338,7 @@ export function setTool(name) {
     log("action", `tool: ${toolId} -> ${name}`);
     if (toolId === "select" && name !== "text") tools.text.cancel();
     currentTool().deactivate?.();
+    clearReferences();
     toolId = name;
     currentTool().activate?.();
     el.classList.toggle("drawing", toolId !== "cross");
@@ -479,6 +611,52 @@ function resize() {
 
 // Many pointer events can arrive per frame; draw at most once per frame.
 let framePending = false;
+// Small hollow triangles mark the temporary midpoint nodes that are on screen.
+function drawMidpoints(g, view) {
+    const d = view.dpr, r = 4 * d;
+    g.save();
+    g.shadowBlur = 0;
+    g.lineWidth = 1.25 * d;
+    g.strokeStyle = view.paper ? "rgba(0,0,0,0.75)" : "rgba(143,227,255,0.9)";
+    g.beginPath();
+    for (const m of midpointNodes()) {
+        const s = view.toScreen(m.x, m.y);
+        if (s.x < -10 || s.x > view.width + 10 || s.y < -10 || s.y > view.height + 10) continue;
+        const x = s.x * d, y = s.y * d;
+        g.moveTo(x, y - r); g.lineTo(x + r, y + r * 0.8); g.lineTo(x - r, y + r * 0.8); g.closePath();
+    }
+    g.stroke();
+    g.restore();
+}
+
+// Acquired reference nodes get a small plus; their guides run faintly across the view, brighter while snapping.
+function drawReferences(g, view) {
+    if (!references.length) return;
+    const d = view.dpr, w = view.width * d, h = view.height * d;
+    const color = a => view.paper ? `rgba(0,0,0,${a})` : `rgba(255,196,92,${a})`;
+    g.save();
+    g.shadowBlur = 0;
+    g.lineWidth = Math.max(1, Math.round(d));
+    g.setLineDash([4 * d, 5 * d]);
+    for (const r of references) {
+        const s = view.toScreen(r.x, r.y), x = Math.round(s.x * d) + 0.5, y = Math.round(s.y * d) + 0.5;
+        g.strokeStyle = color(refActive?.h === r ? 0.95 : 0.3);
+        g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+        g.strokeStyle = color(refActive?.v === r ? 0.95 : 0.3);
+        g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
+    }
+    g.setLineDash([]);
+    g.lineWidth = 1.5 * d;
+    g.strokeStyle = color(0.95);
+    g.beginPath();
+    for (const r of references) {
+        const s = view.toScreen(r.x, r.y), x = s.x * d, y = s.y * d, k = 6 * d;
+        g.moveTo(x - k, y); g.lineTo(x + k, y); g.moveTo(x, y - k); g.lineTo(x, y + k);
+    }
+    g.stroke();
+    g.restore();
+}
+
 function draw() {
     if (framePending) return;
     framePending = true;
@@ -554,6 +732,8 @@ function render() {
     for (const geo of geometries) geo.draw(ctx, screenItems(geo.bucket).filter(item => !preview || layerPrintable(item)), view);
     tools.measurement.drawSaved(ctx, view);
     tools.page.drawComponents(ctx, view);
+    if (midpointsEnabled && !preview) drawMidpoints(ctx, view);
+    if (!preview) drawReferences(ctx, view);
     currentTool().draw?.(ctx, view);
 
     // Only tell Blazor when the "origin is centred" state flips, not on every pan frame.
@@ -692,7 +872,12 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     });
     on(el, "pointermove", e => {
         if (!panning) {
-            currentTool().pointerMove?.(toolEvent(e));
+            const event = toolEvent(e);
+            const hadGuide = refActive !== null;
+            refActive = null;
+            trackReferenceHover(event.sx, event.sy);
+            currentTool().pointerMove?.(event);
+            if (hadGuide && refActive === null) draw();
             return;
         }
         if (e.pointerId !== pointerId) return;
@@ -916,6 +1101,7 @@ export function newProject() {
 }
 
 export function dispose() {
+    clearReferences();
     cancelAnimation();
     holdZoomStop();
     handlers.forEach(h => h());

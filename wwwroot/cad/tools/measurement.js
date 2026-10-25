@@ -200,6 +200,12 @@ export function createMeasurementTool(env) {
                 }
             }
         }
+        if (best) return best;
+        for (const m of env.midpointNodes?.() ?? []) {
+            const s = env.toScreen(m.x, m.y);
+            const dist = Math.hypot(s.x - sx, s.y - sy);
+            if (dist <= bestDist) { best = { x: m.x, y: m.y, kind: "mid" }; bestDist = dist; }
+        }
         return best;
     }
 
@@ -270,8 +276,8 @@ export function createMeasurementTool(env) {
             g.arc(s.x * d, s.y * d, radius * d, 0, Math.PI * 2);
             g.fill();
         } else {
-            const r = (p.kind === "end" ? 6 : 4) * d;
-            g.strokeStyle = p.kind === "end" ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
+            const r = ((p.kind === "end" || p.kind === "mid" || p.kind === "ref") ? 6 : 4) * d;
+            g.strokeStyle = (p.kind === "end" || p.kind === "mid" || p.kind === "ref") ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
             g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
         }
     }

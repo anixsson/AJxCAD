@@ -478,8 +478,8 @@ export function createSelectTool(env) {
     function drawSnapMarker(g, view, p) {
         const d = view.dpr;
         const s = view.toScreen(p.x, p.y);
-        const r = (p.kind === "end" ? 8 : 6) * d;
-        g.strokeStyle = p.kind === "end" ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
+        const r = ((p.kind === "end" || p.kind === "mid" || p.kind === "ref") ? 8 : 6) * d;
+        g.strokeStyle = (p.kind === "end" || p.kind === "mid" || p.kind === "ref") ? (view.paper ? "#000" : "#ff8fe0") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
         g.strokeRect(s.x * d - r, s.y * d - r, r * 2, r * 2);
     }
 

@@ -597,6 +597,22 @@
     </aside>
 }
 
+<aside class="float-panel snap-panel" aria-label="Snap options">
+    <span class="snap-caption">Snap</span>
+    <button type="button" class="float-btn snap-btn @(_gridSnap ? "active" : "")" role="checkbox"
+            aria-checked="@_gridSnap.ToString().ToLowerInvariant()"
+            title="@(_gridSnap ? "Grid snapping is on for all tools. Click to place and move freely" : "Grid snapping is off for all tools. Click to snap to the grid again")"
+            @onclick="ToggleGridSnap">Grid</button>
+    <button type="button" class="float-btn snap-btn @(_midpointSnap ? "active" : "")" role="checkbox"
+            aria-checked="@_midpointSnap.ToString().ToLowerInvariant()"
+            title="Add temporary snap nodes at the middle of every line and each rectangle side and centre"
+            @onclick="ToggleMidpointSnap">Mid</button>
+    <button type="button" class="float-btn snap-btn @(_referenceSnap ? "active" : "")" role="checkbox"
+            aria-checked="@_referenceSnap.ToString().ToLowerInvariant()"
+            title="Reference lines: rest the cursor on a node for a second to show horizontal and vertical guides through it, then snap along them. Rest on it again to remove them"
+            @onclick="ToggleReferenceSnap">Ref</button>
+</aside>
+
 <aside class="float-panel scale-panel" aria-label="Scale">
     <div class="scale-readout">
         <div class="scale-actions">
@@ -1510,6 +1526,25 @@
     }
 
     private bool _extendedZoom = Preferences.Default.Get("extendedZoom", false);
+    private bool _gridSnap = Preferences.Default.Get("gridSnap", true);
+    private bool _midpointSnap = Preferences.Default.Get("midpointSnap", false);
+    private bool _referenceSnap = Preferences.Default.Get("referenceSnap", false);
+
+    private Task ToggleGridSnap() => SetSnapOptions(!_gridSnap, _midpointSnap, _referenceSnap);
+    private Task ToggleMidpointSnap() => SetSnapOptions(_gridSnap, !_midpointSnap, _referenceSnap);
+    private Task ToggleReferenceSnap() => SetSnapOptions(_gridSnap, _midpointSnap, !_referenceSnap);
+
+    private async Task SetSnapOptions(bool grid, bool midpoints, bool references)
+    {
+        if (_cad is null) throw new InvalidOperationException("The drawing workspace is not ready.");
+        await _cad.InvokeVoidAsync("setSnapOptions", grid, midpoints, references);
+        _gridSnap = grid;
+        _midpointSnap = midpoints;
+        _referenceSnap = references;
+        Preferences.Default.Set("gridSnap", grid);
+        Preferences.Default.Set("midpointSnap", midpoints);
+        Preferences.Default.Set("referenceSnap", references);
+    }
     private string? _gridColor = Preferences.Default.ContainsKey("gridColor") ? Preferences.Default.Get("gridColor", "") : null;
     private int _uiScalePercent = Math.Clamp(Preferences.Default.Get("uiScalePercent", 100), 80, 140);
     private int _textScalePercent = Math.Clamp(Preferences.Default.Get("textScalePercent", 100), 100, 160);
@@ -1935,6 +1970,7 @@
         await _cad.InvokeVoidAsync("init", _workspace, _canvas, _self, ReferencePx, _unit.Mm);
         await _cad.InvokeVoidAsync("setExtendedZoom", _extendedZoom);
         await _cad.InvokeVoidAsync("setGridColor", _gridColor);
+        await _cad.InvokeVoidAsync("setSnapOptions", _gridSnap, _midpointSnap, _referenceSnap);
         await ApplyAppearance();
         await SyncProject();
         _pages = await _cad.InvokeAsync<PagesState>("getPages");

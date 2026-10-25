@@ -102,6 +102,8 @@ Printing and PDF export include only visible markers on printable layers. Their 
 
 ## Navigation and scale
 
+The small **Snap** box left of the scale panel has two toggles that apply to every tool and are remembered between sessions. **Grid** (on by default) snaps to grid intersections; turn it off to place and move points exactly where you click, while existing nodes still snap. **Mid** shows temporary snap nodes, drawn as cyan triangles, at the middle of every line and at each rectangle side midpoint and centre. These nodes are never saved, printed or exported. **Ref** turns on reference lines. Rest the cursor on any node (a line end, corner, point or midpoint node) for about a second and it is acquired: a small amber plus marks it, and dashed horizontal and vertical guides run through it. While placing or moving, the cursor locks onto a guide it comes near, which brightens. The other axis follows the grid, or the cursor when Grid is off, and two guides snap to their crossing. Up to four nodes can be acquired at once. Resting on an acquired node again releases it, and changing tool clears them all. Guides are temporary and never saved.
+
 Pan and zoom the canvas as you work, or center the view on the origin. Grid spacing adapts to the zoom level. Choose metric or imperial measurements, set a 1:1 reference, and use the scale panel to check the current ratio and measured scale bar.
 
 ### Optimize view
