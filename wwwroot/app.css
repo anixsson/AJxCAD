@@ -51,6 +51,53 @@ button {
     height: 100%;
 }
 
+.line-length-input {
+    position: absolute;
+    z-index: 1;
+    width: 144px;
+    max-width: 100%;
+    padding: 6px;
+    border: 1px solid #9187bd;
+    border-radius: 8px;
+    background: #211c37;
+    color: #fff;
+    cursor: default;
+    font-size: calc(9.6px * var(--text-scale, 1));
+}
+
+.line-length-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.line-length-input input {
+    flex: 1;
+    width: 0;
+    min-width: 0;
+    padding: 4px 6px;
+    border: 1px solid #9187bd;
+    border-radius: 4px;
+    background: #fff;
+    color: #171321;
+    font: inherit;
+}
+
+.line-length-input input::placeholder {
+    color: #625b70;
+    opacity: 1;
+}
+
+.line-length-input input:focus-visible {
+    outline: 2px solid #d5acff;
+    outline-offset: 2px;
+}
+
+.line-length-input [role="alert"] {
+    display: block;
+    color: #ffd1d1;
+}
+
 /* ---------- Floating UI ---------- */
 
 .float-panel {
@@ -59,7 +106,8 @@ button {
 }
 
 .float-panel,
-.glass {
+.glass,
+.app:not(.perf):not(.paper) .line-length-input {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)), rgba(30, 24, 70, 0.38);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 14px;
@@ -68,6 +116,17 @@ button {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
     user-select: none;
     -webkit-user-select: none;
+}
+
+.app:not(.perf):not(.paper) .line-length-input input {
+    background: rgba(10, 8, 24, 0.55);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #fff;
+    caret-color: #fff;
+}
+
+.app:not(.perf):not(.paper) .line-length-input input::placeholder {
+    color: #d4cee5;
 }
 
 /* ---------- Title bar: the app draws its own window buttons and title ---------- */

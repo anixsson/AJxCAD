@@ -185,10 +185,12 @@
         new("Line", "L", "Draw straight lines. Click to set the start, click again to place the end. With Multi checked, the next line starts where the last one ended; otherwise, each pair of clicks draws a separate line. Points snap to the grid and to existing line ends, and the length is shown while drawing.",
         [
             ("L", "Switch to the Line tool"),
+            ("Exact length", "After the first click, point in the desired direction, then type a length or click the Length field beside the cursor. Press Enter to place that exact length along the current preview direction (including Shift angle locking). The fixed mm suffix indicates millimetres, including in imperial mode; decimals are allowed. Multi continues from the new endpoint. Esc in the field cancels the pending segment"),
             ("Click", "Place a point"),
             ("Shift", "Lock the angle to 45° steps"),
             ("Space", "End the current chain; placed lines stay and the next click starts a new line"),
             ("Toolmenu: Multi", "Checked (default) keeps drawing connected lines; unchecked draws one line per two clicks. Changing it cancels the pending segment but keeps placed lines"),
+            ("Toolmenu: Direct add", "Checked (default) enables the cursor-side Length field and typing a length to place with Enter. Uncheck to hide the field and use click placement only. Toggling keeps the current first point and direction. Like Multi, this option is kept when changing tools and resets when restarting the app"),
             ("Double-click or Esc", "Finish and return to the Pan tool"),
             ("Cmd/Ctrl + Z", "Cancel the current line, then undo placed lines")
         ]),

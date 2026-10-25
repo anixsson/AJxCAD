@@ -6,6 +6,14 @@
      style="--ui-scale: @Css(_uiScalePercent / 100d); --text-scale: @Css(_textScalePercent / 100d)">
 <div class="workspace" @ref="_workspace">
     <canvas @ref="_canvas"></canvas>
+    <div class="line-length-input" data-line-length hidden>
+        <div class="line-length-row">
+            <input id="line-length" type="text" inputmode="decimal" autocomplete="off" placeholder="Length"
+                   aria-label="Line length in millimetres" aria-describedby="line-length-error" />
+            <span aria-hidden="true">mm</span>
+        </div>
+        <span id="line-length-error" role="alert"></span>
+    </div>
 </div>
 
 <Modal Open="@(_dialog == "settings")" Title="App settings" Width="500" OnClose="CloseDialog">
@@ -462,6 +470,14 @@
                             @onclick="ToggleLineMulti">
                         <span class="check-box" aria-hidden="true">@(_lineMulti ? "✓" : "")</span>
                         Multi
+                    </button>
+                    <button type="button" class="chip check-chip @(_lineDirectAdd ? "active" : "")"
+                            role="checkbox"
+                            title="Enter an exact line length beside the cursor"
+                            aria-checked="@(_lineDirectAdd.ToString().ToLowerInvariant())"
+                            @onclick="ToggleLineDirectAdd">
+                        <span class="check-box" aria-hidden="true">@(_lineDirectAdd ? "✓" : "")</span>
+                        Direct add
                     </button>
                 </div>
             </aside>
@@ -994,6 +1010,16 @@
 
     private string _measurementSnap = "grid";
     private bool _lineMulti = true;
+    private bool _lineDirectAdd = true;
+
+    private async Task ToggleLineDirectAdd()
+    {
+        if (_cad is null)
+            throw new InvalidOperationException("The drawing workspace is not ready.");
+
+        await _cad.InvokeVoidAsync("setLineDirectAdd", !_lineDirectAdd);
+        _lineDirectAdd = !_lineDirectAdd;
+    }
 
     private async Task ToggleLineMulti()
     {

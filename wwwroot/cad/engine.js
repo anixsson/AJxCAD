@@ -37,6 +37,7 @@ let extendedZoom = false;
 let gridColor = null;
 let gridSizeStep = 0;
 const handlers = [];
+let lineLengthInput = null;
 
 // Geometry types draw the stored buckets; tools only draw their own overlay.
 const geometries = [lineGeometry, shapeGeometry, textGeometry, pointGeometry, symbolGeometry];
@@ -301,6 +302,7 @@ const env = {
     minorStepMm,
     formatLength,
     formatArea,
+    lineLengthChanged: cursor => lineLengthInput?.update(cursor),
     log,
     redraw: () => draw(),
     setTool: name => setTool(name),
@@ -406,6 +408,7 @@ export function removeSelectedItems() {
 
 export const setMeasurementSnap = mode => tools.measurement.setSnapMode(mode);
 export const setLineMulti = on => tools.line.setMulti(on);
+export const setLineDirectAdd = on => tools.line.setDirectAdd(on);
 export const setTextDraft = draft => tools.text.setDraft(draft);
 function shapeTool() {
     if (toolId === "select" && selectedShapeTool) return selectedShapeTool;
@@ -796,6 +799,77 @@ function textAt(sx, sy) {
     return null;
 }
 
+function setupLineLengthInput() {
+    const box = document.querySelector("[data-line-length]");
+    if (!box) return null;
+    const input = box.querySelector("input");
+    const error = box.querySelector("[role=alert]");
+    let firstPoint = null;
+    const reset = () => {
+        input.value = "";
+        error.textContent = "";
+        input.removeAttribute("aria-invalid");
+    };
+    const invalid = message => {
+        error.textContent = message;
+        input.setAttribute("aria-invalid", "true");
+        log("error", message);
+    };
+    for (const event of ["pointerdown", "pointermove", "pointerup", "dblclick", "wheel"])
+        on(box, event, e => e.stopPropagation());
+    on(input, "input", () => {
+        error.textContent = "";
+        input.removeAttribute("aria-invalid");
+    });
+    on(input, "keydown", e => {
+        if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            tools.line.space();
+            el.focus({ preventScroll: true });
+        } else if (e.key === "Enter" && !e.isComposing) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.repeat) return;
+            const text = input.value.trim().replace(",", ".");
+            const length = Number(text);
+            if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text) || !Number.isFinite(length) || length <= 0) {
+                invalid("Enter a positive, finite length.");
+            } else if (!tools.line.placeLength(length)) {
+                invalid("Choose a direction away from the first point and a representable length.");
+            } else {
+                reset();
+                el.focus({ preventScroll: true });
+            }
+        }
+    });
+    reset();
+    return {
+        startTyping(key) {
+            if (box.hidden) return false;
+            input.focus({ preventScroll: true });
+            input.value = key;
+            return true;
+        },
+        update(cursor) {
+            box.hidden = !cursor;
+            if (!cursor) {
+                if (document.activeElement === input) el.focus({ preventScroll: true });
+                firstPoint = null;
+                reset();
+                return;
+            }
+            if (!firstPoint || firstPoint.x !== cursor.x || firstPoint.y !== cursor.y) reset();
+            firstPoint = cursor;
+            const width = box.offsetWidth, height = box.offsetHeight;
+            const x = cursor.sx + 18 + width <= el.clientWidth ? cursor.sx + 18 : cursor.sx - width - 18;
+            const y = cursor.sy + 18 + height <= el.clientHeight ? cursor.sy + 18 : cursor.sy - height - 18;
+            box.style.left = `${Math.max(0, Math.min(el.clientWidth - width, x))}px`;
+            box.style.top = `${Math.max(0, Math.min(el.clientHeight - height, y))}px`;
+        }
+    };
+}
+
 export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     optimizerEnabled = true;
     optimizerReport = "";
@@ -828,6 +902,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     tools.cross = { id: "cross", hotkey: "v" };
     tools.select = createSelectTool(env);
     tools.line = createLineTool(env);
+    lineLengthInput = setupLineLengthInput();
     tools.circle = createCircleTool(env);
     tools.rectangle = createRectangleTool(env);
     tools.text = createTextTool(env);
@@ -850,6 +925,11 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     const typing = e => !!document.querySelector(".modal-backdrop") || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || !!e.target?.isContentEditable;
     on(document, "keydown", e => {
         if (document.querySelector(".modal-backdrop")) return;
+        if (toolId === "line" && !typing(e) && !e.metaKey && !e.ctrlKey && !e.altKey &&
+            /^[0-9.,]$/.test(e.key) && lineLengthInput?.startTyping(e.key)) {
+            e.preventDefault();
+            return;
+        }
         if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(e) && cycleDefault(e.shiftKey ? -1 : 1)) {
             e.preventDefault();
         } else if ((e.key === "Delete" || e.key === "Backspace") && toolId === "select" && !e.metaKey && !e.ctrlKey && !e.altKey && !typing(e)) {
@@ -1203,6 +1283,8 @@ export function newProject() {
 }
 
 export function dispose() {
+    tools.line?.deactivate();
+    lineLengthInput = null;
     clearTimeout(unsavedTimer);
     unsavedTimer = null;
     savedContent = null;

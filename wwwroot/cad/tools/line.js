@@ -10,6 +10,25 @@ export function createLineTool(env) {
     let start = null;
     let hover = null;
     let multi = true;
+    let directAdd = true;
+    let cursor = null;
+
+    const publish = () => env.lineLengthChanged?.(directAdd && start && cursor ? { ...cursor, x: start.x, y: start.y } : null);
+    function reset() {
+        start = null;
+        hover = null;
+        publish();
+    }
+
+    function place(p) {
+        checkpoint();
+        addLine(start.x, start.y, p.x, p.y);
+        env.log("action", `line placed, length ${env.formatLength(Math.hypot(p.x - start.x, p.y - start.y))}`);
+        start = multi ? p : null;
+        hover = p;
+        publish();
+        env.redraw();
+    }
 
     // Snaps to endpoints and the grid; Shift locks the angle to 45 degree steps from the start point.
     function resolve(e) {
@@ -30,43 +49,75 @@ export function createLineTool(env) {
         hotkey: "l",
 
         deactivate() {
-            start = null;
-            hover = null;
+            reset();
         },
+
+        dataChanged() { reset(); },
 
         pointerDown(e) {
             if (e.detail >= 2) { env.setTool("cross"); return; } // double-click ends the tool
+            cursor = { sx: e.sx, sy: e.sy };
             const p = resolve(e);
             if (!start) start = p;
             else if (p.x !== start.x || p.y !== start.y) {
-                checkpoint();
-                addLine(start.x, start.y, p.x, p.y);
-                env.log("action", `line placed, length ${env.formatLength(Math.hypot(p.x - start.x, p.y - start.y))}`);
-                start = multi ? p : null;
+                place(p);
             }
             hover = p;
+            publish();
             env.redraw();
         },
 
         pointerMove(e) {
+            cursor = { sx: e.sx, sy: e.sy };
             hover = resolve(e);
+            publish();
             env.redraw();
         },
 
         pointerLeave() {
-            hover = null;
+            if (!start) hover = null;
             env.redraw();
+        },
+
+        placeLength(length) {
+            if (!directAdd) {
+                env.log("error", "Enable Direct add in the Line toolbar to enter an exact length.");
+                return false;
+            }
+            if (typeof length !== "number" || !Number.isFinite(length) || length <= 0)
+                throw new Error("Enter a positive, finite length.");
+            const distance = start && hover ? Math.hypot(hover.x - start.x, hover.y - start.y) : 0;
+            if (!distance) {
+                env.log("error", "Move the cursor away from the first point to choose a line direction.");
+                return false;
+            }
+            const p = {
+                x: start.x + (hover.x - start.x) / distance * length,
+                y: start.y + (hover.y - start.y) / distance * length
+            };
+            if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || (p.x === start.x && p.y === start.y)) {
+                env.log("error", "This length cannot be represented at the current coordinates.");
+                return false;
+            }
+            place(p);
+            return true;
+        },
+
+        setDirectAdd(on) {
+            if (typeof on !== "boolean") throw new Error("Direct add must be a checkbox value.");
+            directAdd = on;
+            publish();
         },
 
         setMulti(on) {
             multi = !!on;
-            start = null;
+            reset();
             env.redraw();
         },
 
         space() {
             if (!start) return false;
-            start = null;
+            reset();
             env.log("action", "line chain ended");
             env.redraw();
             return true;
@@ -75,7 +126,7 @@ export function createLineTool(env) {
         // First undo drops the line being drawn, the next ones remove placed lines.
         undoStep() {
             if (!start) return false;
-            start = null;
+            reset();
             return true;
         },
 
