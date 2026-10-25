@@ -700,3 +700,45 @@ test("in Nodes mode Delete removes every line touching a selected node", () => {
     assert.equal(tool.removeSelectedItems(), 2);
     assert.deepEqual(lines.items.map(l => l.id), [3]);
 });
+
+test("Selections lists each selected item with a type label, draws the labels and deselects entries", () => {
+    const lists = [];
+    const { tool } = setup([
+        { x1: 0, y1: 0, x2: 10, y2: 0 },
+        { x1: 100, y1: 100, x2: 110, y2: 100 },
+        { x1: 300, y1: 300, x2: 310, y2: 300 }
+    ], { selectionListChanged: info => lists.push(info) });
+    tool.setSelectionMode("lines");
+    tool.pointerDown(pointer(-20, -20));
+    tool.pointerMove(pointer(200, 200));
+    tool.pointerUp(pointer(200, 200));
+
+    assert.equal(tool.openSelectionList(), true);
+    assert.deepEqual(lists.at(-1).entries, [
+        { label: "L1", kind: "Line", detail: "10 mm", selected: true },
+        { label: "L2", kind: "Line", detail: "10 mm", selected: true }
+    ]);
+    const labels = () => draw(tool).calls.filter(c => c[0] === "fillText").map(c => c[1]);
+    assert.deepEqual(labels(), ["L1", "L2"]);
+
+    assert.equal(tool.toggleSelectionEntry(0), true);
+    assert.deepEqual(lists.at(-1).entries.map(e => [e.label, e.selected]), [["L1", false], ["L2", true]]);
+    assert.deepEqual(highlightedPath(tool), [["moveTo", 100, 100], ["lineTo", 110, 100]], "only L2 stays selected");
+
+    tool.toggleSelectionEntry(1);
+    assert.deepEqual(lists.at(-1).entries.map(e => e.selected), [false, false], "unchecking all keeps the list open");
+    tool.toggleSelectionEntry(0);
+    assert.deepEqual(lists.at(-1).entries.map(e => e.selected), [true, false], "re-checking restores the item");
+
+    tool.pointerDown(pointer(305, 300, { shift: true }));
+    tool.pointerUp(pointer(305, 300, { shift: true }));
+    assert.deepEqual(lists.at(-1).entries.map(e => e.label), ["L1", "L2", "L3"], "new selections get the next label");
+
+    assert.equal(tool.cancel(), true, "Esc closes the list");
+    assert.equal(lists.at(-1), null);
+    assert.deepEqual(labels(), []);
+    assert.equal(tool.openSelectionList(), true);
+    tool.pointerDown(pointer(700, 700));
+    tool.pointerUp(pointer(700, 700));
+    assert.equal(lists.at(-1), null, "clearing the selection on the board closes the list");
+});

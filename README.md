@@ -32,6 +32,8 @@ Select also picks shapes and text, in addition to saved measurement points (blue
 
 While anything is selected, an Actions menu appears beside the toolmenu. **Move** opens a guide box: click a base point (such as a corner of the selection), press Next (or Space), then click the destination. The selection moves by that offset, with a live preview and offset distance; Esc or Cancel stops the move.
 
+**Selections** lists every selected item and labels it on the board by type: **L** lines, **C** circles, **R** rectangles, **T** text, **P** points, **S** symbols and **M** measurements (L1, L2, S1, M1, ...). Uncheck an entry to remove that item from the selection; check it again to restore it. Labels stay fixed while the list is open and newly selected items get the next number. Close, Esc or clearing the selection on the board closes the list.
+
 ## Symbol imports
 
 Choose **Symbol import** (I), press **Select project**, and choose another `.ajx` file. Its Tools buckets are loaded into an isolated source group and rendered as actual geometry, not as an image. Click the board to place the source project's **(0,0) origin**. Each source coordinate is preserved relative to that origin. Lines, shapes, text, points, measurements and nested symbol references stay separate from the host's own tool buckets.
@@ -40,9 +42,13 @@ With **Select**, click the group to open its information box, which shows the so
 
 Use the **- / +** buttons beside Scale factor to decrease or increase the symbol scale by **0.1** per click. The number field still accepts precise positive scale factors; minus is disabled at 0.1 or below to prevent a non-positive step.
 
+Selecting a placed symbol lists the source project's layers under **Show layers**. Check or uncheck a layer to show or hide it in that symbol only; this local choice is saved in the host's Symbols bucket (`sourceLayers`), changes the symbol border and PDF output, supports Undo, and leaves other placements of the same source untouched. **Use source layers** returns to the source's own visibility. If the source project's layer visibility later changes, the local choice keeps overriding it and a **Layers updated** prompt asks whether to use the source layers or keep local; the selected symbol's information box offers the same choice until it is answered.
+
+**Recent symbols** in the Symbol import tool lists the last 10 imported source projects (most recent first) so repeating symbols can be placed again without browsing. It is hidden while a placed symbol is selected. Click an entry to place another copy; **×** removes it from the list. The list is kept in local app preferences, not in the project.
+
 Use **Open source project** to edit the original project separately. A prompt offers to save the host first, open without saving, or cancel; canceling or failing the save keeps the host open. Save source edits there, then reopen the host or press **Refresh** to reload its linked Tools buckets. Opening the host automatically reloads its sources, including nested references. Circular imports are rejected rather than recursed indefinitely.
 
-The host's **Symbols** (`symbols`) bucket stores only each source location, group position, scale and host layer (plus its item ID). No source geometry, image or source project settings are embedded in the saved host. Source layer visibility and point marker settings are respected when rendering; source Print flags do not hide otherwise visible content. The host layer controls visibility and printing of the whole group. PDF output keeps imported geometry vector-based.
+The host's **Symbols** (`symbols`) bucket stores only each source location, group position, scale, host layer and optional local layer choices (plus its item ID). No source geometry, image or source project settings are embedded in the saved host. Source layer visibility (or the symbol's local layer choice) and point marker settings are respected when rendering; source Print flags do not hide otherwise visible content. The host layer controls visibility and printing of the whole group. PDF output keeps imported geometry vector-based.
 
 If a source is deleted, moved, inaccessible or invalid, a crossed **Missing symbol import** placeholder appears. **Select another project** relinks it while preserving the host transform and layer; failed replacements preserve the previous link. On macOS, source-file access bookmarks stay in local app preferences, not in the project. On another computer, select the source files again to locate and authorize them.
 

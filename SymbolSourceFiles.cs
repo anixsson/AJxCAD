@@ -2,6 +2,40 @@ namespace AJxCAD;
 
 public static class SymbolSourceFiles
 {
+    public const int RecentLimit = 10;
+    private const string RecentKey = "symbol-recent-sources";
+
+    // Machine-local history of imported source projects, most recent first.
+    public static IReadOnlyList<string> Recent()
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(Preferences.Default.Get(RecentKey, "[]"))?
+                .Where(s => !string.IsNullOrWhiteSpace(s)).Take(RecentLimit).ToList() ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
+    public static IReadOnlyList<string> AddRecent(string source) =>
+        SaveRecent(Recent().Where(s => !SamePath(s, source)).Prepend(source));
+
+    public static IReadOnlyList<string> RemoveRecent(string source) =>
+        SaveRecent(Recent().Where(s => !SamePath(s, source)));
+
+    private static IReadOnlyList<string> SaveRecent(IEnumerable<string> sources)
+    {
+        var list = sources.Take(RecentLimit).ToList();
+        Preferences.Default.Set(RecentKey, System.Text.Json.JsonSerializer.Serialize(list));
+        return list;
+    }
+
+    private static bool SamePath(string a, string b) =>
+        string.Equals(Path.GetFullPath(a), Path.GetFullPath(b),
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacCatalyst() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
     public static string? RememberAccess(string source)
     {
 #if MACCATALYST

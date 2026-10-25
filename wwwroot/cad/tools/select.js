@@ -290,6 +290,100 @@ export function createSelectTool(env) {
         g.lineWidth = 1.5 * d;
     }
 
+    // Selections list (Actions > Selections): one labelled entry per selected item (L1, S1, M1, ...).
+    // Labels stay fixed while the list is open; unchecked entries remain listed so they can be re-checked.
+    let list = null; // { entries: [{ geo, item, label, refs: Map }], counters: Map }
+    let listToggling = false;
+    const PREFIX = { lines: ["L", "Line"], texts: ["T", "Text"], points: ["P", "Point"], symbols: ["S", "Symbol"], measures: ["M", "Measurement"] };
+    const kindOf = (geo, item) => geo.bucket === "shapes"
+        ? (item.type === "circle" ? ["C", "Circle"] : ["R", "Rectangle"])
+        : PREFIX[geo.bucket] ?? [geo.bucket.slice(0, 1).toUpperCase(), geo.bucket];
+    const entrySelected = entry => [...entry.refs.keys()].some(k => selected.has(k));
+
+    function syncList() {
+        if (!list) return;
+        const known = new Map(list.entries.map(e => [keyOf(e.geo, e.item, "__item"), e]));
+        for (const [k, r] of selected) {
+            const itemKey = keyOf(r.geo, r.item, "__item");
+            let entry = known.get(itemKey);
+            if (!entry) {
+                const [prefix] = kindOf(r.geo, r.item);
+                const n = (list.counters.get(prefix) ?? 0) + 1;
+                list.counters.set(prefix, n);
+                entry = { geo: r.geo, item: r.item, label: `${prefix}${n}`, refs: new Map() };
+                list.entries.push(entry);
+                known.set(itemKey, entry);
+            }
+            entry.refs.set(k, r);
+        }
+        const live = new Set(geometries.flatMap(geo => bucket(geo.bucket).items));
+        list.entries = list.entries.filter(e => live.has(e.item));
+    }
+
+    function entryDetail(entry) {
+        const { geo, item } = entry;
+        const points = geo.points(item);
+        const on = points.filter(p => selected.has(keyOf(geo, item, p.key))).length;
+        const parts = [];
+        if (geo.bucket === "lines" && points.length === 2)
+            parts.push(env.formatLength(Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y)));
+        else if (geo.bucket === "texts") parts.push(`“${item.text}”`);
+        else if (geo.bucket === "symbols") parts.push(String(item.source).split(/[\\/]/).pop());
+        if (on > 0 && on < points.length) parts.push(`${on}/${points.length} points`);
+        return parts.join(" · ") || null;
+    }
+
+    function publishList() {
+        env.selectionListChanged?.(list && {
+            entries: list.entries.map(e => ({
+                label: e.label, kind: kindOf(e.geo, e.item)[1], detail: entryDetail(e), selected: entrySelected(e)
+            }))
+        });
+    }
+
+    function closeList() {
+        if (!list) return false;
+        list = null;
+        publishList();
+        return true;
+    }
+
+    function labelAnchor({ geo, item }) {
+        const points = geo.points(item);
+        if (geo.bucket === "shapes" && item.type === "circle") return points[0];
+        if (!points.length) return null;
+        return { x: points.reduce((s, p) => s + p.x, 0) / points.length, y: points.reduce((s, p) => s + p.y, 0) / points.length };
+    }
+
+    function drawListLabels(g, view) {
+        const d = view.dpr;
+        g.font = `600 ${11 * d}px system-ui, -apple-system, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        for (const entry of list.entries) {
+            const c = labelAnchor(entry);
+            if (!c) continue;
+            const s = view.toScreen(c.x, c.y);
+            if (s.x < -40 || s.x > view.width + 40 || s.y < -40 || s.y > view.height + 40) continue;
+            const on = entrySelected(entry);
+            const color = entry.geo.annotation ? (view.paper ? "#000" : "#8fe3ff") : (view.paper ? "#000" : "#ff8fe0");
+            const x = s.x * d, y = (s.y - 14) * d;
+            const w = g.measureText(entry.label).width + 10 * d, h = 16 * d;
+            g.fillStyle = on ? color : (view.paper ? "rgba(255,255,255,0.95)" : "rgba(20,16,44,0.85)");
+            g.strokeStyle = on ? color : (view.paper ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)");
+            g.lineWidth = 1 * d;
+            g.beginPath();
+            g.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+            g.fill();
+            g.stroke();
+            g.fillStyle = on ? (view.paper ? "#fff" : "#1a1538") : (view.paper ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.8)");
+            g.fillText(entry.label, x, y);
+        }
+        g.textAlign = "start";
+        g.textBaseline = "alphabetic";
+        g.lineWidth = 1.5 * d;
+    }
+
     function report() {
         env.log("action", `selected ${selected.size} drawing point${selected.size === 1 ? "" : "s"}`);
         notifySelection();
@@ -318,6 +412,10 @@ export function createSelectTool(env) {
     }
 
     function notifySelection() {
+        if (list) {
+            if (!selected.size && !listToggling) closeList();
+            else { syncList(); publishList(); }
+        }
         const refs = [...selected.values()];
         env.pointSelectionChanged?.(refs.length === 1 && refs[0].geo.bucket === "points" ? refs[0].item.id : null);
         env.symbolSelectionChanged?.(refs.length === 1 && refs[0].geo.bucket === "symbols" ? refs[0].item.id : null);
@@ -514,9 +612,10 @@ export function createSelectTool(env) {
             return true;
         },
 
-        // Esc: cancel a running Move, otherwise close the Corner box (the selection stays).
+        // Esc: cancel a running Move, otherwise close the Selections list or the Corner box (the selection stays).
         cancel() {
             if (this.cancelProcess()) return true;
+            if (this.closeSelectionList()) return true;
             if (!stack) return false;
             setStack(null);
             env.redraw();
@@ -548,6 +647,39 @@ export function createSelectTool(env) {
             return this.cancelProcess();
         },
 
+        openSelectionList() {
+            if (!selected.size || process) return false;
+            setStack(null);
+            list = { entries: [], counters: new Map() };
+            syncList();
+            publishList();
+            env.log("action", `selections: ${list.entries.length} item${list.entries.length === 1 ? "" : "s"}`);
+            env.redraw();
+            return true;
+        },
+
+        closeSelectionList() {
+            if (!closeList()) return false;
+            env.redraw();
+            return true;
+        },
+
+        // Unchecking removes the entry's points from the selection; re-checking restores them.
+        toggleSelectionEntry(index) {
+            const entry = list?.entries[index];
+            if (!entry) return false;
+            const on = entrySelected(entry);
+            for (const [k, r] of entry.refs) {
+                if (on) selected.delete(k);
+                else if (r.geo.points(r.item).some(p => p.key === r.key)) selected.set(k, r);
+            }
+            env.log("action", `${entry.label} ${on ? "deselected" : "selected"}`);
+            listToggling = true;
+            try { notifySelection(); } finally { listToggling = false; }
+            env.redraw();
+            return true;
+        },
+
         setSelectionMode(value) {
             if (value !== "nodes" && value !== "lines") throw new Error(`Unknown selection mode: ${value}`);
             mode = value;
@@ -567,6 +699,8 @@ export function createSelectTool(env) {
         },
 
         deactivate() {
+            list = null;
+            publishList();
             selected.clear();
             setStack(null);
             hover = null;
@@ -579,6 +713,7 @@ export function createSelectTool(env) {
 
         // Undo replaces the stored items, so any selection would point at stale data.
         dataChanged() {
+            if (list) { list = null; publishList(); }
             selected.clear();
             stack = null;
             env.stackChanged?.(null);
@@ -865,7 +1000,8 @@ export function createSelectTool(env) {
                 }
             }
 
-            if (stack && !drag?.moved && !process) drawStackLabels(g, view);
+            if (stack && !drag?.moved && !process && !list) drawStackLabels(g, view);
+            if (list && !drag?.moved) drawListLabels(g, view);
 
             if (hover && !drag && mode === "nodes") {
                 const s = view.toScreen(hover.x, hover.y);

@@ -17,7 +17,8 @@ import { createPageTool } from "./tools/page.js";
 import { PAGES, textSizeOf } from "./pages.js";
 import { pagePdf } from "./pdf.js";
 import { activeLayerId, normalizeLayers, layerState, addLayer, updateLayer, setActiveLayer, assignLayer, visibleItems, layerPrintable, requireLayer } from "./layers.js";
-import { SYMBOLS, symbolGeometry, createSymbolTool, prepareSymbolSource, refreshSymbol, setSymbolScale, clearSymbolSources, symbolSourceState } from "./symbols.js";
+import { SYMBOLS, symbolGeometry, createSymbolTool, prepareSymbolSource, refreshSymbol, setSymbolScale, clearSymbolSources, symbolSourceState,
+    symbolLayerState, setSymbolLayerVisible, useSourceLayers, keepLocalLayers } from "./symbols.js";
 
 const MIN_MINOR_PX = 12;
 const SNAP_PX = 10;
@@ -161,6 +162,7 @@ const env = {
     measureChanged: info => dotnet?.invokeMethodAsync("OnMeasureChanged", info),
     drawingItemSelectionChanged: count => dotnet?.invokeMethodAsync("OnDrawingItemSelectionChanged", count),
     stackChanged: info => dotnet?.invokeMethodAsync("OnStackChanged", info),
+    selectionListChanged: info => dotnet?.invokeMethodAsync("OnSelectionListChanged", info),
     pagesChanged: state => dotnet?.invokeMethodAsync("OnPagesChanged", state),
     viewSizeMm: () => ({ w: el.clientWidth / scale, h: el.clientHeight / scale }),
     measurementSelectionChanged: id => dotnet?.invokeMethodAsync("OnSelectedMeasurement",
@@ -231,6 +233,11 @@ export function setSplitHandles(on) {
 export const toggleStackEnd = index => tools.select.toggleStackEnd(index);
 export const closeStack = () => tools.select.closeStack();
 
+// Selections list: labelled entries for every selected item (Select tool action menu).
+export const openSelectionList = () => tools.select.openSelectionList();
+export const closeSelectionList = () => tools.select.closeSelectionList();
+export const toggleSelectionEntry = index => tools.select.toggleSelectionEntry(index);
+
 // Guided Move on the current selection (Select tool action menu).
 export const startMove = () => tools.select.startMove();
 export const confirmMoveBase = () => tools.select.confirmMoveBase();
@@ -257,7 +264,23 @@ export function updateSymbolScale(id, value) {
     draw();
 }
 const readSymbolSource = source => dotnet.invokeMethodAsync("ReadSymbolSource", source);
-export async function reloadSymbol(id, replacement = null, text = null) {
+
+// Placed symbols whose source layers changed under a local layer choice; the UI asks which to use.
+function notifySymbolLayerUpdates(ids = null) {
+    const updated = bucket(SYMBOLS).items
+        .filter(item => (ids === null || ids.includes(item.id)) && symbolLayerState(item)?.updated)
+        .map(item => ({ id: item.id, source: item.source }));
+    if (updated.length) dotnet?.invokeMethodAsync("OnSymbolLayersUpdated", updated);
+}
+function symbolLayerEdit(change) {
+    change();
+    tools.symbol.refresh();
+    draw();
+}
+export const updateSymbolLayer = (id, layerId, visible) => symbolLayerEdit(() => setSymbolLayerVisible(id, layerId, visible));
+export const useSymbolSourceLayers = ids => symbolLayerEdit(() => ids.forEach(useSourceLayers));
+export const keepSymbolLocalLayers = ids => symbolLayerEdit(() => ids.forEach(keepLocalLayers));
+export async function reloadSymbol(id, replacement = null, text = null, notify = true) {
     if (text !== null && (replacement === null || typeof text !== "string"))
         throw new Error("Selected source text requires a replacement project");
     try {
@@ -266,15 +289,17 @@ export async function reloadSymbol(id, replacement = null, text = null) {
         tools.symbol.refresh();
         draw();
     }
+    if (notify) notifySymbolLayerUpdates();
 }
 export async function refreshSymbols() {
     for (const item of [...bucket(SYMBOLS).items]) {
         try {
-            await reloadSymbol(item.id);
+            await reloadSymbol(item.id, null, null, false);
         } catch (error) {
             log("error", `Symbol source unavailable: ${item.source}: ${error.message}`);
         }
     }
+    notifySymbolLayerUpdates();
 }
 export const getPointSettings = () => pointSettings();
 export function updatePointSettings(scale, visibility) {

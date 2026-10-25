@@ -22,6 +22,40 @@
                         @onclick="() => StepScale(1)">+</button>
             </div>
             <p class="process-text">Linked Tools group. Source coordinates are relative to the group's origin. Select moves the whole group; individual source items cannot be selected here.</p>
+            @if (info.LayersUpdated)
+            {
+                <div class="symbol-layers-updated" role="alert">
+                    <p class="process-text">Layers are updated in the source. Do you want to use the source layers?</p>
+                    <div class="process-actions">
+                        <button type="button" class="chip" disabled="@Busy" @onclick="OnKeepLocalLayers">Keep local</button>
+                        <button type="button" class="chip active" disabled="@Busy" @onclick="OnUseSourceLayers">Use source layers</button>
+                    </div>
+                </div>
+            }
+            @if (info.Layers is { Length: > 0 } layers)
+            {
+                <div class="measure-caption">Show layers@(info.LocalLayers ? " · local" : "")</div>
+                <div class="stack-list symbol-layer-list" role="group" aria-label="Source layers shown in this symbol">
+                    @foreach (var layer in layers)
+                    {
+                        <button type="button" class="chip check-chip stack-end @(layer.Visible ? "active" : "")" role="checkbox"
+                                aria-checked="@(layer.Visible.ToString().ToLowerInvariant())" disabled="@Busy"
+                                title="@(layer.Visible ? "Hide" : "Show") this source layer in this symbol only"
+                                @onclick="() => OnLayerVisible.InvokeAsync((layer.Id, !layer.Visible))">
+                            <span class="check-box" aria-hidden="true">@(layer.Visible ? "✓" : "")</span>
+                            <span class="stack-label">@layer.Name</span>
+                            @if (layer.Visible != layer.SourceVisible)
+                            {
+                                <span class="stack-meta">source: @(layer.SourceVisible ? "shown" : "hidden")</span>
+                            }
+                        </button>
+                    }
+                </div>
+                @if (info.LocalLayers && !info.LayersUpdated)
+                {
+                    <button type="button" class="chip" disabled="@Busy" @onclick="OnUseSourceLayers">Use source layers</button>
+                }
+            }
         }
         else
         {
@@ -31,6 +65,24 @@
     else
     {
         <p class="process-text">Select an AJxCAD project to reference its Tools buckets as a linked group. Only the source link, position, scale and host layer are saved here.</p>
+    }
+    @if (Recent.Count > 0 && Info?.Id is null)
+    {
+        <div class="measure-caption">Recent symbols</div>
+        <ul class="symbol-recent" aria-label="Recently imported symbols">
+            @foreach (var source in Recent)
+            {
+                <li>
+                    <button type="button" class="chip symbol-recent-place @(Info is { Id: null } pending && pending.Source == source ? "active" : "")"
+                            title="Place another copy of @source" disabled="@Busy" @onclick="() => OnRecent.InvokeAsync(source)">
+                        @System.IO.Path.GetFileNameWithoutExtension(source)
+                        <span class="symbol-recent-path">@System.IO.Path.GetDirectoryName(source)</span>
+                    </button>
+                    <button type="button" class="chip symbol-recent-remove" aria-label="Remove @source from recent symbols"
+                            title="Remove from recent symbols" disabled="@Busy" @onclick="() => OnForgetRecent.InvokeAsync(source)">×</button>
+                </li>
+            }
+        </ul>
     }
     @if (Warning is not null)
     {
@@ -57,7 +109,9 @@
 </section>
 
 @code {
-    public sealed record SymbolInfo(int? Id, string Source, double Scale, string? Error);
+    public sealed record SymbolLayer(int Id, string Name, bool Visible, bool SourceVisible);
+    public sealed record SymbolInfo(int? Id, string Source, double Scale, string? Error,
+        SymbolLayer[]? Layers = null, bool LocalLayers = false, bool LayersUpdated = false);
     [Parameter] public SymbolInfo? Info { get; set; }
     [Parameter] public bool Busy { get; set; }
     [Parameter] public string? Error { get; set; }
@@ -68,6 +122,12 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<double> OnScale { get; set; }
     [Parameter] public EventCallback<string> OnError { get; set; }
+    [Parameter] public IReadOnlyList<string> Recent { get; set; } = [];
+    [Parameter] public EventCallback<string> OnRecent { get; set; }
+    [Parameter] public EventCallback<string> OnForgetRecent { get; set; }
+    [Parameter] public EventCallback<(int LayerId, bool Visible)> OnLayerVisible { get; set; }
+    [Parameter] public EventCallback OnUseSourceLayers { get; set; }
+    [Parameter] public EventCallback OnKeepLocalLayers { get; set; }
 
     private Task StepScale(int direction)
     {

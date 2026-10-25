@@ -2067,3 +2067,57 @@ button {
     flex: 0 0 34px;
     padding: 4px 8px;
 }
+
+.symbol-layer-list {
+    max-height: calc(200px * var(--text-scale, 1));
+    overflow-y: auto;
+    margin: 4px 0 8px;
+}
+
+.symbol-layers-updated {
+    border: 1px solid rgba(255, 143, 224, 0.6);
+    border-radius: 8px;
+    padding: 6px 8px;
+    margin: 6px 0;
+}
+
+.symbol-recent {
+    list-style: none;
+    margin: 4px 0 8px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: calc(220px * var(--text-scale, 1));
+    overflow-y: auto;
+}
+
+.symbol-recent li {
+    display: flex;
+    gap: 4px;
+}
+
+.symbol-recent .symbol-recent-place {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 8px;
+    text-align: left;
+    overflow: hidden;
+}
+
+.symbol-recent-path {
+    opacity: 0.6;
+    font-size: 0.85em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+}
+
+.symbol-recent .symbol-recent-remove {
+    flex: 0 0 30px;
+    padding: 4px 6px;
+}

@@ -49,6 +49,37 @@ function drawText(g, item, view, preview = false) {
     }
 }
 
+let measureContext;
+const measurer = () => {
+    if (measureContext === undefined) {
+        try {
+            measureContext = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(1, 1).getContext("2d")
+                : typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+        } catch { measureContext = null; }
+    }
+    return measureContext;
+};
+
+// Ink extents of a text item in world units (y up), used to keep symbol borders tight.
+export function textBounds(item) {
+    const size = item.fontSize ?? DEFAULT_STYLE.fontSize, ref = 100, k = size / ref;
+    let left = 0, right = item.text.length * size * 0.6, ascent = size * 0.75, descent = size * 0.2;
+    const g = measurer();
+    if (g && item.text) {
+        g.font = fontOf({ ...item, fontSize: ref });
+        g.textAlign = "left";
+        g.textBaseline = "alphabetic";
+        const m = g.measureText(item.text);
+        if (Number.isFinite(m.actualBoundingBoxAscent)) {
+            left = -m.actualBoundingBoxLeft * k; right = m.actualBoundingBoxRight * k;
+            ascent = m.actualBoundingBoxAscent * k; descent = m.actualBoundingBoxDescent * k;
+        } else right = m.width * k;
+    }
+    if (!item.text) { right = 0; ascent = 0; descent = 0; }
+    if (item.underline && item.text) descent = Math.max(descent, size * 0.12 + size / 28);
+    return { left: item.x + left, right: item.x + right, bottom: item.y - descent, top: item.y + ascent };
+}
+
 export const textGeometry = {
     bucket: TEXTS,
     draw(g, items, view) {

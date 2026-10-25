@@ -52,6 +52,33 @@
     </div>
 </Modal>
 
+<Modal Open="@(_dialog == "symbol-layers-updated")" Title="Layers updated" Width="500" OnClose="CloseDialog">
+    <p class="data-intro">Layers are updated in the source of @(_symbolLayerUpdates.Length == 1 ? "a symbol" : $"{_symbolLayerUpdates.Length} symbols") with local layer choices. Do you want to use the source layers?</p>
+    <ul class="data-intro symbol-source">
+        @foreach (var source in _symbolLayerUpdates.Select(u => u.Source).Distinct())
+        {
+            <li title="@source">@Path.GetFileName(source)</li>
+        }
+    </ul>
+    <p class="data-intro">Keep local keeps the layers chosen in this project. Closing this asks again later; the selected symbol's information box also offers the choice.</p>
+    <div class="settings-actions">
+        <button type="button" class="chip" disabled="@_symbolBusy" @onclick="() => ResolveSymbolLayerUpdates(false)">Keep local</button>
+        <button type="button" class="chip active default-action" data-default-action disabled="@_symbolBusy"
+                @onclick="() => ResolveSymbolLayerUpdates(true)">Use source layers</button>
+    </div>
+</Modal>
+
+<Modal Open="@(_dialog == "open-symbol-source")" Title="Open source project?" Width="500" OnClose="CloseDialog">
+    <p class="data-intro">Save this host project first to keep your changes.</p>
+    <p class="data-intro symbol-source" title="@_symbolInfo?.Source">Source: @_symbolInfo?.Source</p>
+    <div class="settings-actions">
+        <button type="button" class="chip" disabled="@_symbolBusy" @onclick="CloseDialog">Cancel</button>
+        <button type="button" class="chip" disabled="@_symbolBusy" @onclick="() => ConfirmOpenSymbolSource(false)">Open without saving</button>
+        <button type="button" class="chip active default-action" data-default-action disabled="@_symbolBusy"
+                @onclick="() => ConfirmOpenSymbolSource(true)">Save host and open source</button>
+    </div>
+</Modal>
+
 @if (_showDebugMenu)
 {
     <Modal Open="@(_dialog == "testdata")" Title="Test data" Width="560" OnClose="CloseDialog">
@@ -110,6 +137,30 @@
                 }
             </section>
         }
+        else if (_selectionList is { } selList)
+        {
+            <section class="glass process-box" role="dialog" aria-label="Selections" aria-live="polite">
+                <div class="process-step">Selections · @selList.Entries.Count(e => e.Selected) of @selList.Entries.Length selected</div>
+                <p class="process-text">Each selected item is labelled on the board. Uncheck an item to remove it from the selection; check it again to restore it.</p>
+                <div class="stack-list measure-point-list" role="group" aria-label="Selected items">
+                    @for (var i = 0; i < selList.Entries.Length; i++)
+                    {
+                        var index = i;
+                        var entry = selList.Entries[i];
+                        <button type="button" class="chip check-chip stack-end @(entry.Kind == "Measurement" ? "area-option" : "") @(entry.Selected ? "active" : "")"
+                                role="checkbox" aria-checked="@(entry.Selected.ToString().ToLowerInvariant())"
+                                @onclick="() => ToggleSelectionEntry(index)">
+                            <span class="check-box" aria-hidden="true">@(entry.Selected ? "✓" : "")</span>
+                            <span class="stack-label">@entry.Label</span>
+                            <span class="stack-meta">@entry.Kind@(entry.Detail is null ? "" : $" · {entry.Detail}")</span>
+                        </button>
+                    }
+                </div>
+                <div class="process-actions">
+                    <button type="button" class="chip active default-action" data-default-action @onclick="CloseSelectionList">Close<span class="key-hint">Space</span></button>
+                </div>
+            </section>
+        }
         else if (_pointInfo is { Point: not null } pointInfo)
         {
             <PointInfoBox Info="pointInfo" OnMarkerChanged="ChangePointMarker" />
@@ -117,7 +168,9 @@
         else if (_symbolInfo is not null)
         {
             <SymbolInfoBox Info="_symbolInfo" Busy="_symbolBusy" Error="@_symbolError" Warning="@_symbolWarning" OnChoose="ChooseSymbolProject"
-                           OnRefresh="RefreshSymbol" OnOpenSource="OpenSymbolSource" OnScale="ChangeSymbolScale" OnClose="CloseSymbol" OnError="ShowSymbolError" />
+                           OnRefresh="RefreshSymbol" OnOpenSource="OpenSymbolSource" OnScale="ChangeSymbolScale" OnClose="CloseSymbol" OnError="ShowSymbolError"
+                           Recent="_symbolRecent" OnRecent="PlaceRecentSymbol" OnForgetRecent="ForgetRecentSymbol"
+                           OnLayerVisible="SetSymbolLayerVisible" OnUseSourceLayers="UseSymbolSourceLayers" OnKeepLocalLayers="KeepSymbolLocalLayers" />
         }
         else if (_textInfo is not null)
         {
@@ -181,6 +234,10 @@
                         <button type="button" class="chip @(_moveStep is not null ? "active" : "")"
                                 title="Move the selection from a base point to a destination"
                                 disabled="@(_moveStep is not null)" @onclick="StartMove">Move</button>
+                        <button type="button" class="chip @(_selectionList is not null ? "active" : "")"
+                                title="List and label every selected item; uncheck items to deselect them"
+                                aria-pressed="@((_selectionList is not null).ToString().ToLowerInvariant())"
+                                disabled="@(_moveStep is not null)" @onclick="ToggleSelectionList">Selections</button>
                         @if (_selectedItems > 0 && _moveStep is null)
                         {
                             <button type="button" class="chip danger" title="Delete selected drawing items (Delete or Backspace)"
@@ -379,7 +436,9 @@
 {
     <div class="toolmenu-dock">
         <SymbolInfoBox Info="_symbolInfo" Busy="_symbolBusy" Error="@_symbolError" Warning="@_symbolWarning" OnChoose="ChooseSymbolProject"
-                       OnRefresh="RefreshSymbol" OnOpenSource="OpenSymbolSource" OnScale="ChangeSymbolScale" OnClose="CloseSymbol" OnError="ShowSymbolError" />
+                       OnRefresh="RefreshSymbol" OnOpenSource="OpenSymbolSource" OnScale="ChangeSymbolScale" OnClose="CloseSymbol" OnError="ShowSymbolError"
+                           Recent="_symbolRecent" OnRecent="PlaceRecentSymbol" OnForgetRecent="ForgetRecentSymbol"
+                           OnLayerVisible="SetSymbolLayerVisible" OnUseSourceLayers="UseSymbolSourceLayers" OnKeepLocalLayers="KeepSymbolLocalLayers" />
     </div>
 }
 
@@ -826,6 +885,33 @@
     private async Task ToggleStackEnd(int index)
     {
         if (_cad is not null) await _cad.InvokeAsync<bool>("toggleStackEnd", index);
+    }
+
+    public sealed record SelectionEntry(string Label, string Kind, string? Detail, bool Selected);
+    public sealed record SelectionList(SelectionEntry[] Entries);
+    private SelectionList? _selectionList;
+
+    [JSInvokable]
+    public void OnSelectionListChanged(SelectionList? list)
+    {
+        _selectionList = list;
+        StateHasChanged();
+    }
+
+    private async Task ToggleSelectionList()
+    {
+        if (_cad is null) return;
+        await _cad.InvokeAsync<bool>(_selectionList is null ? "openSelectionList" : "closeSelectionList");
+    }
+
+    private async Task CloseSelectionList()
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("closeSelectionList");
+    }
+
+    private async Task ToggleSelectionEntry(int index)
+    {
+        if (_cad is not null) await _cad.InvokeAsync<bool>("toggleSelectionEntry", index);
     }
 
     public sealed record MeasurementPoint(string Label, string X, string Y, bool Selected);
@@ -1489,6 +1575,7 @@
     private bool _symbolBusy;
     private string? _symbolError;
     private string? _symbolWarning;
+    private IReadOnlyList<string> _symbolRecent = SymbolSourceFiles.Recent();
 
     [JSInvokable]
     public void OnSymbolChanged(SymbolInfoBox.SymbolInfo? info)
@@ -1559,13 +1646,65 @@
         {
             await cad.InvokeVoidAsync("prepareSymbol", file.FullPath, text);
         }
+        _symbolRecent = SymbolSourceFiles.AddRecent(file.FullPath);
         _symbolWarning = warning;
         if (warning is not null) Log("warning", warning);
     });
 
+    private Task PlaceRecentSymbol(string source) => SymbolCall(async cad =>
+    {
+        if (_filePath is not null && Path.GetFullPath(source) == Path.GetFullPath(_filePath))
+            throw new InvalidOperationException("Select another project, not the current project.");
+        var text = await SymbolSourceFiles.ReadTextAsync(source, warning => Log("warning", warning));
+        await cad.InvokeVoidAsync("prepareSymbol", source, text);
+        _symbolRecent = SymbolSourceFiles.AddRecent(source);
+        Log("action", $"placing recent symbol {source}");
+    });
+
+    private void ForgetRecentSymbol(string source)
+    {
+        if (_symbolBusy) return;
+        _symbolRecent = SymbolSourceFiles.RemoveRecent(source);
+    }
+
     private Task RefreshSymbol() => SymbolCall(async cad =>
     {
         if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("reloadSymbol", id);
+    });
+
+    public sealed record SymbolLayerUpdate(int Id, string Source);
+    private SymbolLayerUpdate[] _symbolLayerUpdates = [];
+
+    [JSInvokable]
+    public async Task OnSymbolLayersUpdated(SymbolLayerUpdate[] updates)
+    {
+        _symbolLayerUpdates = updates;
+        Log("warning", $"Symbol source layers updated: {string.Join(", ", updates.Select(u => u.Source).Distinct())}");
+        if (_dialog is null || _dialog == "symbol-layers-updated") await OpenDialog("symbol-layers-updated");
+        StateHasChanged();
+    }
+
+    private async Task ResolveSymbolLayerUpdates(bool useSource)
+    {
+        var ids = _symbolLayerUpdates.Select(u => u.Id).ToArray();
+        CloseDialog();
+        await SymbolCall(cad => cad.InvokeVoidAsync(useSource ? "useSymbolSourceLayers" : "keepSymbolLocalLayers", ids).AsTask());
+        _symbolLayerUpdates = [];
+    }
+
+    private Task SetSymbolLayerVisible((int LayerId, bool Visible) change) => SymbolCall(async cad =>
+    {
+        if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("updateSymbolLayer", id, change.LayerId, change.Visible);
+    });
+
+    private Task UseSymbolSourceLayers() => SymbolCall(async cad =>
+    {
+        if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("useSymbolSourceLayers", new[] { id });
+    });
+
+    private Task KeepSymbolLocalLayers() => SymbolCall(async cad =>
+    {
+        if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("keepSymbolLocalLayers", new[] { id });
     });
 
     private Task ChangeSymbolScale(double scale) => SymbolCall(async cad =>
@@ -1573,16 +1712,17 @@
         if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("updateSymbolScale", id, scale);
     });
 
-    private async Task OpenSymbolSource()
+    private Task OpenSymbolSource()
+    {
+        if (_symbolInfo is null || _cad is null || _symbolBusy) return Task.CompletedTask;
+        return OpenDialog("open-symbol-source");
+    }
+
+    private async Task ConfirmOpenSymbolSource(bool save)
     {
         if (_symbolInfo is not { } info || _cad is null || _symbolBusy) return;
-        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
-        if (page is null) return;
-        var choice = await page.DisplayActionSheetAsync(
-            "Open source project? Save this host project first to keep your changes.", "Cancel", null,
-            "Save host and open source", "Open source without saving host");
-        if (choice is not ("Save host and open source" or "Open source without saving host")) return;
-        if (choice == "Save host and open source" && !await SaveProject(false)) return;
+        CloseDialog();
+        if (save && !await SaveProject(false)) return;
         await SymbolCall(async cad =>
         {
             var text = await SymbolSourceFiles.ReadTextAsync(info.Source, warning => Log("warning", warning));

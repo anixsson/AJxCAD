@@ -2,14 +2,14 @@ import { bucket, defineBucket, checkpoint, newId, parseDataText } from "./store.
 import { activeLayerId } from "./layers.js";
 import { lineGeometry } from "./lines.js";
 import { shapeGeometry } from "./shapes.js";
-import { textGeometry } from "./text.js";
+import { textGeometry, textBounds } from "./text.js";
 import { pointGeometry, markerVisible } from "./points.js";
 import { createMeasurementTool, dimensionOf } from "./tools/measurement.js";
 import { drawSnapIndicator } from "./snap-indicator.js";
 
 export const SYMBOLS = "symbols";
 defineBucket(SYMBOLS, {
-    label: "Symbols", fields: ["id", "source", "x", "y", "scale", "layerId"]
+    label: "Symbols", fields: ["id", "source", "x", "y", "scale", "layerId", "sourceLayers"]
 });
 const sources = new Map();
 const requests = new WeakMap();
@@ -53,8 +53,78 @@ export function parseSymbolSource(text) {
     }
     return {
         buckets, project, visible, items: name => (buckets.get(name) ?? []).filter(visible),
+        layers: [...layers.values()].map(l => ({ id: l.id, name: String(l.name ?? `Layer ${l.id}`), visible: l.visible !== false })),
         settings: { scale: project.pointScale ?? 100, visibility: project.pointVisibility ?? "local" }
     };
+}
+
+// Local layer visibility of one placed symbol. `item.sourceLayers` is null (follow the source) or
+// [[layerId, visible, sourceVisibleWhenChosen], ...]: the local choice wins until the user takes the source layers.
+const localLayers = item => new Map((Array.isArray(item.sourceLayers) ? item.sourceLayers : [])
+    .filter(e => Array.isArray(e) && e.length >= 3).map(([id, visible, source]) => [id, { visible: !!visible, source: !!source }]));
+
+export function symbolLayerState(item) {
+    const source = symbolSourceState(item).source;
+    if (!source) return null;
+    const local = Array.isArray(item.sourceLayers) ? localLayers(item) : null;
+    const layers = source.layers.map(l => ({
+        id: l.id, name: l.name, sourceVisible: l.visible, visible: local?.get(l.id)?.visible ?? l.visible
+    }));
+    const updated = !!local && source.layers.some(l => !local.has(l.id) || local.get(l.id).source !== l.visible);
+    return { layers, local: !!local, updated };
+}
+
+// The source's items as this placed symbol shows them (its local layer choices applied).
+export function symbolItems(item, source) {
+    if (!Array.isArray(item.sourceLayers)) return source.items;
+    const local = localLayers(item);
+    const shown = entry => {
+        if (entry.layerId == null) return true;
+        const choice = local.get(entry.layerId);
+        return choice ? choice.visible : source.visible(entry);
+    };
+    return name => (source.buckets.get(name) ?? []).filter(shown);
+}
+
+// Drops the local choice when it matches the source exactly, so the symbol simply follows the source again.
+function settleLayers(item, source) {
+    const local = localLayers(item);
+    if (source.layers.every(l => local.get(l.id)?.visible === l.visible && local.get(l.id)?.source === l.visible))
+        item.sourceLayers = null;
+}
+
+function requireLoadedSymbol(id) {
+    const item = requireSymbol(id), source = symbolSourceState(item).source;
+    if (!source) throw new Error("Symbol source is not loaded");
+    return { item, source };
+}
+
+export function setSymbolLayerVisible(id, layerId, visible) {
+    const { item, source } = requireLoadedSymbol(id);
+    if (!source.layers.some(l => l.id === layerId)) throw new Error(`Unknown source layer: ${layerId}`);
+    checkpoint();
+    const local = Array.isArray(item.sourceLayers) ? localLayers(item) : new Map();
+    for (const l of source.layers) if (!local.has(l.id)) local.set(l.id, { visible: l.visible, source: l.visible });
+    local.get(layerId).visible = !!visible;
+    item.sourceLayers = [...local].map(([lid, e]) => [lid, e.visible, e.source]);
+    settleLayers(item, source);
+}
+
+export function useSourceLayers(id) {
+    const { item } = requireLoadedSymbol(id);
+    if (item.sourceLayers == null) return;
+    checkpoint();
+    item.sourceLayers = null;
+}
+
+// Keeps the local choices and accepts the source's current layers as the new baseline (no further prompt).
+export function keepLocalLayers(id) {
+    const { item, source } = requireLoadedSymbol(id);
+    if (!Array.isArray(item.sourceLayers)) return;
+    checkpoint();
+    const local = localLayers(item);
+    item.sourceLayers = source.layers.map(l => [l.id, local.get(l.id)?.visible ?? l.visible, l.visible]);
+    settleLayers(item, source);
 }
 
 export function symbolBounds(item, ancestry = new Set()) {
@@ -69,25 +139,24 @@ export function symbolBounds(item, ancestry = new Set()) {
         left = Math.min(left, x); right = Math.max(right, x);
         bottom = Math.min(bottom, y); top = Math.max(top, y);
     };
-    const source = state.source;
-    for (const geo of sourceGeometries) for (const entry of source.items(geo.bucket)) {
+    const source = state.source, items = symbolItems(item, source);
+    for (const geo of sourceGeometries) for (const entry of items(geo.bucket)) {
         if (geo === pointGeometry && !markerVisible(entry, source.settings)) continue;
         if (geo === shapeGeometry && entry.type === "circle") {
             const radius = Math.hypot(entry.x2 - entry.x1, entry.y2 - entry.y1);
             include(entry.x1 - radius, entry.y1 - radius); include(entry.x1 + radius, entry.y1 + radius);
         } else if (geo === textGeometry) {
-            const size = entry.fontSize ?? 4.5;
-            include(entry.x, entry.y - size * 0.3);
-            include(entry.x + entry.text.length * size, entry.y + size * 1.2);
+            const r = textBounds(entry);
+            include(r.left, r.bottom); include(r.right, r.top);
         } else for (const p of geo.points(entry)) include(p.x, p.y);
     }
-    for (const entry of source.items("measures")) {
+    for (const entry of items("measures")) {
         const pts = entry.points.filter(p => p.enabled !== false);
         for (const p of pts) include(p.x, p.y);
         const dim = dimensionOf(pts, entry.dimension);
         if (dim) { include(dim.a2.x, dim.a2.y); include(dim.b2.x, dim.b2.y); }
     }
-    for (const entry of source.items(SYMBOLS)) {
+    for (const entry of items(SYMBOLS)) {
         const bounds = symbolBounds(entry, next);
         include(bounds.left, bounds.bottom); include(bounds.right, bounds.top);
     }
@@ -188,7 +257,7 @@ export const symbolGeometry = {
         g.setLineDash([5 * d, 4 * d]);
         g.strokeStyle = view.paper ? "#000" : "#ff8fe0";
         g.lineWidth = 1.5 * d;
-        g.strokeRect(a.x * d - 4 * d, a.y * d - 4 * d, (b.x - a.x + 8) * d, (b.y - a.y + 8) * d);
+        g.strokeRect(a.x * d, a.y * d, (b.x - a.x) * d, (b.y - a.y) * d);
         g.restore();
     },
     draw(g, items, view, ancestry = new Set()) {
@@ -217,9 +286,10 @@ export const symbolGeometry = {
                     pointPrintPx: (view.pointPrintPx || 1) * item.scale,
                     toScreen: (x, y) => view.toScreen(item.x + x * item.scale, item.y + y * item.scale)
                 };
-                for (const geo of sourceGeometries) geo.draw(g, source.items(geo.bucket), sourceView);
-                this.draw(g, source.items(SYMBOLS), sourceView, new Set(ancestry).add(item.source));
-                createMeasurementTool({ visibleItems: source.items,
+                const items = symbolItems(item, source);
+                for (const geo of sourceGeometries) geo.draw(g, items(geo.bucket), sourceView);
+                this.draw(g, items(SYMBOLS), sourceView, new Set(ancestry).add(item.source));
+                createMeasurementTool({ visibleItems: items,
                     formatLength: symbolFormat(source.project).length, formatArea: symbolFormat(source.project).area
                 }).drawSaved(g, sourceView);
             }
@@ -235,7 +305,9 @@ export function createSymbolTool(env) {
     let selectedId = null, pending = null, hover = null;
     const publish = () => {
         const item = bucket(SYMBOLS).items.find(item => item.id === selectedId);
-        env.symbolChanged?.(item ? { id: item.id, source: item.source, scale: item.scale, error: symbolSourceState(item).error ?? null }
+        const layers = item ? symbolLayerState(item) : null;
+        env.symbolChanged?.(item ? { id: item.id, source: item.source, scale: item.scale, error: symbolSourceState(item).error ?? null,
+            layers: layers?.layers ?? null, localLayers: layers?.local ?? false, layersUpdated: layers?.updated ?? false }
             : pending ? { id: null, source: pending, scale: 1, error: null } : null);
         env.redraw();
     };

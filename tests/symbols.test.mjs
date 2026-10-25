@@ -5,7 +5,8 @@ import { normalizeLayers, activeLayerId, updateLayer, visibleItems } from "../ww
 import { addLine } from "../wwwroot/cad/lines.js";
 import { addText, createTextTool } from "../wwwroot/cad/text.js";
 import { SYMBOLS, parseSymbolSource, prepareSymbolSource, addSymbol, setSymbolScale, refreshSymbol,
-    symbolSourceState, symbolBounds, clearSymbolSources, symbolGeometry, createSymbolTool } from "../wwwroot/cad/symbols.js";
+    symbolSourceState, symbolBounds, clearSymbolSources, symbolGeometry, createSymbolTool,
+    symbolLayerState, setSymbolLayerVisible, useSourceLayers, keepLocalLayers } from "../wwwroot/cad/symbols.js";
 import { createSelectTool } from "../wwwroot/cad/tools/select.js";
 import { pagePdf } from "../wwwroot/cad/pdf.js";
 
@@ -71,8 +72,9 @@ test("the host Symbols bucket persists only a reference and transform, never sou
     const item = addSymbol("/source.ajx", 10, 20);
     setSymbolScale(item.id, 3);
     const saved = serialize(), doc = JSON.parse(saved), b = doc.buckets.find(b => b.name === SYMBOLS);
-    assert.deepEqual(b.fields, ["id", "source", "x", "y", "scale", "layerId"]);
-    assert.deepEqual(b.rows[0], [item.id, "/source.ajx", 10, 20, 3, activeLayerId()]);
+    assert.deepEqual(b.fields, ["id", "source", "x", "y", "scale", "layerId", "sourceLayers"]);
+    assert.deepEqual(b.rows[0].slice(0, 6), [item.id, "/source.ajx", 10, 20, 3, activeLayerId()]);
+    assert.equal(b.rows[0][6] ?? null, null, "symbols follow source layers by default");
     assert.ok(!saved.includes("Source only") && !saved.includes("image"));
     assert.equal(doc.buckets.find(b => b.name === "lines").rows.length, 0);
     deserialize(saved);
@@ -297,4 +299,66 @@ test("engine reload uses selected text, sources reload after host open and impor
         engine.dispose();
         for (const key of ["window", "document", "ResizeObserver", "requestAnimationFrame", "cancelAnimationFrame"]) delete globalThis[key];
     }
+});
+
+test("symbol border hugs the outermost source nodes without padding or loose text estimates", async () => {
+    reset();
+    await prepareSymbolSource("/tight.ajx", data({
+        lines: [{ x1: 0, y1: 0, x2: 40, y2: 10 }],
+        texts: [{ text: "Hi", x: 0, y: 0, fontSize: 10 }]
+    }), noRead);
+    const item = addSymbol("/tight.ajx", 100, 100);
+    const r = symbolBounds(item);
+    assert.equal(r.left, 100); assert.equal(r.right, 140); assert.equal(r.top, 110);
+    assert.ok(r.bottom > 100 - 3, "text descent stays close to the baseline");
+    const { g, calls } = context();
+    symbolGeometry.drawSelection(g, view(), item);
+    const rect = calls.find(c => c[0] === "strokeRect");
+    assert.deepEqual(rect.slice(1), [r.left, 1000 - r.top, r.right - r.left, r.top - r.bottom]);
+});
+
+test("a placed symbol chooses its shown source layers locally and is asked when the source layers change", async () => {
+    reset();
+    const source = (aVisible, bVisible) => data({
+        layers: [{ id: 10, name: "Walls", visible: aVisible }, { id: 11, name: "Notes", visible: bVisible }],
+        lines: [{ x1: 0, y1: 0, x2: 10, y2: 10, layerId: 10 }, { x1: 0, y1: 0, x2: 50, y2: 50, layerId: 11 }]
+    });
+    await prepareSymbolSource("/l.ajx", source(true, true), noRead);
+    const item = addSymbol("/l.ajx", 0, 0), other = addSymbol("/l.ajx", 500, 0);
+    assert.deepEqual(symbolLayerState(item), { local: false, updated: false, layers: [
+        { id: 10, name: "Walls", sourceVisible: true, visible: true },
+        { id: 11, name: "Notes", sourceVisible: true, visible: true }] });
+    assert.equal(symbolBounds(item).right, 50);
+
+    setSymbolLayerVisible(item.id, 11, false);
+    assert.equal(symbolBounds(item).right, 10, "the hidden local layer leaves the symbol and its border");
+    assert.equal(symbolBounds(other).right, 550, "other placements of the same source are unaffected");
+    assert.deepEqual(item.sourceLayers, [[10, true, true], [11, false, true]]);
+    const saved = JSON.parse(serialize()).buckets.find(b => b.name === SYMBOLS).rows[0];
+    assert.deepEqual(saved.at(-1), [[10, true, true], [11, false, true]]);
+
+    setSymbolLayerVisible(item.id, 11, true);
+    assert.equal(item.sourceLayers, null, "matching the source again follows the source");
+    undo();
+    assert.deepEqual(bucket(SYMBOLS).items[0].sourceLayers, [[10, true, true], [11, false, true]], "layer choices undo");
+    const placed = bucket(SYMBOLS).items[0];
+
+    // The source changes behind: Walls is hidden there now. The local choice still wins, and an update is flagged.
+    await refreshSymbol(placed.id, async () => ({ text: source(false, true) }));
+    const state = symbolLayerState(placed);
+    assert.equal(state.updated, true);
+    assert.deepEqual(state.layers.map(l => [l.name, l.visible, l.sourceVisible]), [["Walls", true, false], ["Notes", false, true]]);
+    assert.equal(symbolBounds(placed).right, 10, "local layers keep overriding the source");
+    assert.equal(symbolLayerState(bucket(SYMBOLS).items[1]).updated, false, "symbols without local layers just follow");
+
+    keepLocalLayers(placed.id);
+    assert.deepEqual(symbolLayerState(placed).updated, false, "keeping local accepts the new baseline");
+    assert.deepEqual(placed.sourceLayers, [[10, true, false], [11, false, true]]);
+
+    await refreshSymbol(placed.id, async () => ({ text: source(true, false) }));
+    assert.equal(symbolLayerState(placed).updated, true);
+    useSourceLayers(placed.id);
+    assert.equal(placed.sourceLayers, null);
+    assert.equal(symbolBounds(placed).right, 10, "source layers: Walls shown, Notes hidden");
+    assert.throws(() => setSymbolLayerVisible(placed.id, 999, true), /Unknown source layer/);
 });

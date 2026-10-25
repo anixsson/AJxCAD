@@ -8,7 +8,7 @@ import { pageRect, paperSize, textSizeOf } from "./pages.js";
 import { pageComponentGeometry } from "./page-components.js";
 import { layerPrintable } from "./layers.js";
 import { pointSettings, markerVisible } from "./points.js";
-import { symbolSourceState, symbolBounds, symbolFormat } from "./symbols.js";
+import { symbolSourceState, symbolBounds, symbolFormat, symbolItems } from "./symbols.js";
 import { displayOf, polygonArea, polygonCentroid, corners, formatAngle, dimensionOf, readableAngle, PRINT_SIZES, scaleSizes } from "./tools/measurement.js";
 
 const PT_PER_MM = 72 / 25.4;
@@ -236,12 +236,12 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
             marks.push("Q");
             continue;
         }
-        const source = state.source;
+        const source = state.source, items = symbolItems(item, source);
         const sourcePage = { ...page, x: (page.x - item.x) / item.scale, y: (page.y - item.y) / item.scale,
             scale: page.scale / item.scale, compass: null, ruler: null };
-        marks.push(pagePdf(sourcePage, source.items("lines"), source.items("measures"), symbolFormat(source.project),
-            source.items("shapes"), source.items("texts"), source.items("points"), source.items("symbols"), {
-                contentOnly: true, printable: source.visible, pointSettings: source.settings,
+        marks.push(pagePdf(sourcePage, items("lines"), items("measures"), symbolFormat(source.project),
+            items("shapes"), items("texts"), items("points"), items("symbols"), {
+                contentOnly: true, printable: () => true, pointSettings: source.settings,
                 annotationScale: (options.annotationScale ?? 1) * item.scale,
                 ancestry: new Set(ancestry).add(item.source)
             }));
