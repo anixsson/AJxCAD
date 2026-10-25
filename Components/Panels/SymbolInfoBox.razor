@@ -1,3 +1,5 @@
+@implements IDisposable
+
 <section class="glass process-box symbol-info-box" aria-label="Symbol import" aria-live="polite">
     <div class="process-step">Symbol import</div>
     @if (Info is { } info)
@@ -11,15 +13,19 @@
         {
             <label class="measure-caption" for="symbol-scale">Scale factor</label>
             <div class="symbol-scale-row">
-                <input id="symbol-scale" class="text-input" type="number" min="0.000001" max="10000" step="0.1"
+                <input id="symbol-scale" class="text-input" type="number" min="0.000001" max="10000" step="0.05"
                        value="@info.Scale.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                        disabled="@Busy" @onchange="ChangeScale" />
                 <button type="button" class="chip symbol-scale-button" aria-label="Decrease symbol scale"
-                        title="Decrease scale by 0.1" disabled="@(Busy || info.Scale <= 0.1)"
-                        @onclick="() => StepScale(-1)">-</button>
+                        title="Decrease scale by 0.05" disabled="@(Busy || info.Scale <= 0.05)"
+                        @onpointerdown="e => ScaleHoldStart(-1, e)" @onpointerup="ScaleHoldStop"
+                        @onpointerleave="ScaleHoldStop" @onpointercancel="ScaleHoldStop"
+                        @onclick="e => ScaleClick(-1, e)">-</button>
                 <button type="button" class="chip symbol-scale-button" aria-label="Increase symbol scale"
-                        title="Increase scale by 0.1" disabled="@(Busy || info.Scale >= 10000)"
-                        @onclick="() => StepScale(1)">+</button>
+                        title="Increase scale by 1" disabled="@(Busy || info.Scale >= 10000)"
+                        @onpointerdown="e => ScaleHoldStart(1, e)" @onpointerup="ScaleHoldStop"
+                        @onpointerleave="ScaleHoldStop" @onpointercancel="ScaleHoldStop"
+                        @onclick="e => ScaleClick(1, e)">+</button>
             </div>
             <p class="process-text">Linked Tools group. Source coordinates are relative to the group's origin. Select moves the whole group; individual source items cannot be selected here.</p>
             @if (info.LayersUpdated)
@@ -129,10 +135,58 @@
     [Parameter] public EventCallback OnUseSourceLayers { get; set; }
     [Parameter] public EventCallback OnKeepLocalLayers { get; set; }
 
+    private CancellationTokenSource? _scaleHold;
+    private int? _scaleHoldId;
+
+    protected override void OnParametersSet()
+    {
+        if (_scaleHold is not null && Info?.Id != _scaleHoldId) ScaleHoldStop();
+    }
+
+    private bool CanStepScale(int direction) =>
+        !Busy && Info is { Id: not null } info && (direction < 0 ? info.Scale > 0.05 : info.Scale < 10000);
+
+    private async Task ScaleHoldStart(int direction, PointerEventArgs args)
+    {
+        if (args.Button != 0 || !args.IsPrimary) return;
+        ScaleHoldStop();
+        if (!CanStepScale(direction)) return;
+
+        var hold = new CancellationTokenSource();
+        _scaleHold = hold;
+        _scaleHoldId = Info?.Id;
+        var delay = 400;
+        try
+        {
+            await StepScale(direction);
+            while (!hold.IsCancellationRequested && CanStepScale(direction))
+            {
+                await Task.Delay(delay, hold.Token);
+                delay = Math.Max(60, (int)(delay * 0.75));
+                if (!hold.IsCancellationRequested) await StepScale(direction);
+            }
+        }
+        catch (OperationCanceledException) when (hold.IsCancellationRequested) { }
+        finally
+        {
+            if (ReferenceEquals(_scaleHold, hold)) _scaleHold = null;
+            hold.Dispose();
+        }
+    }
+
+    private void ScaleHoldStop()
+    {
+        _scaleHold?.Cancel();
+        _scaleHold = null;
+    }
+
+    private Task ScaleClick(int direction, MouseEventArgs args) =>
+        args.Detail == 0 ? StepScale(direction) : Task.CompletedTask;
+
     private Task StepScale(int direction)
     {
-        if (Busy || Info is not { Id: not null } info) return Task.CompletedTask;
-        var value = Math.Clamp(Math.Round(info.Scale + direction * 0.1, 6), 0.000001, 10000);
+        if (!CanStepScale(direction) || Info is not { } info) return Task.CompletedTask;
+        var value = Math.Clamp(Math.Round(info.Scale + (direction < 0 ? -0.05 : 1), 6), 0.000001, 10000);
         return OnScale.InvokeAsync(value);
     }
 
@@ -147,4 +201,6 @@
         }
         await OnScale.InvokeAsync(value);
     }
+
+    public void Dispose() => ScaleHoldStop();
 }

@@ -7,7 +7,3 @@
 # Symbol import
 - holdin gin button to scale will do it automaticly
 
-
-# save
-- Save before quit
-- Autosave

@@ -1723,6 +1723,7 @@
     private string? _filePath;
     private SymbolInfoBox.SymbolInfo? _symbolInfo;
     private bool _symbolBusy;
+    private bool _symbolCallActive;
     private string? _symbolError;
     private string? _symbolWarning;
     private IReadOnlyList<string> _symbolRecent = SymbolSourceFiles.Recent();
@@ -1758,10 +1759,11 @@
         Log("error", $"Symbol import: {error}");
     }
 
-    private async Task SymbolCall(Func<IJSObjectReference, Task> action)
+    private async Task SymbolCall(Func<IJSObjectReference, Task> action, bool showBusy = true)
     {
-        if (_cad is null || _symbolBusy) return;
-        _symbolBusy = true;
+        if (_cad is null || _symbolBusy || _symbolCallActive) return;
+        _symbolCallActive = true;
+        _symbolBusy = showBusy;
         _symbolError = null;
         try
         {
@@ -1774,6 +1776,7 @@
         finally
         {
             _symbolBusy = false;
+            _symbolCallActive = false;
         }
     }
 
@@ -1860,7 +1863,7 @@
     private Task ChangeSymbolScale(double scale) => SymbolCall(async cad =>
     {
         if (_symbolInfo?.Id is { } id) await cad.InvokeVoidAsync("updateSymbolScale", id, scale);
-    });
+    }, showBusy: false);
 
     private Task OpenSymbolSource()
     {

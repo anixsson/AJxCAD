@@ -2144,6 +2144,8 @@ button {
 .symbol-scale-button {
     flex: 0 0 34px;
     padding: 4px 8px;
+    touch-action: none;
+    user-select: none;
 }
 
 .symbol-layer-list {
