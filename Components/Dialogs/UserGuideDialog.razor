@@ -46,7 +46,7 @@
             ("Point", "Press N and click to place a single point, snapping to existing nodes or the grid. Its fixed-screen-size marker has two opposite red quarters and extended crosshairs. Select one point to open its information box and drag to move it"),
             ("Edit", "Press S, select a line end and drag it to a new position"),
             ("Measure", "Press M, then click two points"),
-            ("Explore", "Press V for the Cross tool, right-drag to pan and scroll to zoom"),
+            ("Explore", "Press V for the hand-shaped Pan tool. Drag or scroll with two fingers to pan; pinch or Ctrl-scroll to zoom. Right-drag pans in every tool"),
             ("Keep your work", "Apply title changes in Project settings, then use File > Save to write the project to disk. (Unsaved) after the title means project data differs from the last save; saving or undoing back to the saved state clears it"),
             ("Close or quit", "Unsaved project changes open Save before quitting? Choose Save, Don't save, or Cancel to keep working. Canceling the save picker or a failed save keeps the app open. Panning and zooming alone do not prompt; apply tool information-box edits before quitting to include them")
         ]),
@@ -113,10 +113,12 @@
             ("Print", "Uncheck to exclude a visible layer from print preview, printing and PDF export. Pages do not belong to layers and remain available in Print / Export"),
             ("Undo and save", "Layer creation, names, checkboxes and assignments are undoable. File > Save keeps changes on disk")
         ]),
-        new("Cross", "V", "The default tool. Nothing is drawn or changed; use it to look around the drawing.",
+        new("Pan", "V", "The default, hand-shaped tool. Nothing is drawn or changed; use it to look around the drawing.",
         [
-            ("V", "Switch to the Cross tool"),
-            ("Esc", "Return to the Cross tool from any other tool")
+            ("V", "Switch to the Pan tool"),
+            ("Drag (trackpad or left mouse)", "Pan the drawing"),
+            ("Two-finger scroll", "Pan horizontally and vertically; pinch or Ctrl-scroll to zoom"),
+            ("Esc", "Return to the Pan tool from any other tool")
         ]),
         new("Toolmenus and options", "", "The bottom-center bars show controls for the active tool. Checkbox buttons show a tick when enabled.",
         [
@@ -151,7 +153,7 @@
             ("Click empty space", "Clear the selection"),
             ("Actions > Move", "With a selection, press Move, click a base point (such as a corner), press Next or Space, then click the destination. A preview and offset show where the selection will go"),
             ("Actions > Selections", "Lists every selected item and labels it on the board: L lines, C circles, R rectangles, T text, P points, S symbols, M measurements (L1, S1, M1, ...). Uncheck an entry to deselect that item; check it again to restore it. Close or Esc closes the list"),
-            ("Esc", "Cancel a running Move, then close an open Corner box; once neither is open, return to the Cross tool"),
+            ("Esc", "Cancel a running Move, then close an open Corner box; once neither is open, return to the Pan tool"),
             ("Cmd/Ctrl + Z", "Undo the move")
         ]),
         new("Measurement", "M", "Measure without changing drawing lines. Click two points to see their distance, x and y difference, and coordinates. Finished multi-point measurements can be saved as annotations in the Measurements bucket.",
@@ -178,7 +180,7 @@
             ("Cmd/Ctrl + Z", "While adding points, remove the last point"),
             ("Grid + nodes", "Default. Snap to line ends, otherwise to the grid"),
             ("Nodes only", "Ignore the grid; only line ends can be picked"),
-            ("Esc", "Clear the measurement; press again to return to the Cross tool")
+            ("Esc", "Clear the measurement; press again to return to the Pan tool")
         ]),
         new("Line", "L", "Draw straight lines. Click to set the start, click again to place the end. With Multi checked, the next line starts where the last one ended; otherwise, each pair of clicks draws a separate line. Points snap to the grid and to existing line ends, and the length is shown while drawing.",
         [
@@ -187,7 +189,7 @@
             ("Shift", "Lock the angle to 45° steps"),
             ("Space", "End the current chain; placed lines stay and the next click starts a new line"),
             ("Toolmenu: Multi", "Checked (default) keeps drawing connected lines; unchecked draws one line per two clicks. Changing it cancels the pending segment but keeps placed lines"),
-            ("Double-click or Esc", "Finish and return to the Cross tool"),
+            ("Double-click or Esc", "Finish and return to the Pan tool"),
             ("Cmd/Ctrl + Z", "Cancel the current line, then undo placed lines")
         ]),
         new("Page", "P", "Lay out print pages. A page frame is a sheet of paper (ISO A5–A0, or US Letter, Legal, Tabloid, ANSI C and ANSI D) multiplied by a scale factor: at 1:50 the frame covers 50 times the paper size of the drawing. Pages live in the Pages bucket and are saved with the project. Visible frames show on the board with every tool.",
@@ -204,13 +206,15 @@
             ("Save or Space", "Store the edits. Cancel or Esc goes back to the saved page. Selecting another page discards unsaved edits"),
             ("Zoom to", "Fit the selected page in the view"),
             ("Delete", "Remove the page frame; Cmd/Ctrl + Z restores it"),
-            ("Esc", "Stop placing, then discard unsaved edits, then clear the selection; once nothing is open, return to the Cross tool"),
+            ("Esc", "Stop placing, then discard unsaved edits, then clear the selection; once nothing is open, return to the Pan tool"),
             ("Cmd/Ctrl + Z", "Drop the frame being placed or unsaved edits first, then undo placing, moving, saving, showing or hiding, No select changes, and deleting pages")
         ]),
         new("Navigation and scale", "", "Pan and zoom in any tool. The scale panel shows the current ratio, grid spacing and a measured scale bar. Its expandable settings control the measuring system and 1:1 reference.",
         [
             ("Right mouse + drag", "Pan"),
-            ("Mouse wheel", "Zoom at the cursor"),
+            ("Drag with the Pan tool", "Pan with a trackpad click-drag or the left mouse button"),
+            ("Scroll with the Pan tool", "Two-finger scrolling or the mouse wheel pans the board horizontally and vertically"),
+            ("Zoom at the cursor", "Pinch or Ctrl-scroll in Pan; scrolling also zooms in every other tool"),
             ("+ / − buttons", "Step the zoom; hold to zoom continuously"),
             ("1:1", "Reset the zoom to the chosen reference scale"),
             ("Center", "Return to the origin without changing the current zoom"),
@@ -236,7 +240,7 @@
         new("Undo and keyboard shortcuts", "", "Undo drawing and line-end moves with Edit > Undo or the keyboard. Tool shortcuts are paused while a dialog is open or you are typing in an input.",
         [
             ("Cmd/Ctrl + Z", "Undo a drawing edit. In the Line tool, first cancel the current line, then undo placed lines"),
-            ("Esc", "Close an open dialog or menu; otherwise return to the Cross tool"),
+            ("Esc", "Close an open dialog or menu; otherwise return to the Pan tool"),
             ("Space", "Press the glowing default button in a guide box, such as Next in Move"),
             ("V / S / L / O / R / T", "Choose Cross, Select, Line, Circle, Rectangle or Text when working in the workspace"),
             ("Project settings", "Title changes are not part of drawing undo"),

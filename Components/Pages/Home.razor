@@ -253,6 +253,14 @@
                                 aria-pressed="@((_selectionMode == mode).ToString().ToLowerInvariant())"
                                 @onclick="() => SetSelectionMode(mode)">@(mode == "nodes" ? "Nodes" : "Lines")</button>
                     }
+                    @if (_selectionCount > 0)
+                    {
+                        <span class="toolmenu-divider" role="separator" aria-orientation="vertical"></span>
+                        <button type="button" class="chip @(_selectionList is not null ? "active" : "")"
+                                title="List and label every selected item; uncheck items to deselect them"
+                                aria-pressed="@((_selectionList is not null).ToString().ToLowerInvariant())"
+                                disabled="@(_moveStep is not null)" @onclick="ToggleSelectionList">Selections</button>
+                    }
                 </div>
             </aside>
             @if (_selectionCount > 0)
@@ -263,10 +271,10 @@
                         <button type="button" class="chip @(_moveStep is not null ? "active" : "")"
                                 title="Move the selection from a base point to a destination"
                                 disabled="@(_moveStep is not null)" @onclick="StartMove">Move</button>
-                        <button type="button" class="chip @(_selectionList is not null ? "active" : "")"
-                                title="List and label every selected item; uncheck items to deselect them"
-                                aria-pressed="@((_selectionList is not null).ToString().ToLowerInvariant())"
-                                disabled="@(_moveStep is not null)" @onclick="ToggleSelectionList">Selections</button>
+                        @if ((_selectedItems > 0 || _selectedMeasurement is not null) && _moveStep is null)
+                        {
+                            <span class="toolmenu-divider" role="separator" aria-orientation="vertical"></span>
+                        }
                         @if (_selectedItems > 0 && _moveStep is null)
                         {
                             <button type="button" class="chip danger" title="Delete selected drawing items (Delete or Backspace)"
@@ -1427,8 +1435,8 @@
 
     private static readonly ToolDef[] _tools =
     [
-        new("cross", "Cross", "V", "general", "<path class=\"cross\" d=\"M12 3v7M12 14v7M3 12h7M14 12h7\"/>"),
-        new("select", "Select", "S", "general", "<path d=\"M5 3l14 8.5-6.2 1.6 3.7 6.4-2.6 1.5-3.7-6.4L5 18z\"/>"),
+        new("cross", "Pan", "V", "general", "<path class=\"outline\" d=\"M8 12V5a1.5 1.5 0 0 1 3 0v6-8a1.5 1.5 0 0 1 3 0v8-6a1.5 1.5 0 0 1 3 0v6-3a1.5 1.5 0 0 1 3 0v7c0 4-2 7-6 7h-1c-2 0-3-1-4-2L4 13a1.5 1.5 0 0 1 2-2l2 1z\"/>"),
+        new("select", "Select", "S", "general", "<path class=\"cross\" d=\"M12 3v7M12 14v7M3 12h7M14 12h7\"/>"),
         new("page", "Page", "P", "data", "<path class=\"outline\" d=\"M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6\"/>"),
         new("line", "Line", "L", "data", "<path d=\"M5 19L19 5\"/><rect x=\"3\" y=\"17\" width=\"4\" height=\"4\"/><rect x=\"17\" y=\"3\" width=\"4\" height=\"4\"/>"),
         new("measurement", "Measurement", "M", "data", "<path class=\"outline\" d=\"M3 16.5L16.5 3 21 7.5 7.5 21zM7 12.5l2 2M10 9.5l1.5 1.5M13 6.5l2 2\"/>"),

@@ -37,8 +37,8 @@ button {
     background-image: radial-gradient(ellipse at 50% 45%, rgba(70, 50, 150, 0.45), rgba(10, 10, 28, 0) 75%);
 }
 
-.workspace.tool-select {
-    cursor: default;
+.workspace:not(.drawing) {
+    cursor: grab;
 }
 
 .workspace.panning {
@@ -1163,7 +1163,9 @@ button {
     border-radius: 11px;
 }
 
-.snap-divider {
+.snap-divider,
+.toolmenu-divider {
+    flex: none;
     align-self: stretch;
     margin: 2px 5px;
     border-left: 1px solid currentColor;

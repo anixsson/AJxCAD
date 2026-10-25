@@ -1,0 +1,8 @@
+{
+  "sdk": {
+    "version": "10.0.402",
+    "rollForward": "latestPatch",
+    "allowPrerelease": false,
+    "workloadVersion": "10.0.402.1"
+  }
+}

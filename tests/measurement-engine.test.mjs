@@ -26,6 +26,8 @@ test("only Select opens saved measurement text; blue points select without openi
         clientWidth: 1024, clientHeight: 768, style: {},
         classList: { toggle() {}, add() {}, remove() {} },
         setPointerCapture() {},
+        hasPointerCapture() { return true; },
+        releasePointerCapture() {},
         getBoundingClientRect: () => ({ left: 0, top: 0 }),
         focus() { document.activeElement = workspace; }
     });
@@ -154,6 +156,18 @@ test("only Select opens saved measurement text; blue points select without openi
         const area = texts.find(t => t.text.endsWith("²"));
         click(area.x, area.y);
         assert.equal(calls.findLast(c => c.name === "OnToolChanged").args[0], "cross");
+
+        const drag = (button, from, to) => {
+            for (const [type, [x, y]] of [["pointerdown", from], ["pointermove", to], ["pointerup", to]]) {
+                workspace.dispatchEvent(Object.assign(new Event(type), { button, clientX: x, clientY: y, detail: 1, pointerId: 1 }));
+            }
+            flush();
+        };
+        const viewBefore = engine.getDataText();
+        drag(0, [300, 300], [380, 340]);
+        assert.notEqual(engine.getDataText(), viewBefore, "Cross tool: a primary-button (trackpad) drag pans");
+        drag(2, [380, 340], [300, 300]);
+        assert.equal(engine.getDataText(), viewBefore, "right-button drag pans back");
         engine.setTool("select");
         flush();
         click(200, 200);

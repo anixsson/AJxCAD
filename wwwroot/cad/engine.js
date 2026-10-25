@@ -1,4 +1,4 @@
-// Canvas workspace: grid drawing, zoom, right-mouse-button panning, and the tool host.
+// Canvas workspace: grid drawing, zoom, right-mouse-button (and Pan-tool drag/scroll) panning, and the tool host.
 // Everything pointer-related stays in JS so panning never round-trips through Blazor.
 // Tools live in ./tools, data lives in per-tool buckets in ./store.js.
 
@@ -841,7 +841,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
         return { sx: e.clientX - r.left, sy: e.clientY - r.top, shift: e.shiftKey, control: e.ctrlKey || e.metaKey, detail: e.detail, pointerId: e.pointerId };
     };
 
-    // Right mouse button pans.
+    // Right mouse button pans in every tool; the Pan tool also pans with a primary-button drag.
     on(el, "contextmenu", e => e.preventDefault());
     const mods = e => [e.metaKey && "cmd", e.ctrlKey && "ctrl", e.altKey && "alt", e.shiftKey && "shift"].filter(Boolean).join("+");
     on(window, "keydown", e => log("key", `down  key="${e.key}" code=${e.code}${mods(e) ? " +" + mods(e) : ""}${e.repeat ? " (repeat)" : ""}`), true);
@@ -887,8 +887,24 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     });
     el.tabIndex = 0;
     el.style.outline = "none";
+    const startPan = (e, source) => {
+        e.preventDefault();
+        cancelAnimation();
+        panning = true;
+        log("mouse", `${source}: pan start`);
+        pointerId = e.pointerId;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        el.setPointerCapture(e.pointerId);
+        el.classList.add("panning");
+    };
     on(el, "pointerdown", e => {
         if (document.activeElement !== el) el.focus({ preventScroll: true });
+        // Pan tool: a primary drag (trackpad click-drag or left mouse) pans, since it changes nothing.
+        if (e.button === 0 && toolId === "cross") {
+            startPan(e, "primary button (cross)");
+            return;
+        }
         if (e.button === 0) {
             log("mouse", `click detail=${e.detail}`);
             const event = toolEvent(e);
@@ -917,15 +933,7 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
         }
 
         if (e.button !== 2) return;
-        e.preventDefault();
-        cancelAnimation();
-        panning = true;
-        log("mouse", "right button: pan start");
-        pointerId = e.pointerId;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        el.setPointerCapture(e.pointerId);
-        el.classList.add("panning");
+        startPan(e, "right button");
     });
     on(el, "pointermove", e => {
         if (!panning) {
@@ -963,6 +971,15 @@ export function init(workspace, canvasEl, dotnetRef, referencePx, unit) {
     });
     on(el, "wheel", e => {
         e.preventDefault();
+        if (toolId === "cross" && !e.ctrlKey) {
+            cancelAnimation();
+            const dx = e.deltaX * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1);
+            const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientHeight : 1);
+            originX -= dx;
+            originY -= dy;
+            draw();
+            return;
+        }
         const r = el.getBoundingClientRect();
         zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
     }, { passive: false });
