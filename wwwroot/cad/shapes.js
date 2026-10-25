@@ -107,6 +107,27 @@ export const shapeGeometry = {
             if (yIsBottom) shape.y2 = value; else shape.y1 = value;
         }
     },
+    // Side handles of a rectangle: the middle of each side. Dragging one moves only that side.
+    sides(shape) {
+        if (shape.type !== "rectangle") return [];
+        const left = Math.min(shape.x1, shape.x2), right = Math.max(shape.x1, shape.x2);
+        const bottom = Math.min(shape.y1, shape.y2), top = Math.max(shape.y1, shape.y2);
+        const mx = (left + right) / 2, my = (bottom + top) / 2;
+        return [
+            { side: "top", x: mx, y: top }, { side: "right", x: right, y: my },
+            { side: "bottom", x: mx, y: bottom }, { side: "left", x: left, y: my }
+        ];
+    },
+    setSide(shape, side, value) {
+        if (shape.type !== "rectangle") throw new Error("Only rectangles have side handles.");
+        if (!Number.isFinite(value)) throw new Error("A side position must be a finite number.");
+        const left = Math.min(shape.x1, shape.x2), top = Math.max(shape.y1, shape.y2);
+        if (side === "left") this.setPoint(shape, "tl", value, top);
+        else if (side === "right") this.setPoint(shape, "tr", value, top);
+        else if (side === "top") this.setPoint(shape, "tl", left, value);
+        else if (side === "bottom") this.setPoint(shape, "bl", left, value);
+        else throw new Error(`Unknown rectangle side: ${side}`);
+    },
     moveItem(shape, dx, dy) {
         shape.x1 += dx;
         shape.x2 += dx;

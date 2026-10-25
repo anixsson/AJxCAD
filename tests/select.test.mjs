@@ -4,6 +4,7 @@ import { bucket, undo, newId } from "../wwwroot/cad/store.js";
 import { createSelectTool } from "../wwwroot/cad/tools/select.js";
 import { lineGeometry } from "../wwwroot/cad/lines.js";
 import { MEASURES, measurementGeometry } from "../wwwroot/cad/tools/measurement.js";
+import { SHAPES, shapeGeometry } from "../wwwroot/cad/shapes.js";
 
 const lines = bucket("lines");
 
@@ -50,7 +51,7 @@ function draw(tool, { dpr = 1, fx = false, toScreen = (x, y) => ({ x, y }) } = {
     const strokes = [];
     let path = [];
     const g = {};
-    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText", "closePath", "fill", "roundRect", "arc"]) {
+    for (const method of ["fillRect", "strokeRect", "setLineDash", "beginPath", "moveTo", "lineTo", "stroke", "fillText", "closePath", "fill", "roundRect", "arc", "rect"]) {
         g[method] = (...args) => {
             calls.push([method, ...args]);
             if (method === "beginPath") path = [];
@@ -741,4 +742,54 @@ test("Selections lists each selected item with a type label, draws the labels an
     tool.pointerDown(pointer(700, 700));
     tool.pointerUp(pointer(700, 700));
     assert.equal(lists.at(-1), null, "clearing the selection on the board closes the list");
+});
+
+test("side handles on a selected rectangle change only its width or height, snap and undo", () => {
+    lines.items = [];
+    bucket(SHAPES).items = [{ id: 1, type: "rectangle", x1: 0, y1: 0, x2: 100, y2: 60, layerId: "l" }];
+    const rect = bucket(SHAPES).items[0];
+    const snapped = [];
+    const { tool, logs } = setup([], {
+        geometries: [shapeGeometry],
+        visibleItems: name => bucket(name).items,
+        snap: (x, y, exclude) => {
+            snapped.push(exclude?.(shapeGeometry, rect, "tl"));
+            return { x: Math.round(x / 10) * 10, y: Math.round(y / 10) * 10, kind: "grid" };
+        }
+    });
+    const drag = (from, to) => {
+        tool.pointerDown(pointer(...from));
+        tool.pointerMove(pointer(...to));
+        tool.pointerUp(pointer(...to));
+    };
+    const box = () => { const r = bucket(SHAPES).items[0]; return [r.x1, r.y1, r.x2, r.y2]; };
+    assert.equal(draw(tool).calls.filter(c => c[0] === "rect").length, 0, "no handles before selection");
+
+    drag([-20, -20], [120, 80]);
+    assert.equal(draw(tool).calls.filter(c => c[0] === "rect").length, 4, "one bar per side");
+
+    drag([100, 30], [143, 55]);
+    assert.deepEqual(box(), [0, 0, 140, 60], "right side: width only");
+    assert.equal(snapped.at(-1), true, "the rectangle's own corners are not snap targets");
+    assert.ok(logs.some(l => l.text === "resized rectangle right side"));
+
+    drag([70, 60], [10, 88]);
+    assert.deepEqual(box(), [0, 0, 140, 90], "top side: height only");
+
+    drag([0, 45], [500, 45]);
+    assert.ok(rect.x1 < rect.x2 && rect.x2 - rect.x1 < 1e-3, "a side cannot pass the opposite side");
+
+    assert.equal(undo(), true);
+    assert.deepEqual(box(), [0, 0, 140, 90]);
+    assert.equal(undo(), true);
+    assert.equal(undo(), true);
+    assert.deepEqual(box(), [0, 0, 100, 60]);
+
+    tool.dataChanged?.();
+    drag([-20, -20], [120, 80]);
+    tool.pointerDown(pointer(50, 0));
+    tool.pointerUp(pointer(50, 0));
+    assert.deepEqual(box(), [0, 0, 100, 60], "a click on a handle changes nothing");
+    assert.throws(() => shapeGeometry.setSide(rect, "middle", 3), /Unknown rectangle side/);
+    bucket(SHAPES).items = [];
 });

@@ -4,6 +4,8 @@
 //  - Lines mode selects both corners of a clicked line; lines with both ends selected are highlighted.
 //  - Lines mode: a selected line shows a handle in its middle. Dragging it splits the line in two
 //    and moves the new shared corner.
+//  - A whole selected rectangle shows a bar handle in the middle of each side. Dragging one moves only
+//    that side, so only the width or the height changes.
 //  - Move (action menu): pick a base point, press Next, then pick where the base point should go.
 //  - A corner shared by several lines moves as one, so joined lines stay joined.
 //  - Clicking such a stacked corner (Nodes mode) opens the Corner box: each line end gets a label
@@ -154,9 +156,21 @@ export function createSelectTool(env) {
         }
     }
 
+    // Side handles of whole selected rectangles (any geometry with `sides`), shown in both modes.
+    function* resizable() {
+        for (const geo of env.geometries) {
+            if (!geo.sides) continue;
+            for (const item of visibleItems(geo.bucket)) {
+                const points = geo.points(item);
+                if (!points.length || !points.every(p => selected.has(keyOf(geo, item, p.key)))) continue;
+                for (const h of geo.sides(item)) yield { geo, item, ...h };
+            }
+        }
+    }
+
     function findHandle(sx, sy) {
         let best = null, bestDist = HIT_PX;
-        for (const h of splittable()) {
+        for (const h of [...splittable(), ...resizable()]) {
             const s = env.toScreen(h.x, h.y);
             const dist = Math.hypot(s.x - sx, s.y - sy);
             if (dist <= bestDist) { best = h; bestDist = dist; }
@@ -747,7 +761,8 @@ export function createSelectTool(env) {
                 // The split happens once the drag really starts, so a plain click changes nothing.
                 drag = {
                     kind: "move",
-                    split: handle,
+                    split: handle.side ? null : handle,
+                    resize: handle.side ? handle : null,
                     anchor: { x: handle.x, y: handle.y },
                     sx: e.sx,
                     sy: e.sy,
@@ -854,9 +869,22 @@ export function createSelectTool(env) {
                     hoverHandle = null;
                     notifySelection();
                     env.log("action", "split line");
+                } else if (drag.resize) {
+                    hoverHandle = null;
+                    env.log("action", `drag ${drag.resize.side} side`);
                 } else {
                     env.log("action", `drag ${selected.size} line end${selected.size === 1 ? "" : "s"}`);
                 }
+            }
+            if (drag.resize) {
+                // Only the dragged side follows the cursor; its own corners are not snap targets.
+                const { geo, item, side } = drag.resize;
+                const p = env.snap(e.sx, e.sy, (g, it) => g === geo && it === item);
+                const horizontal = side === "left" || side === "right";
+                geo.setSide(item, side, horizontal ? p.x : p.y);
+                marker = { x: horizontal ? p.x : drag.anchor.x, y: horizontal ? drag.anchor.y : p.y, kind: p.kind };
+                env.redraw();
+                return;
             }
             // Snap to grid or to ends that are not being moved.
             const p = env.snap(e.sx, e.sy, (geo, item, key) => drag.origin.has(keyOf(geo, item, key)));
@@ -889,6 +917,7 @@ export function createSelectTool(env) {
                 removeNode(drag.toggleOnRelease);
                 report();
             }
+            if (drag.resize && drag.moved) env.log("action", `resized rectangle ${drag.resize.side} side`);
             if (drag.moved || drag.toggleOnRelease) {
                 publishStack();
                 notifySelection();
@@ -1000,6 +1029,24 @@ export function createSelectTool(env) {
                 }
             }
 
+            // Side handles on whole selected rectangles: drag one to change only the width or the height.
+            if (!drag && !process) {
+                for (const h of resizable()) {
+                    const s = view.toScreen(h.x, h.y);
+                    if (s.x < -10 || s.x > view.width + 10 || s.y < -10 || s.y > view.height + 10) continue;
+                    const hot = hoverHandle?.item === h.item && hoverHandle?.side === h.side;
+                    const along = (hot ? 9 : 7) * d, across = (hot ? 3.5 : 2.5) * d;
+                    const [w, ht] = h.side === "left" || h.side === "right" ? [across, along] : [along, across];
+                    g.beginPath();
+                    g.rect(s.x * d - w, s.y * d - ht, w * 2, ht * 2);
+                    g.fillStyle = hot ? (view.paper ? "#000" : "#8fe3ff") : (view.paper ? "#fff" : "#1a1538");
+                    g.fill();
+                    g.strokeStyle = (view.paper ? "#000" : "#8fe3ff");
+                    g.lineWidth = 1.5 * d;
+                    g.stroke();
+                }
+            }
+
             if (stack && !drag?.moved && !process && !list) drawStackLabels(g, view);
             if (list && !drag?.moved) drawListLabels(g, view);
 
@@ -1015,6 +1062,7 @@ export function createSelectTool(env) {
 
             if (marker && drag?.kind === "move" && drag.moved) {
                 const drawn = new Set();
+                if (drag.resize) drag.resize.geo.drawEditFeedback?.(g, view, drag.resize.item, env.formatLength);
                 for (const { ref } of drag.origin.values()) {
                     if (drawn.has(ref.item)) continue;
                     ref.geo.drawEditFeedback?.(g, view, ref.item, env.formatLength);
