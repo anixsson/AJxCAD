@@ -43,6 +43,10 @@ test("extended zoom clamps every view entry point and custom grid color leaves a
     }, 1000, 1000);
     try {
         flush();
+        const snapshot = engine.getSaveSnapshot();
+        assert.equal(snapshot.text, engine.getDataText());
+        assert.equal(snapshot.content, engine.getContentText());
+        assert.equal(JSON.parse(snapshot.text).app, "ajxcad");
         engine.zoomBy(1e9);
         flush();
         assert.equal(scale(), 100);
@@ -106,6 +110,35 @@ test("extended zoom clamps every view entry point and custom grid color leaves a
         assert.throws(() => engine.setExtendedZoom("true"), /checkbox/);
         for (const value of [0, -1, Infinity, NaN])
             assert.throws(() => engine.setScale(value), /positive and finite/);
+
+        const baseline = engine.getContentText();
+        assert.equal(engine.setSavedContent(baseline), false);
+        const unsavedEvents = () => calls.filter(c => c.name === "OnUnsavedChanged").map(c => c.args[0]);
+        const checkScheduledState = async () => {
+            flush();
+            await new Promise(resolve => setTimeout(resolve, 300));
+        };
+        engine.zoomBy(2);
+        await checkScheduledState();
+        assert.deepEqual(unsavedEvents(), [], "navigation must not mark the title unsaved");
+        const originalName = engine.getProjectData().name;
+        engine.setProjectData({ name: "Unsaved title" });
+        await checkScheduledState();
+        assert.deepEqual(unsavedEvents(), [true], "project edits update the title indicator");
+        engine.setProjectData({ name: originalName });
+        await checkScheduledState();
+        assert.deepEqual(unsavedEvents(), [true, false], "returning to saved data clears the indicator");
+        engine.createLayer();
+        await checkScheduledState();
+        assert.deepEqual(unsavedEvents(), [true, false, true], "bucket edits update the indicator");
+        engine.undo();
+        await checkScheduledState();
+        assert.deepEqual(unsavedEvents(), [true, false, true, false], "undo back to saved clears the indicator");
+        engine.createLayer();
+        await checkScheduledState();
+        assert.equal(engine.setSavedContent(engine.getSaveSnapshot().content), false, "saving clears the indicator");
+        engine.createLayer();
+        assert.equal(engine.setSavedContent(baseline), true, "new edits after a save snapshot remain unsaved");
     } finally {
         engine.dispose();
         delete globalThis.window;

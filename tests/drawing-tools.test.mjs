@@ -228,6 +228,7 @@ test("PDF and canvas text retain the same size relative to drawing geometry", ()
                     toScreen: (x, y) => ({ x: x * scale, y: -y * scale })
                 });
                 const canvasSize = parseFloat(context.font);
+                assert.equal(context.fillStyle, "#000", "drawing text uses black ink in print preview");
                 const worldSize = canvasSize / (scale * dpr);
                 assert.ok(Math.abs(pdfSize * pageScale * 25.4 / 72 - worldSize) < 0.01,
                     "printed size matches canvas size in world millimetres");

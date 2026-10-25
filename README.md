@@ -2,6 +2,8 @@
 
 AJxCAD is a focused 2D CAD workspace for macOS and Windows, built with .NET MAUI and Blazor Hybrid.
 
+The VS Code Mac Catalyst Run tasks build the selected configuration before launching it. After clearing Debug or Release outputs, run the corresponding task again to recreate the app bundle.
+
 Create precise 2D drawings in a clean workspace designed for quick drafting and easy navigation.
 
 In **Data buckets**, **Project** groups project settings, Pages and Layers. **Tools** contains Lines, Shapes, Text, Points, Measurements and Symbols. The Measurement tool keeps its existing `measures` bucket format for compatibility with saved projects.
@@ -50,7 +52,11 @@ Use **Open source project** to edit the original project separately. A prompt of
 
 The host's **Symbols** (`symbols`) bucket stores only each source location, group position, scale, host layer and optional local layer choices (plus its item ID). No source geometry, image or source project settings are embedded in the saved host. Source layer visibility (or the symbol's local layer choice) and point marker settings are respected when rendering; source Print flags do not hide otherwise visible content. The host layer controls visibility and printing of the whole group. PDF output keeps imported geometry vector-based.
 
-If a source is deleted, moved, inaccessible or invalid, a crossed **Missing symbol import** placeholder appears. **Select another project** relinks it while preserving the host transform and layer; failed replacements preserve the previous link. On macOS, source-file access bookmarks stay in local app preferences, not in the project. On another computer, select the source files again to locate and authorize them.
+Linked imports reload automatically when the host opens, without selecting their source files again. The macOS desktop app disables App Sandbox so linked projects can be read directly across restarts. macOS privacy permissions still apply to protected folders; grant AJxCAD access in System Settings when requested. Mac App Store distribution requires re-enabling App Sandbox.
+
+On macOS, security-scoped source-file bookmarks are also retained to support sandboxed distribution and follow relocated files when macOS can resolve them. Bookmarks stay in local app preferences, not in the project; older bookmarks are upgraded automatically while the source is accessible.
+
+If a source is deleted, cannot be located, is inaccessible or invalid, a crossed **Missing symbol import** placeholder appears. **Select another project** relinks it while preserving the host transform and layer; failed replacements preserve the previous link. On another computer, select the source files again to locate and authorize them.
 
 If macOS cannot retain source access, the selected file still imports and a warning explains that it may need to be selected again after restarting. Importing and relinking use the file picker's readable stream; a bookmark failure does not invalidate the project.
 
@@ -88,6 +94,8 @@ The ruler shows zero, a real drawing distance in the project's measurement units
 
 ## Printing and PDF
 
+Drawing text prints and exports in black, including when the page contains shaded measurement areas. Font family, bold, italic and underline are preserved.
+
 Choose **File > Print / Export…** (Cmd/Ctrl + P) and pick a page. The app switches to the Paper look while the dialog is open. **Print…** opens the PDF in your default PDF app and opens its print dialog (if it only opens the PDF, print from that app), and **Export PDF…** saves a PDF where you choose. After saving, click the file name to open the PDF, or **Open location** to show it in Finder or Explorer. The output is a vector PDF of the drawing lines, shapes, text and saved measurements inside the page frame, on the page's paper size at its scale. Measurements print in the Paper look and follow their own **Lengths**, **Angles** and **Area** settings. The grid, unsaved measurements are not printed.
 
 ## Points
@@ -117,6 +125,12 @@ An **Optimize view** panel appears when any visible-layer objects fall below the
 ## Projects
 
 Save and reopen drawings as `.ajx` project files. A project keeps its drawing data, title, measurement settings, reference unit, and current view together, so you can pick up where you left off.
+
+The title bar shows **(Unsaved)** after the project title when project data differs from the last save. Saving or undoing back to the saved state clears it; panning and zooming alone do not show it.
+
+Closing the window or quitting with unsaved project changes opens **Save before quitting?** Choose **Save** to save and quit, **Don't save** to discard changes and quit, or **Cancel** (also Esc or closing the dialog) to keep working. New projects ask for a save location. Canceling the save picker or a failed save leaves the app open. Unchanged projects close without a prompt; panning and zooming alone do not count as unsaved changes. Apply edits in tool information boxes before quitting to include them in the saved project.
+
+**File > New** and **File > Open** use the same save confirmation before replacing a project with unsaved tool buckets or project settings. **Save** saves the current project and then continues; **Don't save** continues without saving; **Cancel** keeps the current project. Canceling the save picker or a failed save also leaves the current project intact.
 
 The selected page's information box is titled **Page settings**. Expand **Page sizes** to choose a paper format; the collapsed header shows the current format (for example, **ISO A4** or **US Letter**) and paper dimensions. Orientation and scale remain available outside the accordion.
 

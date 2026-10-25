@@ -1,5 +1,9 @@
 using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
+#if MAUI_DEVFLOW
+using Microsoft.Maui.DevFlow.Agent;
+using Microsoft.Maui.DevFlow.Blazor;
+#endif
 
 namespace AJxCAD;
 
@@ -17,6 +21,10 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddMauiBlazorWebView();
+#if MAUI_DEVFLOW
+		builder.AddMauiDevFlowAgent();
+		builder.AddMauiBlazorDevFlowTools();
+#endif
 
 		// Hide the OS title bar and its buttons; the app draws its own (see NativeWindow).
 		Microsoft.Maui.Handlers.WindowHandler.Mapper.AppendToMapping("NoTitleBar", (handler, view) =>

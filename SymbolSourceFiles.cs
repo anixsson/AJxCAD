@@ -40,7 +40,15 @@ public static class SymbolSourceFiles
     {
 #if MACCATALYST
         using var url = Foundation.NSUrl.FromFilename(source);
-        return SaveBookmark(source, url);
+        var accessed = url.StartAccessingSecurityScopedResource();
+        try
+        {
+            return SaveBookmark(source, url);
+        }
+        finally
+        {
+            if (accessed) url.StopAccessingSecurityScopedResource();
+        }
 #else
         return null;
 #endif
@@ -52,7 +60,10 @@ public static class SymbolSourceFiles
         var saved = Preferences.Default.Get(BookmarkKey(source), "");
         try
         {
-            return await File.ReadAllTextAsync(source);
+            var text = await File.ReadAllTextAsync(source);
+            // Upgrade older bookmarks while the file is still accessible.
+            if (RememberAccess(source) is { } warning) warn(warning);
+            return text;
         }
         catch (Exception ex) when (saved.Length > 0 && ex is IOException or UnauthorizedAccessException)
         {
@@ -62,7 +73,8 @@ public static class SymbolSourceFiles
         {
             using var data = Foundation.NSData.FromArray(Convert.FromBase64String(saved));
             using var url = Foundation.NSUrl.FromBookmarkData(data,
-                Foundation.NSUrlBookmarkResolutionOptions.WithoutUI,
+                Foundation.NSUrlBookmarkResolutionOptions.WithoutUI |
+                SecurityScopedResolution,
                 null, out var stale, out var error);
             if (url is null || error is not null)
                 throw new IOException($"Could not restore source access: {error?.LocalizedDescription ?? source}");
@@ -70,7 +82,9 @@ public static class SymbolSourceFiles
             try
             {
                 if (stale && SaveBookmark(source, url) is { } warning) warn(warning);
-                return await File.ReadAllTextAsync(source);
+                if (!url.IsFileUrl || string.IsNullOrWhiteSpace(url.Path))
+                    throw new IOException($"The saved source bookmark does not resolve to a file: {source}");
+                return await File.ReadAllTextAsync(url.Path);
             }
             finally
             {
@@ -82,6 +96,14 @@ public static class SymbolSourceFiles
     }
 
 #if MACCATALYST
+    // Apple's SDK supports these flags on Mac Catalyst 13+, but the .NET enum annotations omit it.
+#pragma warning disable CA1416
+    private const Foundation.NSUrlBookmarkCreationOptions SecurityScopedCreation =
+        Foundation.NSUrlBookmarkCreationOptions.WithSecurityScope;
+    private const Foundation.NSUrlBookmarkResolutionOptions SecurityScopedResolution =
+        Foundation.NSUrlBookmarkResolutionOptions.WithSecurityScope;
+#pragma warning restore CA1416
+
     private static string BookmarkKey(string source) =>
         "symbol-source-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(source)));
 
@@ -89,7 +111,7 @@ public static class SymbolSourceFiles
     {
         // Keep the sandbox grant on this machine, never inside a shared project file.
         using var data = url.CreateBookmarkData(
-            Foundation.NSUrlBookmarkCreationOptions.MinimalBookmark,
+            SecurityScopedCreation,
             null, null, out var error);
         if (data is null || error is not null)
             return $"The selected project can be imported, but macOS could not retain source access: {error?.LocalizedDescription ?? source}. You may need to select the source again after restarting the app.";

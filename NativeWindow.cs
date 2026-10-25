@@ -6,10 +6,69 @@ public static class NativeWindow
 {
     public static bool IsMac => OperatingSystem.IsMacCatalyst();
 
-    public static void Close() => Application.Current?.Quit();
+    public static event Action? CloseRequested;
+
+    public static void Close() => MainThread.BeginInvokeOnMainThread(() => CloseRequested?.Invoke());
+
+    internal static void Quit()
+    {
+#if MACCATALYST || WINDOWS
+        _quitApproved = true;
+#endif
+        Application.Current?.Quit();
+    }
 
 #if MACCATALYST
     const string ObjC = "/usr/lib/libobjc.dylib";
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate void NativeAction(IntPtr receiver, IntPtr selector, IntPtr sender);
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate void NativeClose(IntPtr receiver, IntPtr selector);
+
+    [System.Runtime.InteropServices.DllImport(ObjC)]
+    private static extern IntPtr class_getInstanceMethod(IntPtr cls, IntPtr selector);
+
+    [System.Runtime.InteropServices.DllImport(ObjC)]
+    private static extern IntPtr method_setImplementation(IntPtr method, IntPtr implementation);
+
+    private static readonly NativeAction TerminateHandler = OnTerminate;
+    private static readonly NativeClose CloseHandler = OnWindowClose;
+    private static NativeAction? _originalTerminate;
+    private static NativeClose? _originalClose;
+    private static IntPtr _mainWindow;
+    private static bool _quitApproved;
+
+    [ObjCRuntime.MonoPInvokeCallback(typeof(NativeAction))]
+    private static void OnTerminate(IntPtr receiver, IntPtr selector, IntPtr sender)
+    {
+        if (_quitApproved) _originalTerminate!(receiver, selector, sender);
+        else Close();
+    }
+
+    [ObjCRuntime.MonoPInvokeCallback(typeof(NativeClose))]
+    private static void OnWindowClose(IntPtr receiver, IntPtr selector)
+    {
+        if (receiver != _mainWindow || _quitApproved) _originalClose!(receiver, selector);
+        else Close();
+    }
+
+    private static void InstallCloseHandlers()
+    {
+        _mainWindow = MainNsWindow();
+        if (_originalTerminate is not null) return;
+
+        // Catalyst exposes no cancellable MAUI closing event. Intercept AppKit before it tears down the WebView.
+        var terminate = class_getInstanceMethod(ObjCRuntime.Class.GetHandle("NSApplication"), Sel("terminate:"));
+        var close = class_getInstanceMethod(ObjCRuntime.Class.GetHandle("NSWindow"), Sel("close"));
+        if (terminate == IntPtr.Zero || close == IntPtr.Zero)
+            throw new InvalidOperationException("Could not install save-before-quit handlers.");
+        _originalTerminate = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<NativeAction>(
+            method_setImplementation(terminate, System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(TerminateHandler)));
+        _originalClose = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<NativeClose>(
+            method_setImplementation(close, System.Runtime.InteropServices.Marshal.GetFunctionPointerForDelegate(CloseHandler)));
+    }
 
     [System.Runtime.InteropServices.DllImport(ObjC, EntryPoint = "objc_msgSend")]
     private static extern IntPtr Send(IntPtr receiver, IntPtr selector);
@@ -50,6 +109,7 @@ public static class NativeWindow
     // Full-size content under a transparent, title-less bar, and the traffic lights hidden.
     public static void HideChrome()
     {
+        InstallCloseHandlers();
         var windows = Send(NsApp(), Sel("windows"));
         var count = SendReturnNuint(windows, Sel("count"));
         for (nuint i = 0; i < count; i++)
@@ -118,6 +178,9 @@ public static class NativeWindow
         if (w != IntPtr.Zero && e != IntPtr.Zero) SendPtr(w, Sel("performWindowDragWithEvent:"), e);
     }
 #elif WINDOWS
+    private static Microsoft.UI.Windowing.AppWindow? _closeWindow;
+    private static bool _quitApproved;
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
 
@@ -129,8 +192,22 @@ public static class NativeWindow
 
     public static void HideChrome()
     {
+        var window = PlatformWindow?.AppWindow;
+        if (window is not null && _closeWindow != window)
+        {
+            if (_closeWindow is not null) _closeWindow.Closing -= OnWindowClosing;
+            _closeWindow = window;
+            _closeWindow.Closing += OnWindowClosing;
+        }
         var presenter = PlatformWindow?.AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter;
         presenter?.SetBorderAndTitleBar(true, false); // keep the resize border, drop the title bar and buttons
+    }
+
+    private static void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        if (_quitApproved) return;
+        args.Cancel = true;
+        Close();
     }
 
     public static void Minimize() =>

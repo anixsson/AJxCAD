@@ -105,6 +105,10 @@ button {
     color: rgba(230, 230, 255, 0.55);
 }
 
+.unsaved-indicator {
+    margin-left: 10px;
+}
+
 .win-dots {
     position: absolute;
     top: 6px;

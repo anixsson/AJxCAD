@@ -264,7 +264,7 @@ export function pagePdf(page, lines, measures = [], format = { length: mm => `${
     const content = [
         `q 0 0 ${n(w)} ${n(h)} re W n`,
         ...(fills.length ? ["0.94 g", ...fills] : []),
-        "0.6 w 1 J 1 j 0 G", ...path, path.length ? "S" : "",
+        "0.6 w 1 J 1 j 0 G 0 g", ...path, path.length ? "S" : "",
         ...marks,
         "Q"
     ].join("\n");

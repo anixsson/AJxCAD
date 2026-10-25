@@ -2,7 +2,7 @@
 // Everything pointer-related stays in JS so panning never round-trips through Blazor.
 // Tools live in ./tools, data lives in per-tool buckets in ./store.js.
 
-import { bucket, checkpoint, newId, undo as undoData, describe, describePage, serialize, deserialize, clearAll } from "./store.js";
+import { bucket, checkpoint, newId, undo as undoData, describe, describePage, serialize, serializeContent, deserialize, clearAll } from "./store.js";
 import { getProject, updateProject, getView, setView } from "./project.js";
 import { addLine, lineGeometry, LINES } from "./lines.js";
 import { addShape, createCircleTool, createRectangleTool, shapeGeometry, SHAPES } from "./shapes.js";
@@ -658,6 +658,7 @@ function drawReferences(g, view) {
 }
 
 function draw() {
+    scheduleUnsavedCheck();
     if (framePending) return;
     framePending = true;
     requestAnimationFrame(() => {
@@ -1016,6 +1017,33 @@ function captureView() {
 export const getBuckets = () => { captureView(); return describe(); };
 export const getBucketPage = (name, offset) => describePage(name, offset);
 export const getDataText = () => { captureView(); return serialize(); };
+export const getContentText = () => serializeContent();
+let savedContent = null;
+let unsaved = false;
+let unsavedTimer = null;
+
+export function setSavedContent(content) {
+    savedContent = content;
+    unsaved = serializeContent() !== savedContent;
+    return unsaved;
+}
+
+function scheduleUnsavedCheck() {
+    if (savedContent === null || unsavedTimer !== null) return;
+    // Coalesce pointer-driven redraws instead of serializing the drawing on every frame.
+    unsavedTimer = setTimeout(() => {
+        unsavedTimer = null;
+        const changed = serializeContent() !== savedContent;
+        if (changed === unsaved) return;
+        unsaved = changed;
+        dotnet?.invokeMethodAsync("OnUnsavedChanged", changed);
+    }, 250);
+}
+
+export const getSaveSnapshot = () => {
+    captureView();
+    return { text: serialize(), content: serializeContent() };
+};
 
 // Glides to the saved view; files saved without one leave the view alone.
 export function restoreView() {
@@ -1044,6 +1072,7 @@ export const getProjectData = () => ({ ...getProject() });
 
 export function setProjectData(changes) {
     updateProject(changes);
+    scheduleUnsavedCheck();
 }
 
 export function generateTestLines(count, spacing) {
@@ -1101,6 +1130,9 @@ export function newProject() {
 }
 
 export function dispose() {
+    clearTimeout(unsavedTimer);
+    unsavedTimer = null;
+    savedContent = null;
     clearReferences();
     cancelAnimation();
     holdZoomStop();

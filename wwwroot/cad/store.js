@@ -75,8 +75,7 @@ export function clearAll() {
 
 const num = v => (typeof v === "number" ? +v.toFixed(6) : v);
 
-function bucketText(b, items = b.items) {
-    const fields = b.fields ?? Object.keys(b.items[0] ?? {});
+function bucketText(b, items = b.items, fields = b.fields ?? Object.keys(b.items[0] ?? {})) {
     const rows = items.map(item => JSON.stringify(fields.map(f => num(item[f]))));
     const head = `{"name":${JSON.stringify(b.name)},"v":${b.version},"fields":${JSON.stringify(fields)},"rows":[`;
     return rows.length ? `${head}\n${rows.join(",\n")}\n]}` : `${head}]}`;
@@ -101,6 +100,13 @@ export function describePage(name, offset = 0) {
 export function serialize() {
     const parts = [...buckets.values()].map(b => bucketText(b));
     return `{"app":"ajxcad","format":${FORMAT},"buckets":[\n${parts.join(",\n")}\n]}`;
+}
+
+// View navigation is saved, but does not by itself require a save-before-quit prompt.
+export function serializeContent() {
+    const viewFields = new Set(["viewX", "viewY", "viewZoom"]);
+    return [...buckets.values()].map(b => bucketText(b, b.items,
+        (b.fields ?? Object.keys(b.items[0] ?? {})).filter(f => b.name !== "project" || !viewFields.has(f)))).join("\n");
 }
 
 export function parseDataText(text) {

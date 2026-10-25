@@ -37,6 +37,17 @@
     <AboutDialog />
 </Modal>
 
+<Modal Open="@(_dialog == "save-changes")" Title="@SaveChangesTitle" Width="500" OnClose="CloseDialog">
+    <p class="data-intro">Save changes to <strong>@_projectName</strong> before @PendingActionDescription? Your unsaved changes will be lost if you don't save.</p>
+    <div class="settings-actions">
+        <button type="button" class="chip" disabled="@ProjectActionBusy" @onclick="CloseDialog">Cancel</button>
+        <button type="button" class="chip danger" disabled="@ProjectActionBusy" @onclick="() => ContinueProjectAction(false)">Don't save</button>
+        <button type="button" class="chip active default-action" data-default-action disabled="@ProjectActionBusy" @onclick="() => ContinueProjectAction(true)">
+            @(_savingProject ? "Saving..." : "Save")
+        </button>
+    </div>
+</Modal>
+
 <Modal Open="@(_dialog == "delete-measurement")" Title="Delete measurement?" Width="500" OnClose="CloseDialog">
     <p class="data-intro">Delete this saved measurement? Other measurements and drawing lines will stay. You can undo this action.</p>
     @if (_deleteMeasurementError is not null)
@@ -533,6 +544,10 @@
     }
     <div class="glass titlebar-title">
         @_projectName
+        @if (_unsaved)
+        {
+            <span class="unsaved-indicator" role="status">(Unsaved)</span>
+        }
         @if (BuildInfo.IsDebug)
         {
             <span class="dev-build">Dev Build @AppInfo.VersionString</span>
@@ -703,7 +718,7 @@
             Separator,
             new("App settings…", "⌘,", () => OpenDialog("settings")),
             Separator,
-            new("Quit", "⌘Q", () => { Application.Current?.Quit(); return Task.CompletedTask; })
+            new("Quit", "⌘Q", RequestQuit)
         ]),
         new("Edit",
         [
@@ -1392,15 +1407,17 @@
 
     private void CloseDialog()
     {
+        if (_dialog == "save-changes" && ProjectActionBusy) return;
         Log("action", $"dialog closed ({_dialog})");
         _dialog = null;
+        _pendingProjectAction = null;
     }
 
     [JSInvokable]
     public async Task OnEscape()
     {
         Log("action", $"OnEscape in Blazor (dialog={_dialog}, menu={_openMenu}, tool={_tool})");
-        if (_dialog is not null) _dialog = null;
+        if (_dialog is not null) CloseDialog();
         else if (_openMenu is not null) _openMenu = null;
         else if (_cad is not null && await _cad.InvokeAsync<bool>("cancelCurrent")) return;
         else if (_tool != "cross") await SetTool("cross");
@@ -1765,6 +1782,7 @@
             _filePath = info.Source;
             await cad.InvokeVoidAsync("refreshSymbols");
             await ApplyProject(await cad.InvokeAsync<ProjectData>("getProjectData"));
+            await MarkProjectClean();
             Log("action", $"opened symbol source {_filePath}");
         });
     }
@@ -1794,8 +1812,8 @@
         _openMenu = null;
         switch (command)
         {
-            case "new": await NewProject(); break;
-            case "open": await OpenProject(); break;
+            case "new": await RequestProjectAction(ProjectAction.New); break;
+            case "open": await RequestProjectAction(ProjectAction.Open); break;
             case "save": await SaveProject(false); break;
             case "saveas": await SaveProject(true); break;
             case "print": await OpenPrint(); break;
@@ -1816,22 +1834,137 @@
         _filePath = null;
         _projectName = "Untitled";
         await SyncProject();
+        await MarkProjectClean();
         Log("action", "new project");
+    }
+
+    private string? _savedContent;
+    private bool _unsaved;
+    private enum ProjectAction { Quit, New, Open }
+    private ProjectAction? _pendingProjectAction;
+    private bool _checkingProjectAction;
+    private bool _continuingProjectAction;
+    private bool _savingProject;
+    private sealed record SaveSnapshot(string Text, string Content);
+    private bool ProjectActionBusy => _savingProject || _continuingProjectAction;
+    private string PendingActionDescription => _pendingProjectAction switch
+    {
+        ProjectAction.New => "creating a new project",
+        ProjectAction.Open => "opening another project",
+        _ => "quitting"
+    };
+    private string SaveChangesTitle => _pendingProjectAction switch
+    {
+        ProjectAction.New => "Save before creating a new project?",
+        ProjectAction.Open => "Save before opening another project?",
+        _ => "Save before quitting?"
+    };
+
+    private async Task MarkProjectClean()
+    {
+        if (_cad is not null) await SetSavedContent(await _cad.InvokeAsync<string>("getContentText"));
+    }
+
+    private async Task SetSavedContent(string content)
+    {
+        _savedContent = content;
+        if (_cad is not null) _unsaved = await _cad.InvokeAsync<bool>("setSavedContent", content);
+    }
+
+    [JSInvokable]
+    public void OnUnsavedChanged(bool unsaved)
+    {
+        _unsaved = unsaved;
+        StateHasChanged();
+    }
+
+    private async void OnNativeCloseRequested()
+    {
+        await InvokeAsync(RequestQuit);
+    }
+
+    private Task RequestQuit() => RequestProjectAction(ProjectAction.Quit);
+
+    private async Task RequestProjectAction(ProjectAction action)
+    {
+        if (_checkingProjectAction || ProjectActionBusy || _pendingProjectAction is not null) return;
+        _openMenu = null;
+        _checkingProjectAction = true;
+        try
+        {
+            if (_cad is null || _savedContent is null)
+            {
+                await Alert("Please wait", "The project is still loading. Try again when it has finished.");
+                return;
+            }
+            if (await _cad.InvokeAsync<string>("getContentText") == _savedContent)
+            {
+                await ExecuteProjectAction(action);
+                return;
+            }
+            _pendingProjectAction = action;
+            await OpenDialog("save-changes");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Log("error", $"could not check unsaved changes: {ex.Message}");
+            await Alert("Could not continue", ex.Message);
+        }
+        finally
+        {
+            _checkingProjectAction = false;
+        }
+    }
+
+    private async Task ExecuteProjectAction(ProjectAction action)
+    {
+        switch (action)
+        {
+            case ProjectAction.Quit: NativeWindow.Quit(); break;
+            case ProjectAction.New: await NewProject(); break;
+            case ProjectAction.Open: await OpenProject(); break;
+        }
+    }
+
+    private async Task ContinueProjectAction(bool save)
+    {
+        if (ProjectActionBusy || _pendingProjectAction is not { } action) return;
+        _continuingProjectAction = true;
+        try
+        {
+            if (save && !await SaveProject(false)) return;
+            _pendingProjectAction = null;
+            _dialog = null;
+            await ExecuteProjectAction(action);
+        }
+        catch (Exception ex)
+        {
+            Log("error", $"project action failed: {ex.Message}");
+            await Alert("Could not continue", ex.Message);
+        }
+        finally
+        {
+            _continuingProjectAction = false;
+        }
     }
 
     private async Task<bool> SaveProject(bool saveAs)
     {
-        if (_cad is null) return false;
+        if (_cad is null || _savingProject) return false;
+        _savingProject = true;
         try
         {
             await SyncProject();
-            var text = await _cad.InvokeAsync<string>("getDataText");
+            var snapshot = await _cad.InvokeAsync<SaveSnapshot>("getSaveSnapshot");
+            var text = snapshot.Text;
 
             if (!saveAs && _filePath is not null)
             {
                 try
                 {
                     await File.WriteAllTextAsync(_filePath, text);
+                    await SetSavedContent(snapshot.Content);
                     Log("action", $"saved {_filePath}");
                     return true;
                 }
@@ -1846,6 +1979,7 @@
             if (result.IsSuccessful)
             {
                 _filePath = result.FilePath;
+                await SetSavedContent(snapshot.Content);
                 Log("action", $"saved {_filePath}");
                 return true;
             }
@@ -1858,6 +1992,10 @@
         {
             Log("error", $"save failed: {ex.Message}");
             await Alert("Save failed", ex.Message);
+        }
+        finally
+        {
+            _savingProject = false;
         }
         return false;
     }
@@ -1878,6 +2016,7 @@
             _filePath = file.FullPath;
             await _cad.InvokeVoidAsync("refreshSymbols");
             await ApplyProject(await _cad.InvokeAsync<ProjectData>("getProjectData"));
+            await MarkProjectClean();
             Log("action", $"opened {_filePath}");
         }
         catch (Exception ex)
@@ -1973,6 +2112,8 @@
         await _cad.InvokeVoidAsync("setSnapOptions", _gridSnap, _midpointSnap, _referenceSnap);
         await ApplyAppearance();
         await SyncProject();
+        await MarkProjectClean();
+        NativeWindow.CloseRequested += OnNativeCloseRequested;
         _pages = await _cad.InvokeAsync<PagesState>("getPages");
         _layers = await _cad.InvokeAsync<LayersState>("getLayers");
         StateHasChanged();
@@ -2050,6 +2191,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        NativeWindow.CloseRequested -= OnNativeCloseRequested;
         FontSizeHoldStop();
         if (_cad is not null)
         {

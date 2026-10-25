@@ -59,6 +59,21 @@ test("saved measurements print with their lengths, angles and area", () => {
     assert.ok(/^[\x00-\x7f]*$/.test(pdf), "still ASCII only");
 });
 
+test("drawing text prints in black even after measurement area shading", () => {
+    for (const shaded of [false, true]) {
+        for (const fontFamily of ["sans-serif", "serif", "monospace"]) {
+            const body = stream(pagePdf(page, [], shaded ? [square()] : [], format, [], [
+                { text: "Black text", x: 0, y: 0, fontFamily, bold: true, italic: true, underline: true }
+            ]));
+            const beforeText = body.slice(0, body.indexOf("(Black text) Tj"));
+            const fills = [...beforeText.matchAll(/([\d.]+) g\b/g)];
+            assert.equal(fills.at(-1)?.[1], "0", `${fontFamily} text must use black fill (shading=${shaded})`);
+            assert.match(beforeText, /0 G 0 g/, "text underlines retain black stroke");
+            assert.equal(body.includes("0.94 g"), shaded, "measurement shading remains unchanged");
+        }
+    }
+});
+
 test("each measurement's display settings decide what is printed", () => {
     const body = stream(pagePdf(page, [], [square({ showLengths: false, showAngles: false, showArea: false })], format));
     assert.ok(!body.includes("Tj"), "no labels");
